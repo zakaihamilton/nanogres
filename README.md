@@ -17,9 +17,11 @@ database port is not exposed to the browser.
 
 ```sh
 pnpm install
-cp .env.example .env.local
 pnpm dev
 ```
+
+The protected dashboard needs server-only environment values for local use. Create an untracked
+`.env.local` as needed; never commit its contents or expose its secrets with a `NEXT_PUBLIC_` prefix.
 
 Open `http://localhost:3000/ui-preview` to review the screens without signing in. The route is
 development-only and returns 404 in production. Its fixtures are synthetic; its actions do not call
