@@ -519,6 +519,8 @@ export function LiveOverviewScreen() {
 }
 
 export function FirstRunCard({ error }: { error: string | null }) {
+  const needsWorkspaceAccess = error === "Perminister denied this action.";
+
   return (
     <section aria-labelledby="first-run-title" className={styles.firstRunCard}>
       <div className={styles.firstRunIntro}>
@@ -528,20 +530,29 @@ export function FirstRunCard({ error }: { error: string | null }) {
           </span>
           <span>GETTING STARTED</span>
         </div>
-        <h2 id="first-run-title">Connect your VPS to see your Postgres workspace.</h2>
+        <h2 id="first-run-title">
+          {needsWorkspaceAccess
+            ? "Grant your account access to this workspace."
+            : "Connect your VPS to see your Postgres workspace."}
+        </h2>
         <p>
-          Once the private management API is connected, this page will show database health,
-          storage, backups, and recent changes.
+          {needsWorkspaceAccess
+            ? "Your VPS is connected. Perminister needs to grant this account workspace access before Nanogres can show database health, storage, backups, and recent changes."
+            : "Once the private management API is connected, this page will show database health, storage, backups, and recent changes."}
         </p>
-        <a
-          className={styles.setupLink}
-          href="https://github.com/zakaihamilton/nanogres#connect-your-vps"
-          rel="noreferrer"
-          target="_blank"
-        >
-          Open the setup guide <span aria-hidden="true">↗</span>
-        </a>
-        {error ? (
+        {needsWorkspaceAccess ? (
+          <WorkspaceBootstrap />
+        ) : (
+          <a
+            className={styles.setupLink}
+            href="https://github.com/zakaihamilton/nanogres#connect-your-vps"
+            rel="noreferrer"
+            target="_blank"
+          >
+            Open the setup guide <span aria-hidden="true">↗</span>
+          </a>
+        )}
+        {error && !needsWorkspaceAccess ? (
           <details className={styles.connectionDetails}>
             <summary>Connection details</summary>
             <p>{error}</p>
@@ -552,10 +563,16 @@ export function FirstRunCard({ error }: { error: string | null }) {
         <li className={styles.firstRunStep}>
           <span className={styles.stepNumber}>01</span>
           <span>
-            <strong>Connect your server</strong>
-            <small>Set up the private HTTPS API.</small>
+            <strong>
+              {needsWorkspaceAccess ? "Grant workspace access" : "Connect your server"}
+            </strong>
+            <small>
+              {needsWorkspaceAccess
+                ? "Initialize this workspace in Perminister."
+                : "Set up the private HTTPS API."}
+            </small>
           </span>
-          <Icon name="server" size={16} />
+          <Icon name={needsWorkspaceAccess ? "shield" : "server"} size={16} />
         </li>
         <li className={styles.firstRunStep}>
           <span className={styles.stepNumber}>02</span>
