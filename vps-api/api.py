@@ -24,6 +24,7 @@ BACKUP_DIR = Path(os.environ.get("NANOGRES_BACKUP_DIR", "/var/backups/nanogres")
 STATE_DIR = Path(os.environ.get("NANOGRES_STATE_DIR", "/var/lib/nanogres"))
 EVENTS_FILE = STATE_DIR / "events.jsonl"
 BACKUP_RETENTION_DAYS = int(os.environ.get("NANOGRES_BACKUP_RETENTION_DAYS", "14"))
+DATABASE_GROWTH_PERCENT = int(os.environ.get("NANOGRES_DATABASE_GROWTH_PERCENT", "25"))
 NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 BACKUP_PATTERN = re.compile(r"^([a-z][a-z0-9_]*)__([0-9]{8}T[0-9]{12}Z)\.dump$")
 UPLOAD_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
@@ -101,6 +102,27 @@ def list_databases() -> list[dict[str, object]]:
     return rows if isinstance(rows, list) else []
 
 
+def add_database_growth_targets(
+    databases: list[dict[str, object]], free_bytes: int
+) -> list[dict[str, object]]:
+    if not 1 <= DATABASE_GROWTH_PERCENT <= 50:
+        raise ApiError(503, "Database growth percentage must be between 1 and 50.")
+
+    user_databases = [database for database in databases if not database.get("systemDatabase")]
+    growth_budget = free_bytes * DATABASE_GROWTH_PERCENT // 100
+    per_database_headroom = growth_budget // len(user_databases) if user_databases else 0
+
+    for database in databases:
+        size_bytes = int(database.get("sizeBytes", 0))
+        headroom = 0 if database.get("systemDatabase") else per_database_headroom
+        database["growthHeadroomBytes"] = headroom
+        database["recommendedMaxBytes"] = size_bytes + headroom
+        # PostgreSQL has no native per-database size quota. Until the VPS filesystem
+        # is provisioned with project quotas, these values are guidance only.
+        database["hardLimitEnforced"] = False
+    return databases
+
+
 def list_roles() -> list[dict[str, object]]:
     rows = json_query(
         """
@@ -176,11 +198,14 @@ def postgres_status() -> dict[str, object]:
     )
     if not isinstance(status, dict):
         raise ApiError(503, "PostgreSQL is unavailable.")
-    disk = shutil.disk_usage("/")
+    data_directory = run_sql("SHOW data_directory")
+    disk = shutil.disk_usage(data_directory)
     return {
         **status,
         "disk": {"totalBytes": disk.total, "usedBytes": disk.used, "freeBytes": disk.free},
         "backupRetentionDays": BACKUP_RETENTION_DAYS,
+        "databaseGrowthPercent": DATABASE_GROWTH_PERCENT,
+        "databaseQuotaEnforced": False,
     }
 
 
@@ -588,17 +613,25 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/healthz":
                 self._json(200, {"ok": True, **postgres_status()})
             elif path == "/v1/overview":
+                status = postgres_status()
+                databases = add_database_growth_targets(
+                    list_databases(), int(status["disk"]["freeBytes"])
+                )
                 self._json(
                     200,
                     {
-                        "status": postgres_status(),
-                        "databases": list_databases(),
+                        "status": status,
+                        "databases": databases,
                         "backups": list_backups()[:8],
                         "activity": list_activity(8),
                     },
                 )
             elif path == "/v1/databases":
-                self._json(200, {"databases": list_databases()})
+                status = postgres_status()
+                databases = add_database_growth_targets(
+                    list_databases(), int(status["disk"]["freeBytes"])
+                )
+                self._json(200, {"status": status, "databases": databases})
             elif path == "/v1/roles":
                 self._json(200, {"roles": list_roles()})
             elif path == "/v1/backups":
@@ -633,7 +666,11 @@ class Handler(BaseHTTPRequestHandler):
                     f"CREATE DATABASE {quote_identifier(name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
                 )
                 record_event("database.created", f"Database {name} created.", actor)
-                self._json(201, {"database": next(row for row in list_databases() if row["name"] == name)})
+                status = postgres_status()
+                databases = add_database_growth_targets(
+                    list_databases(), int(status["disk"]["freeBytes"])
+                )
+                self._json(201, {"database": next(row for row in databases if row["name"] == name)})
             elif path == "/v1/roles":
                 self._create_role(body, actor)
             elif path == "/v1/backups":

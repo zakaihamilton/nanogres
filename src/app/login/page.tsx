@@ -1,11 +1,15 @@
 import { ThemeControl } from "@/components/theme/theme-control";
-import { isPerministerConfigured } from "@/lib/perminister-auth";
+import { getPerministerRecoveryUrl, isPerministerConfigured } from "@/lib/perminister-auth";
+import { passwordLoginAction } from "./actions";
 import styles from "./login.module.css";
 
 const messages: Record<string, string> = {
   setup: "Sign-in is not configured yet. Add the Perminister app client to the server environment.",
   denied: "Sign-in was cancelled. You can try again when you’re ready.",
   callback: "We couldn’t complete sign-in. Please start again.",
+  invalid: "We couldn’t sign you in. Check your email or username and password, then try again.",
+  rate_limited: "Too many sign-in attempts. Wait a moment before trying again.",
+  unavailable: "Perminister is temporarily unavailable. Try again in a moment.",
 };
 
 function FeatureIcon({ kind }: { kind: "database" | "access" | "backup" }) {
@@ -49,6 +53,7 @@ export default async function LoginPage({
 }) {
   const query = await searchParams;
   const configured = isPerministerConfigured();
+  const recoveryUrl = configured ? getPerministerRecoveryUrl() : null;
   const error = Array.isArray(query.error) ? query.error[0] : query.error;
   const loggedOut = Array.isArray(query.loggedOut) ? query.loggedOut[0] : query.loggedOut;
   const message = error ? messages[error] : undefined;
@@ -149,7 +154,7 @@ export default async function LoginPage({
           <p className={styles.loginEyebrow}>WORKSPACE ACCESS</p>
           <h2 id="login-title">Welcome back.</h2>
           <p className={styles.description}>
-            Sign in with your Perminister account to open your Nanogres workspace.
+            Use your Perminister email or username and password, or continue with single sign-on.
           </p>
 
           {message ? (
@@ -164,10 +169,53 @@ export default async function LoginPage({
           ) : null}
 
           {configured ? (
-            <a className={styles.signInButton} href="/api/auth/login">
-              Continue with Perminister
-              <span aria-hidden="true">→</span>
-            </a>
+            <>
+              <form action={passwordLoginAction} className={styles.credentialsForm}>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>Email or username</span>
+                  <input
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    className={styles.input}
+                    maxLength={254}
+                    name="identifier"
+                    required
+                    spellCheck={false}
+                    type="text"
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>Password</span>
+                  <input
+                    autoComplete="current-password"
+                    className={styles.input}
+                    maxLength={1024}
+                    name="password"
+                    required
+                    type="password"
+                  />
+                </label>
+                {recoveryUrl ? (
+                  <a className={styles.recoveryLink} href={recoveryUrl}>
+                    Forgot password?
+                  </a>
+                ) : null}
+                <button className={styles.signInButton} type="submit">
+                  Sign in
+                  <span aria-hidden="true">→</span>
+                </button>
+              </form>
+
+              <div aria-hidden="true" className={styles.divider}>
+                <span>OR</span>
+              </div>
+
+              <a className={styles.singleSignOnButton} href="/api/auth/login">
+                Continue with Perminister
+                <span aria-hidden="true">↗</span>
+              </a>
+            </>
           ) : (
             <button className={styles.signInButton} disabled type="button">
               Perminister sign-in not configured
@@ -187,12 +235,14 @@ export default async function LoginPage({
             <span>
               <strong>Your session stays private</strong>
               <small>
-                Perminister verifies your identity. Nanogres checks workspace permissions on the
+                Perminister verifies your credentials. Nanogres checks workspace permissions on the
                 server.
               </small>
             </span>
           </div>
-          <p className={styles.signInFootnote}>You’ll be redirected to Perminister to sign in.</p>
+          <p className={styles.signInFootnote}>
+            Your password is checked by Perminister and is never stored by Nanogres.
+          </p>
         </section>
       </div>
     </main>

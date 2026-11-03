@@ -21,6 +21,19 @@ its existing loopback-only port. The Python API uses the system PostgreSQL CLI a
 All routes require a server-only bearer token. Database names and role names use lowercase letters,
 digits, and underscores. New roles receive only the selected database and table privileges.
 
+## Storage reporting
+
+The API reports total, used, and free space for the filesystem containing PostgreSQL's data
+directory. Each user database also receives a dynamic growth-room estimate: by default, 25% of the
+currently free data-volume space is divided evenly across user databases. Set
+`NANOGRES_DATABASE_GROWTH_PERCENT` in `/etc/nanogres/api.env` to a value from 1 to 50 to change the
+percentage. The estimate is recalculated when the dashboard refreshes.
+
+These values are advisory. PostgreSQL has no native per-database size quota, and the VPS API reports
+`hardLimitEnforced: false` until operating-system filesystem quotas are configured and verified.
+The dashboard labels this state and shows current free disk space so the estimate is not mistaken
+for a hard stop.
+
 ## Backups
 
 The timer creates custom-format pg_dump files every day near 02:00 UTC. It retains 14 days on the

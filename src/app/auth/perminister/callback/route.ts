@@ -3,33 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getAppOrigin,
   getPerministerConfig,
+  isPerministerSessionGrant,
   OAUTH_STATE_COOKIE,
   OAUTH_VERIFIER_COOKIE,
   SESSION_COOKIE,
 } from "@/lib/perminister-auth";
 
 export const runtime = "nodejs";
-
-type TokenResponse = {
-  authenticated: true;
-  sessionToken: string;
-  session: { expiresAt: string };
-};
-
-function isTokenResponse(value: unknown): value is TokenResponse {
-  if (typeof value !== "object" || value === null) return false;
-  const body = value as Record<string, unknown>;
-  if (typeof body.session !== "object" || body.session === null) return false;
-  const session = body.session as Record<string, unknown>;
-  return (
-    body.authenticated === true &&
-    typeof body.sessionToken === "string" &&
-    body.sessionToken.length > 0 &&
-    body.sessionToken.length <= 4096 &&
-    typeof session.expiresAt === "string" &&
-    Number.isFinite(Date.parse(session.expiresAt))
-  );
-}
 
 function stateMatches(received: string, expected: string | undefined): boolean {
   if (!expected) return false;
@@ -92,7 +72,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   } catch {
     return loginError(request, "callback");
   }
-  if (!isTokenResponse(body)) return loginError(request, "callback");
+  if (!isPerministerSessionGrant(body)) return loginError(request, "callback");
 
   const maxAge = Math.floor((Date.parse(body.session.expiresAt) - Date.now()) / 1000);
   if (maxAge <= 0) return loginError(request, "callback");

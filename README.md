@@ -13,6 +13,8 @@ server and a guarded place to handle routine database work.
 
 - **See the state of your server.** Review database sizes, owners, connection counts, server health,
   and recent changes.
+- **Track storage pressure.** See free space on the Postgres data volume and estimated growth room
+  for each user database.
 - **Keep project access organized.** Create database-scoped read-only and read-write roles, with
   workspace permissions checked on the server for each action.
 - **Make and move backups.** Schedule daily backups, download a custom-format dump, or restore a
@@ -82,7 +84,9 @@ and has no live VPS actions.
 
 For sign-in, configure a Perminister client whose origin exactly matches your local app origin and
 whose callback is `<origin>/auth/perminister/callback`. Production and preview origins need their
-own matching Perminister configuration when they are used for sign-in.
+own matching Perminister configuration when they are used for sign-in. The login page supports
+both Perminister single sign-on and a custom email/username and password form backed by Perminister;
+Nanogres does not store the password. Password recovery opens Perminister's recovery page.
 
 ### Server-only variables
 
@@ -108,6 +112,18 @@ hours. Restores never overwrite an existing database.
 The scheduled copies share the VPS disk with PostgreSQL. Download a second copy to protect against
 loss of that server or disk. A PostgreSQL dump can contain executable SQL from its source, so restore
 only files from sources you trust.
+
+## Storage sizing
+
+Nanogres calculates a dynamic growth-room estimate from the free space on the Postgres data volume.
+By default, 25% of current free space is shared evenly across user databases; the VPS API setting
+`NANOGRES_DATABASE_GROWTH_PERCENT` changes that percentage. The dashboard shows actual data-volume
+free space and the estimate for each database.
+
+The estimate is advisory until filesystem quotas are configured on the VPS. PostgreSQL does not
+provide a native per-database hard size limit, so the dashboard identifies whether a quota is
+actually enforced instead of presenting the estimate as a guarantee. See [`vps-api/README.md`](vps-api/README.md)
+for storage-reporting details.
 
 ## Repository checks
 

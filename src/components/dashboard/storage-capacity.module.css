@@ -1,0 +1,176 @@
+.capacity {
+  display: grid;
+  gap: 17px;
+  padding: 16px 17px 17px;
+}
+
+.diskSummary,
+.policyHeader {
+  display: grid;
+  gap: 10px;
+}
+
+.summaryHeading,
+.policyHeader,
+.databaseHeading,
+.databaseMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.summaryHeading > div,
+.policyHeader > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.summaryHeading strong,
+.policyHeader strong {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.summaryHeading span,
+.policyHeader > div > span,
+.databaseHeading > span,
+.databaseMeta {
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.freeSpace {
+  text-align: right;
+}
+
+.freeSpace strong {
+  color: var(--green-strong);
+  font-size: 14px;
+}
+
+.track {
+  display: block;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.diskFill,
+.databaseFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--green);
+  transition: width 180ms ease;
+}
+
+.diskFill {
+  background: var(--blue);
+}
+
+.policyHeader {
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+}
+
+.policyPill {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.advisory {
+  background: var(--amber-pale);
+  color: var(--amber);
+}
+
+.enforced {
+  background: var(--green-pale);
+  color: var(--green-strong);
+}
+
+.databaseList {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.databaseItem {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.databaseHeading code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+}
+
+.databaseHeading > span {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.databaseMeta {
+  justify-content: flex-start;
+}
+
+.databaseMeta span:last-child {
+  margin-left: auto;
+}
+
+.empty {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.advisoryNote {
+  margin: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--amber-pale);
+  border-radius: 8px;
+  background: var(--amber-pale);
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+@media (width <= 520px) {
+  .capacity {
+    padding: 14px 12px;
+  }
+
+  .databaseHeading,
+  .summaryHeading {
+    align-items: flex-start;
+  }
+
+  .databaseHeading {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .databaseHeading > span {
+    text-align: left;
+  }
+
+  .policyHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

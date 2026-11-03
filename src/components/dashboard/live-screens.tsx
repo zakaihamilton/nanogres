@@ -1,11 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { Icon } from "./icons";
+import { PanelFrame } from "./panel-frame";
+import {
+  formatBytes,
+  StorageCapacity,
+  type DatabaseStorage,
+  type StorageDisk,
+} from "./storage-capacity";
 import styles from "./live-screens.module.css";
 
-type Database = {
+/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Keyboard-focusable regions let users scroll wide data tables on small screens. */
+
+type Database = DatabaseStorage & {
   name: string;
   owner: string;
   sizeBytes: number;
@@ -43,8 +52,10 @@ type ServerStatus = {
   startedAt: string;
   connections: number;
   maxConnections: number;
-  disk: { totalBytes: number; usedBytes: number; freeBytes: number };
+  disk: StorageDisk;
   backupRetentionDays: number;
+  databaseGrowthPercent?: number;
+  databaseQuotaEnforced?: boolean;
 };
 
 type ApiPayload = object;
@@ -131,18 +142,6 @@ function useApiData<T extends ApiPayload>(path: string) {
     };
   }, [path]);
   return { data, error, loading, refresh };
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1024;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
 }
 
 function formatDate(value: string): string {
@@ -275,20 +274,26 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className={styles.panel}>
-      <div className={styles.panelHeader}>
-        <div>
-          <h2>{title}</h2>
-          {detail ? <p>{detail}</p> : null}
-        </div>
-      </div>
+    <PanelFrame
+      className={styles.panel}
+      headingClassName={styles.panelHeader}
+      title={title}
+      detail={detail}
+    >
       {children}
-    </section>
+    </PanelFrame>
   );
 }
 
 function Notice({ children, tone = "error" }: { children: ReactNode; tone?: "error" | "info" }) {
-  return <div className={`${styles.notice} ${styles[tone]}`}>{children}</div>;
+  return (
+    <div
+      className={`${styles.notice} ${styles[tone]}`}
+      role={tone === "error" ? "alert" : "status"}
+    >
+      {children}
+    </div>
+  );
 }
 
 function Loading({ label = "Loading server data…" }: { label?: string }) {
@@ -305,16 +310,16 @@ function Empty({ children }: { children: ReactNode }) {
 
 function DatabaseTable({
   databases,
-  onDelete,
+  onRequestDelete,
   busyName,
 }: {
   databases: Database[];
-  onDelete?: (database: Database) => void;
+  onRequestDelete?: (database: Database) => void;
   busyName?: string | null;
 }) {
   if (!databases.length) return <Empty>No user databases yet. Create one to get started.</Empty>;
   return (
-    <div className={styles.tableWrap}>
+    <div aria-label="Databases" className={styles.tableWrap} role="region" tabIndex={0}>
       <table>
         <thead>
           <tr>
@@ -323,7 +328,7 @@ function DatabaseTable({
             <th scope="col">Size</th>
             <th scope="col">Connections</th>
             <th scope="col">Encoding</th>
-            {onDelete ? (
+            {onRequestDelete ? (
               <th scope="col">
                 <span className={styles.srOnly}>Actions</span>
               </th>
@@ -345,14 +350,14 @@ function DatabaseTable({
                 {database.connections} / {database.maxConnections}
               </td>
               <td>{database.encoding}</td>
-              {onDelete ? (
+              {onRequestDelete ? (
                 <td className={styles.actionCell}>
                   {database.systemDatabase ? (
                     <span className={styles.muted}>Protected</span>
                   ) : (
                     <Button
                       disabled={busyName === database.name}
-                      onClick={() => onDelete(database)}
+                      onClick={() => onRequestDelete(database)}
                       variant="danger"
                     >
                       {busyName === database.name ? "Deleting…" : "Delete"}
@@ -368,12 +373,134 @@ function DatabaseTable({
   );
 }
 
-function ErrorNotice({ error }: { error: string | null }) {
+export function DeleteDatabaseDialog({
+  database,
+  busy,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  database: Database;
+  busy: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const [confirmationName, setConfirmationName] = useState("");
+  const [copyStatus, setCopyStatus] = useState("");
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (!dialog.open) dialog.showModal();
+    nameInputRef.current?.focus();
+    return () => {
+      if (dialog.open) dialog.close();
+    };
+  }, []);
+
+  async function copyDatabaseName() {
+    try {
+      await navigator.clipboard.writeText(database.name);
+      setCopyStatus("Database name copied.");
+    } catch {
+      setCopyStatus("Could not copy. Select the name and copy it manually.");
+    }
+  }
+
+  function confirmDeletion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || confirmationName !== database.name) return;
+    onConfirm();
+  }
+
+  return (
+    <dialog
+      aria-describedby="delete-database-warning"
+      aria-busy={busy}
+      aria-labelledby="delete-database-title"
+      aria-modal="true"
+      className={styles.dialog}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!busy) onCancel();
+      }}
+      ref={dialogRef}
+      role="alertdialog"
+    >
+      <div className={styles.dialogContent}>
+        <p className={styles.dialogEyebrow}>DESTRUCTIVE ACTION</p>
+        <h2 id="delete-database-title">Delete database?</h2>
+        <p className={styles.dialogWarning} id="delete-database-warning">
+          This permanently deletes the database and all of its data. This cannot be undone.
+        </p>
+        <div className={styles.dialogNameGroup}>
+          <span className={styles.dialogNameLabel}>Database name</span>
+          <div className={styles.dialogNameRow}>
+            <code className={styles.dialogDatabaseName}>{database.name}</code>
+            <Button disabled={busy} onClick={() => void copyDatabaseName()} variant="secondary">
+              Copy name
+            </Button>
+          </div>
+          <span aria-live="polite" className={styles.dialogStatus} role="status">
+            {copyStatus}
+          </span>
+        </div>
+        <form className={styles.dialogForm} onSubmit={confirmDeletion}>
+          <label htmlFor="delete-database-confirmation">
+            Type the database name exactly to enable deletion.
+          </label>
+          <input
+            autoCapitalize="off"
+            autoComplete="off"
+            disabled={busy}
+            id="delete-database-confirmation"
+            maxLength={63}
+            onChange={(event) => setConfirmationName(event.target.value)}
+            placeholder="Type the database name"
+            ref={nameInputRef}
+            required
+            spellCheck={false}
+            value={confirmationName}
+          />
+          {error ? (
+            <p className={styles.dialogError} role="alert">
+              {error}
+            </p>
+          ) : null}
+          <div className={styles.dialogActions}>
+            <Button disabled={busy} onClick={onCancel} variant="secondary">
+              Cancel
+            </Button>
+            <Button
+              disabled={busy || confirmationName !== database.name}
+              type="submit"
+              variant="danger"
+            >
+              {busy ? "Deleting…" : "Delete permanently"}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+  );
+}
+
+function ErrorNotice({ error, onRetry }: { error: string | null; onRetry?: () => void }) {
   if (!error) return null;
   const canBootstrap = error === "Perminister denied this action.";
   return (
     <>
-      <Notice>{error}</Notice>
+      <Notice>
+        <span>{error}</span>
+        {onRetry && !canBootstrap ? (
+          <Button onClick={onRetry} variant="secondary">
+            Try again
+          </Button>
+        ) : null}
+      </Notice>
       {canBootstrap ? <WorkspaceBootstrap /> : null}
     </>
   );
@@ -418,8 +545,31 @@ function WorkspaceBootstrap() {
 }
 
 function useDatabases() {
-  const query = useApiData<{ databases: Database[] }>("/api/nanogres/databases");
-  return { ...query, databases: query.data?.databases ?? [] };
+  const query = useApiData<{ databases: Database[]; status?: ServerStatus }>(
+    "/api/nanogres/databases",
+  );
+  const [fallbackStatus, setFallbackStatus] = useState<ServerStatus | null>(null);
+
+  useEffect(() => {
+    if (!query.data || query.data.status || fallbackStatus) return;
+    let active = true;
+    void apiRequest<{ status?: ServerStatus }>("/api/nanogres/overview")
+      .then((payload) => {
+        if (active) setFallbackStatus(payload.status ?? null);
+      })
+      .catch(() => {
+        if (active) setFallbackStatus(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [fallbackStatus, query.data]);
+
+  return {
+    ...query,
+    databases: query.data?.databases ?? [],
+    status: query.data?.status ?? fallbackStatus,
+  };
 }
 
 export function LiveOverviewScreen() {
@@ -442,7 +592,10 @@ export function LiveOverviewScreen() {
       />
       {loading && !data ? <Loading label="Connecting to your VPS…" /> : null}
       {!loading && !data ? <FirstRunCard error={error} /> : null}
-      {data && !status ? <ErrorNotice error={error ?? "Server health is unavailable."} /> : null}
+      {data && error ? <ErrorNotice error={error} onRetry={() => void refresh()} /> : null}
+      {data && !status && !error ? (
+        <ErrorNotice error="Server health is unavailable." onRetry={() => void refresh()} />
+      ) : null}
       {status ? (
         <div className={styles.metrics}>
           <Metric
@@ -505,8 +658,18 @@ export function LiveOverviewScreen() {
               </div>
             </Panel>
           </div>
+          <Panel
+            title="Storage capacity"
+            detail="Disk usage and current growth room for each user database"
+          >
+            <StorageCapacity
+              databases={databases}
+              disk={status.disk}
+              growthPercent={status.databaseGrowthPercent ?? 25}
+            />
+          </Panel>
           <Panel title="Recent activity" detail="Database and access changes on this VPS">
-            <ActivityList events={data.activity} loading={false} />
+            <ActivityList error={null} events={data.activity} loading={false} />
           </Panel>
           <Notice tone="info">
             Backups are stored on the same VPS disk. Download copies to keep an off-server recovery
@@ -606,10 +769,12 @@ function Metric({ label, value, detail }: { label: string; value: string; detail
 }
 
 export function LiveDatabasesScreen() {
-  const { databases, error, loading, refresh } = useDatabases();
+  const { databases, error, loading, refresh, status } = useDatabases();
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [busyName, setBusyName] = useState<string | null>(null);
+  const deletingDatabase = useRef(false);
+  const [deleteTarget, setDeleteTarget] = useState<Database | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -634,11 +799,20 @@ export function LiveDatabasesScreen() {
     }
   }
 
-  async function deleteDatabase(database: Database) {
-    if (
-      !window.confirm(`Delete database “${database.name}”? This permanently removes all its data.`)
-    )
-      return;
+  function requestDatabaseDeletion(database: Database) {
+    setActionError(null);
+    setDeleteTarget(database);
+  }
+
+  function cancelDatabaseDeletion() {
+    if (busyName) return;
+    setDeleteTarget(null);
+    setActionError(null);
+  }
+
+  async function confirmDatabaseDeletion(database: Database) {
+    if (deletingDatabase.current) return;
+    deletingDatabase.current = true;
     setBusyName(database.name);
     setActionError(null);
     setMessage(null);
@@ -647,10 +821,12 @@ export function LiveDatabasesScreen() {
         method: "DELETE",
       });
       setMessage(`Database “${database.name}” deleted.`);
+      setDeleteTarget(null);
       await refresh();
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : "Could not delete database.");
     } finally {
+      deletingDatabase.current = false;
       setBusyName(null);
     }
   }
@@ -662,8 +838,8 @@ export function LiveDatabasesScreen() {
         eyebrow="DATA"
         title="Databases"
       />
-      <ErrorNotice error={error} />
-      <ErrorNotice error={actionError} />
+      <ErrorNotice error={error} onRetry={() => void refresh()} />
+      <ErrorNotice error={deleteTarget ? null : actionError} />
       {message ? <Notice tone="info">{message}</Notice> : null}
       <Panel
         title="Create a database"
@@ -689,6 +865,15 @@ export function LiveDatabasesScreen() {
           </div>
         </form>
       </Panel>
+      {status ? (
+        <Panel title="Storage capacity" detail="Current disk space and per-database growth room">
+          <StorageCapacity
+            databases={databases}
+            disk={status.disk}
+            growthPercent={status.databaseGrowthPercent ?? 25}
+          />
+        </Panel>
+      ) : null}
       <Panel
         title="All databases"
         detail={
@@ -699,20 +884,40 @@ export function LiveDatabasesScreen() {
       >
         {loading && !databases.length ? (
           <Loading />
+        ) : error && !databases.length ? (
+          <Empty>Nanogres could not load the database list. Use Try again above to retry.</Empty>
         ) : (
-          <DatabaseTable busyName={busyName} databases={databases} onDelete={deleteDatabase} />
+          <DatabaseTable
+            busyName={busyName}
+            databases={databases}
+            onRequestDelete={requestDatabaseDeletion}
+          />
         )}
       </Panel>
       <Notice tone="info">
         Postgres remains private on the VPS. Database access is granted through the Access &amp;
         roles page.
       </Notice>
+      {deleteTarget ? (
+        <DeleteDatabaseDialog
+          busy={busyName === deleteTarget.name}
+          database={deleteTarget}
+          error={actionError}
+          onCancel={cancelDatabaseDeletion}
+          onConfirm={() => void confirmDatabaseDeletion(deleteTarget)}
+        />
+      ) : null}
     </div>
   );
 }
 
 export function LiveAccessScreen() {
-  const { databases, error: databaseError, loading: databaseLoading } = useDatabases();
+  const {
+    databases,
+    error: databaseError,
+    loading: databaseLoading,
+    refresh: refreshDatabases,
+  } = useDatabases();
   const userDatabases = databases.filter((item) => !item.systemDatabase);
   const rolesQuery = useApiData<{ roles: Role[] }>("/api/nanogres/roles");
   const roles = rolesQuery.data?.roles ?? [];
@@ -756,7 +961,13 @@ export function LiveAccessScreen() {
         eyebrow="SECURITY"
         title="Access & roles"
       />
-      <ErrorNotice error={databaseError ?? rolesQuery.error} />
+      <ErrorNotice
+        error={databaseError ?? rolesQuery.error}
+        onRetry={() => {
+          if (databaseError) void refreshDatabases();
+          if (rolesQuery.error) void rolesQuery.refresh();
+        }}
+      />
       <ErrorNotice error={actionError} />
       {message ? <Notice tone="info">{message}</Notice> : null}
       <Notice tone="info">
@@ -769,6 +980,8 @@ export function LiveAccessScreen() {
       >
         {databaseLoading ? (
           <Loading />
+        ) : databaseError && !userDatabases.length ? (
+          <Empty>Nanogres could not load databases. Use Try again above to retry.</Empty>
         ) : userDatabases.length ? (
           <form className={styles.formGrid} onSubmit={createRole}>
             <div className={styles.field}>
@@ -841,8 +1054,10 @@ export function LiveAccessScreen() {
       >
         {rolesQuery.loading && !rolesQuery.data ? (
           <Loading />
+        ) : rolesQuery.error && !rolesQuery.data ? (
+          <Empty>Nanogres could not load database roles. Use Try again above to retry.</Empty>
         ) : roles.length ? (
-          <div className={styles.tableWrap}>
+          <div aria-label="Login roles" className={styles.tableWrap} role="region" tabIndex={0}>
             <table>
               <thead>
                 <tr>
@@ -883,7 +1098,12 @@ export function LiveAccessScreen() {
 }
 
 export function LiveBackupsScreen() {
-  const { databases, refresh: refreshDatabases } = useDatabases();
+  const {
+    databases,
+    error: databaseError,
+    loading: databaseLoading,
+    refresh: refreshDatabases,
+  } = useDatabases();
   const backupsQuery = useApiData<{ backups: Backup[] }>("/api/nanogres/backups");
   const backups = backupsQuery.data?.backups ?? [];
   const userDatabases = databases.filter((item) => !item.systemDatabase);
@@ -1155,7 +1375,9 @@ export function LiveBackupsScreen() {
         eyebrow="RECOVERY"
         title="Backups"
       />
-      <ErrorNotice error={backupsQuery.error ?? error} />
+      <ErrorNotice error={databaseError} onRetry={() => void refreshDatabases()} />
+      <ErrorNotice error={backupsQuery.error} onRetry={() => void backupsQuery.refresh()} />
+      <ErrorNotice error={error} />
       {message ? <Notice tone="info">{message}</Notice> : null}
       {transferProgress ? (
         <Notice tone="info">
@@ -1191,7 +1413,15 @@ export function LiveBackupsScreen() {
             onChange={(event) => setDatabase(event.target.value)}
             value={selectedDatabase}
           >
-            {!selectedDatabase ? <option value="">No user databases</option> : null}
+            {!selectedDatabase ? (
+              <option value="">
+                {databaseLoading
+                  ? "Loading databases…"
+                  : databaseError
+                    ? "Could not load databases"
+                    : "No user databases"}
+              </option>
+            ) : null}
             {userDatabases.map((item) => (
               <option key={item.name} value={item.name}>
                 {item.name}
@@ -1212,8 +1442,10 @@ export function LiveBackupsScreen() {
       >
         {backupsQuery.loading && !backupsQuery.data ? (
           <Loading />
+        ) : backupsQuery.error && !backupsQuery.data ? (
+          <Empty>Nanogres could not load backup history. Use Try again above to retry.</Empty>
         ) : backups.length ? (
-          <div className={styles.tableWrap}>
+          <div aria-label="Backup history" className={styles.tableWrap} role="region" tabIndex={0}>
             <table>
               <thead>
                 <tr>
@@ -1372,16 +1604,27 @@ export function LiveActivityScreen() {
         eyebrow="AUDIT TRAIL"
         title="Activity"
       />
-      <ErrorNotice error={error} />
+      <ErrorNotice error={error} onRetry={() => void refresh()} />
       <Panel title="Recent events" detail="Newest operations first">
-        <ActivityList events={data?.events ?? []} loading={loading && !data} />
+        <ActivityList error={error} events={data?.events ?? []} loading={loading && !data} />
       </Panel>
     </div>
   );
 }
 
-function ActivityList({ events, loading }: { events: ActivityEvent[]; loading: boolean }) {
+function ActivityList({
+  events,
+  loading,
+  error,
+}: {
+  events: ActivityEvent[];
+  loading: boolean;
+  error: string | null;
+}) {
   if (loading && !events.length) return <Loading />;
+  if (error && !events.length) {
+    return <Empty>Nanogres could not load activity. Use Try again above to retry.</Empty>;
+  }
   if (!events.length) return <Empty>No Nanogres operations recorded yet.</Empty>;
   return (
     <div className={styles.activityList}>

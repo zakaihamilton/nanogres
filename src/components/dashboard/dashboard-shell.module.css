@@ -1,8 +1,10 @@
 .frame {
   display: grid;
   min-height: 100vh;
+  min-height: 100dvh;
   grid-template-columns: 254px minmax(0, 1fr);
   background: var(--canvas);
+  overflow-x: clip;
 }
 
 .sidebar {
@@ -336,6 +338,7 @@
   flex: 1;
   margin: 0 auto;
   padding: 36px 42px 54px;
+  overflow-x: clip;
 }
 
 .footer {
@@ -398,39 +401,45 @@
   .workspaceCard,
   .sectionLabel,
   .sidebarSpacer,
-  .sidebarStatus,
-  .profile {
+  .sidebarStatus {
     display: none;
   }
 
   .navigation {
-    display: flex;
-    gap: 3px;
-    overflow-x: auto;
-    margin: 0 -5px;
-    padding: 0 5px;
-    scrollbar-width: none;
-  }
-
-  .navigation::-webkit-scrollbar {
-    display: none;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
   }
 
   .navItem {
-    min-height: 37px;
-    flex: 0 0 auto;
-    gap: 7px;
-    padding: 0 9px;
+    min-width: 0;
+    min-height: 39px;
+    gap: 6px;
+    padding: 0 8px;
     font-size: 11px;
   }
 
   .navItem svg {
     width: 15px;
     height: 15px;
+    flex: 0 0 15px;
+  }
+
+  .navItem > span:not(.navCount) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .navCount {
     display: none;
+  }
+
+  .profile {
+    min-height: 46px;
+    margin-top: 8px;
+    padding: 8px 2px 0;
   }
 
   .topbar {
@@ -456,5 +465,11 @@
 
   .footer {
     padding: 12px 17px 17px;
+  }
+}
+
+@media (width <= 389px) {
+  .navigation {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

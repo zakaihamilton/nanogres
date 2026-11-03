@@ -45,18 +45,32 @@ export function DashboardShell({
   children,
   previewMode = false,
   activePath,
+  onPreviewNavigate,
 }: {
   account: AccountView;
   children: ReactNode;
   previewMode?: boolean;
   activePath?: string;
+  onPreviewNavigate?: (path: string) => void;
 }) {
   const pathname = usePathname();
 
   return (
     <div className={styles.frame}>
       <aside aria-label="Main navigation" className={styles.sidebar}>
-        <Link aria-label="Nanogres overview" className={styles.brand} href="/">
+        <Link
+          aria-label="Nanogres overview"
+          className={styles.brand}
+          href="/"
+          onClick={
+            previewMode
+              ? (event) => {
+                  event.preventDefault();
+                  onPreviewNavigate?.("/");
+                }
+              : undefined
+          }
+        >
           <span aria-hidden="true" className={styles.brandMark}>
             <span />
             <span />
@@ -82,10 +96,17 @@ export function DashboardShell({
             return (
               <Link
                 aria-current={active ? "page" : undefined}
-                aria-disabled={previewMode || undefined}
+                aria-disabled={(previewMode && !onPreviewNavigate) || undefined}
                 className={`${styles.navItem} ${active ? styles.navItemActive : ""}`}
                 href={item.href}
-                onClick={previewMode ? (event) => event.preventDefault() : undefined}
+                onClick={
+                  previewMode
+                    ? (event) => {
+                        event.preventDefault();
+                        onPreviewNavigate?.(item.href);
+                      }
+                    : undefined
+                }
                 key={item.href}
               >
                 <Icon name={item.icon} size={18} />

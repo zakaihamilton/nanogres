@@ -80,7 +80,7 @@
 }
 
 .button:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.6;
 }
 
@@ -314,6 +314,13 @@
 .tableWrap {
   width: 100%;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tableWrap:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
 }
 
 .tableWrap table {
@@ -606,6 +613,10 @@
 }
 
 .notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
   padding: 12px 14px;
   border: 1px solid var(--red-pale);
   border-radius: 9px;
@@ -667,6 +678,131 @@
   clip-path: inset(50%);
 }
 
+.dialog {
+  width: min(460px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
+}
+
+.dialog::backdrop {
+  background: rgb(9 17 13 / 58%);
+  backdrop-filter: blur(2px);
+}
+
+.dialogContent {
+  display: grid;
+  gap: 15px;
+  padding: clamp(20px, 4vw, 26px);
+}
+
+.dialogEyebrow {
+  margin: 0;
+  color: var(--red);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.12em;
+}
+
+.dialogContent h2 {
+  margin: -7px 0 0;
+  font-size: 22px;
+  font-weight: 660;
+  letter-spacing: -0.045em;
+}
+
+.dialogWarning {
+  margin: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--red-pale);
+  border-radius: 9px;
+  background: var(--red-pale);
+  color: var(--red);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.dialogNameGroup {
+  display: grid;
+  gap: 7px;
+}
+
+.dialogNameLabel,
+.dialogForm label {
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 640;
+}
+
+.dialogNameRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.dialogDatabaseName {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.dialogStatus {
+  min-height: 14px;
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.dialogForm {
+  display: grid;
+  gap: 8px;
+}
+
+.dialogForm input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.dialog input:focus-visible,
+.dialog button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.dialogError {
+  margin: 0;
+  color: var(--red);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 5px;
+}
+
 @media (width <= 980px) {
   .metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -715,6 +851,19 @@
 
   .formActions {
     grid-column: auto;
+  }
+
+  .dialogActions {
+    flex-direction: column;
+  }
+
+  .notice {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dialogActions .button {
+    width: 100%;
   }
 
   .activityItem {

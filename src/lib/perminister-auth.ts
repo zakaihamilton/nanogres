@@ -14,6 +14,16 @@ export type PerministerConfig = {
   appOrigin: string;
 };
 
+export type PerministerSessionGrant = {
+  authenticated: true;
+  sessionToken: string;
+  session: { expiresAt: string };
+};
+
+export type PerministerLoginResult =
+  | { success: true; sessionToken: string; expiresAt: string }
+  | { success: false; error: "invalid" | "rate_limited" | "unavailable" };
+
 type PerministerAccount = {
   subjectId: string;
   email: string | null;
@@ -86,11 +96,20 @@ export function getAppOrigin(): string | null {
   );
 }
 
-export function getPerministerConfig(): PerministerConfig | null {
-  const baseUrl = readUrlOrigin(
+function getPerministerBaseUrl(): string | null {
+  return readUrlOrigin(
     process.env.PERMINISTER_URL ?? "https://www.perminister.com",
     process.env.NODE_ENV !== "production",
   );
+}
+
+export function getPerministerRecoveryUrl(): string | null {
+  const baseUrl = getPerministerBaseUrl();
+  return baseUrl ? new URL("/forgot-password", baseUrl).toString() : null;
+}
+
+export function getPerministerConfig(): PerministerConfig | null {
+  const baseUrl = getPerministerBaseUrl();
   const appOrigin = getAppOrigin();
   const clientId = process.env.PERMINISTER_CLIENT_ID?.trim();
   const clientSecret = process.env.PERMINISTER_CLIENT_SECRET;
@@ -101,6 +120,21 @@ export function getPerministerConfig(): PerministerConfig | null {
 
 export function isPerministerConfigured(): boolean {
   return getPerministerConfig() !== null;
+}
+
+export function isPerministerSessionGrant(value: unknown): value is PerministerSessionGrant {
+  if (typeof value !== "object" || value === null) return false;
+  const body = value as Record<string, unknown>;
+  if (typeof body.session !== "object" || body.session === null) return false;
+  const session = body.session as Record<string, unknown>;
+  return (
+    body.authenticated === true &&
+    typeof body.sessionToken === "string" &&
+    body.sessionToken.length > 0 &&
+    body.sessionToken.length <= 4096 &&
+    typeof session.expiresAt === "string" &&
+    Number.isFinite(Date.parse(session.expiresAt))
+  );
 }
 
 function isAccount(value: unknown): value is PerministerAccount {
@@ -160,6 +194,52 @@ function clientHeaders(config: PerministerConfig, token?: string): HeadersInit {
     "X-Perminister-Client-Id": config.clientId,
     "X-Perminister-Client-Secret": config.clientSecret,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+export async function loginWithPerminister(
+  config: PerministerConfig,
+  identifier: string,
+  password: string,
+): Promise<PerministerLoginResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${config.baseUrl}/api/auth/consumer/login`, {
+      method: "POST",
+      headers: {
+        ...clientHeaders(config),
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ identifier, password }),
+      cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(8_000),
+    });
+  } catch {
+    return { success: false, error: "unavailable" };
+  }
+
+  if (response.status === 429) return { success: false, error: "rate_limited" };
+  if (response.status === 400 || response.status === 401 || response.status === 403) {
+    return { success: false, error: "invalid" };
+  }
+  if (!response.ok) return { success: false, error: "unavailable" };
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return { success: false, error: "unavailable" };
+  }
+  if (!isPerministerSessionGrant(body)) return { success: false, error: "unavailable" };
+
+  const expiresAt = Date.parse(body.session.expiresAt);
+  if (expiresAt <= Date.now()) return { success: false, error: "unavailable" };
+  return {
+    success: true,
+    sessionToken: body.sessionToken,
+    expiresAt: body.session.expiresAt,
   };
 }
 

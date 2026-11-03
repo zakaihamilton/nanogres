@@ -19,3 +19,8 @@ Before enabling the public proxy:
 The first two public network changes are deliberate access-control changes. Review the firewall and
 Nginx diffs before applying them. The API token should be transferred only to the Nanogres Vercel
 project.
+
+The dashboard reports current free space on PostgreSQL's data volume and a per-database growth
+estimate. This estimate is advisory until filesystem quotas are configured and verified on the VPS;
+PostgreSQL itself does not enforce a database-size cap. See `vps-api/README.md` for the sizing
+formula and `NANOGRES_DATABASE_GROWTH_PERCENT` setting.

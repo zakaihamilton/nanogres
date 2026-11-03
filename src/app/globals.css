@@ -36,6 +36,7 @@
 
 html {
   min-width: 320px;
+  overflow-x: clip;
   background: var(--canvas);
 }
 

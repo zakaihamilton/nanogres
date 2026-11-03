@@ -303,6 +303,67 @@
   line-height: 1.5;
 }
 
+.credentialsForm {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 7px;
+}
+
+.fieldLabel {
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface-muted);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.input:hover {
+  border-color: var(--green);
+}
+
+.input:focus-visible {
+  border-color: var(--green);
+  outline: 3px solid color-mix(in srgb, var(--green) 25%, transparent);
+  outline-offset: 1px;
+}
+
+.recoveryLink {
+  justify-self: end;
+  margin-top: -8px;
+  color: var(--green-strong);
+  font-size: 11px;
+  font-weight: 620;
+  text-decoration: none;
+}
+
+.recoveryLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.recoveryLink:focus-visible,
+.singleSignOnButton:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--green) 34%, transparent);
+  outline-offset: 3px;
+}
+
 .signInButton {
   display: flex;
   width: 100%;
@@ -313,7 +374,7 @@
   border: 1px solid var(--green);
   border-radius: 10px;
   background: var(--green);
-  color: #fff;
+  color: var(--surface);
   cursor: pointer;
   font-size: 13px;
   font-weight: 690;
@@ -340,6 +401,51 @@
   background: var(--surface-muted);
   color: var(--ink-muted);
   cursor: not-allowed;
+}
+
+.divider {
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 12px;
+  margin: 19px 0;
+  color: var(--ink-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.divider::before,
+.divider::after {
+  height: 1px;
+  background: var(--line);
+  content: "";
+}
+
+.singleSignOnButton {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.singleSignOnButton:hover {
+  border-color: var(--green);
+  background: var(--surface-green);
+  color: var(--green-strong);
 }
 
 .setupHint {
@@ -392,7 +498,7 @@
 }
 
 .signInFootnote {
-  margin: 20px 0 0;
+  margin: 15px 0 0;
   color: var(--ink-muted);
   font-size: 10px;
   text-align: center;
@@ -483,7 +589,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .signInButton {
+  .signInButton,
+  .input,
+  .singleSignOnButton {
     transition: none;
   }
 }
