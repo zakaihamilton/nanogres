@@ -104,12 +104,6 @@
   white-space: nowrap;
 }
 
-.workspaceChevron {
-  margin-left: auto;
-  color: var(--ink-muted);
-  font-size: 14px;
-}
-
 .sectionLabel {
   margin: 29px 9px 9px;
   color: var(--ink-muted);
@@ -332,11 +326,9 @@
   font-weight: 570;
 }
 
-.apiStatus .statusDot {
-  width: 6px;
-  height: 6px;
-  flex-basis: 6px;
-  margin: 0;
+.apiStatus svg {
+  flex: 0 0 auto;
+  color: var(--green);
 }
 
 .mainContent {

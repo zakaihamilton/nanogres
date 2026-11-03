@@ -6,6 +6,7 @@ import {
   LiveActivityScreen,
   LiveBackupsScreen,
   LiveDatabasesScreen,
+  FirstRunCard,
   LiveOverviewScreen,
 } from "./live-screens";
 
@@ -267,10 +268,10 @@ export function OverviewScreen({ mode }: ScreenProps) {
   return (
     <div className={styles.screen}>
       <ScreenHeading
-        action="New database"
-        description="Your Postgres databases and operational health, in one place."
-        eyebrow="OVERVIEW"
-        title="Postgres, at a glance."
+        action="Create a database"
+        description="Manage project databases, access, and recovery from one workspace."
+        eyebrow="YOUR WORKSPACE"
+        title="Your Postgres, in one place."
       />
       {!preview ? <ApiNotice /> : null}
 
@@ -383,6 +384,20 @@ export function OverviewScreen({ mode }: ScreenProps) {
           </span>
         </section>
       </div>
+    </div>
+  );
+}
+
+export function GettingStartedScreen() {
+  return (
+    <div className={styles.screen}>
+      <ScreenHeading
+        action="Create a database"
+        description="A clear view of database health, storage, access, and recovery."
+        eyebrow="YOUR WORKSPACE"
+        title="Your Postgres, in one place."
+      />
+      <FirstRunCard error={null} />
     </div>
   );
 }
@@ -551,7 +566,7 @@ export function BackupsScreen({ mode }: ScreenProps) {
           </span>
           <span>
             <small>Retention</small>
-            <strong>{preview ? "7 daily copies" : "Not configured"}</strong>
+            <strong>{preview ? "14 daily copies" : "Not configured"}</strong>
           </span>
         </div>
         <div>

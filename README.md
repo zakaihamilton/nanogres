@@ -1,69 +1,117 @@
-# Nanogres
+<div align="center">
+  <img src="src/app/icon.svg" alt="Nanogres icon" width="72" height="72" />
+  <h1>Nanogres</h1>
+  <p><strong>A private workspace for the Postgres server behind your projects.</strong></p>
+  <p>Manage databases, roles, backups, and recovery from one small control panel.</p>
+</div>
 
-Nanogres is a private Next.js control panel for Postgres databases on the CloudFanatic VPS. The web
-app runs on Vercel. The VPS management API will be the only service that can reach Postgres; the
-database port is not exposed to the browser.
+Nanogres is a self-hosted Postgres management dashboard for personal projects and small teams. The
+Next.js app runs on Vercel, while Postgres stays on your VPS. Nanogres gives you a clear view of the
+server and a guarded place to handle routine database work.
 
-## Stack
+## What you can do
 
-- Next.js App Router and TypeScript
-- CSS Modules for application screens and responsive layout
-- System, light, and dark themes
-- Perminister for shared identity and server-side permission checks
-- `ui-preview-kit` for a local `/ui-preview` route with synthetic data and simulated controls
-- RepNix for repository health guardrails
+- **See the state of your server.** Review database sizes, owners, connection counts, server health,
+  and recent changes.
+- **Keep project access organized.** Create database-scoped read-only and read-write roles, with
+  workspace permissions checked on the server for each action.
+- **Make and move backups.** Schedule daily backups, download a custom-format dump, or restore a
+  trusted `.dump` or `.backup` file into a new database.
+- **Review the interface safely.** Open synthetic-data screens, including the getting-started state,
+  without signing in or connecting to the VPS.
+- **Choose your theme.** Follow the system setting or select light or dark mode.
 
-## Local development
+## How it fits together
+
+```mermaid
+flowchart LR
+    Browser[Your browser] -->|Perminister session| Dashboard[Next.js dashboard on Vercel]
+    Dashboard -->|HTTPS + server-only bearer token| Proxy[Nginx on your VPS]
+    Proxy -->|loopback only| API[Nanogres API]
+    API -->|local socket| Postgres[(PostgreSQL)]
+```
+
+The browser talks only to the dashboard. Vercel server functions check your Perminister session and
+workspace permission, then call the VPS API over HTTPS. The VPS API token and Postgres credentials
+stay out of browser code. PostgreSQL remains on the VPS and is not exposed as a public database
+port.
+
+## Connect your VPS
+
+Use a stable HTTPS origin for the Perminister app client and the VPS API. The default API address in
+this project is `https://nanogres.duckdns.org:8443`; Nginx uses port 8443 so an existing TURN service
+can continue using its ports.
+
+1. **Install the API on the VPS.** As root, run [`vps-api/install-vps.sh`](vps-api/install-vps.sh).
+   The service binds to `127.0.0.1:8765`, creates a random bearer token in
+   `/etc/nanogres/api.env`, and enables the daily backup timer. It stages, but does not enable, the
+   public HTTPS proxy or firewall rule.
+2. **Enable the HTTPS proxy.** Confirm that `nanogres.duckdns.org` resolves to the VPS and that a
+   trusted certificate is installed. Review [`vps-api/nginx-nanogres.conf`](vps-api/nginx-nanogres.conf),
+   enable the Nginx site, validate the configuration, and reload Nginx. Then allow inbound TCP 8443
+   in the VPS firewall. Keep PostgreSQL bound to loopback. The detailed installation notes are in
+   [`vps-api/install-vps.md`](vps-api/install-vps.md).
+3. **Configure Perminister.** Set the product and organization IDs and create an app client for the
+   production dashboard origin. Its callback is `<dashboard-origin>/auth/perminister/callback`.
+   Keep public registration disabled for this private dashboard.
+4. **Set Vercel Production variables.** Configure the names listed below. Set `NANOGRES_API_URL` to
+   the HTTPS API origin and copy the token from `/etc/nanogres/api.env` into
+   `NANOGRES_API_TOKEN`. Both values are server-only. Never use a `NEXT_PUBLIC_` prefix for them.
+5. **Deploy and sign in.** Deploy the app, sign in through Perminister, then initialize the first
+   workspace admin grant if the setup screen requests it.
+
+See [`vps-api/README.md`](vps-api/README.md) for the API routes, backup format, and retention
+behavior.
+
+## Develop locally
+
+Requirements: Node.js 24.22 or newer in the 24.x line, and pnpm 12.16 or newer.
 
 ```sh
 pnpm install
 pnpm dev
 ```
 
-The protected dashboard needs server-only environment values for local use. Create an untracked
-`.env.local` as needed; never commit its contents or expose its secrets with a `NEXT_PUBLIC_` prefix.
+Create an ignored `.env.local` file for local configuration. Add the server-only variable names
+below with values from your own Perminister app client and VPS. Do not commit that file. Never add
+secrets to source code or variables prefixed with `NEXT_PUBLIC_`.
 
-Open `http://localhost:3000/ui-preview` to review the screens without signing in. The route is
-development-only and returns 404 in production. Its fixtures are synthetic; its actions do not call
-the VPS or change data.
+Open [`http://localhost:3000/ui-preview`](http://localhost:3000/ui-preview) to browse the screens
+without authentication. It is enabled only in development, uses clearly labeled synthetic data,
+and has no live VPS actions.
 
-The real dashboard requires a Perminister app client. Set its app origin to the exact Nanogres app
-origin and use the callback URL `<origin>/auth/perminister/callback`. For local development,
-Perminister accepts `http://localhost` as an origin. Put the client secret in `.env.local` and in
-Vercel's server-side environment variables; never expose it with a `NEXT_PUBLIC_` prefix.
+For sign-in, configure a Perminister client whose origin exactly matches your local app origin and
+whose callback is `<origin>/auth/perminister/callback`. Production and preview origins need their
+own matching Perminister configuration when they are used for sign-in.
 
-Vercel preview URLs are unique and Perminister app origins match exactly. Use a stable preview alias
-and a separate app client if preview deployments need sign-in. The production app origin should use
-the Vercel production URL (or a domain attached to the Vercel project), not the VPS API hostname.
+### Server-only variables
 
-## Current connection state
+| Variable                      | Purpose                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------ |
+| `PERMINISTER_URL`             | Perminister service base URL; defaults to `https://www.perminister.com`. |
+| `PERMINISTER_CLIENT_ID`       | Nanogres app client ID.                                                  |
+| `PERMINISTER_CLIENT_SECRET`   | Server-side app client secret.                                           |
+| `PERMINISTER_PRODUCT_ID`      | Product ID used for workspace authorization.                             |
+| `PERMINISTER_ORGANIZATION_ID` | Organization that owns the product.                                      |
+| `NANOGRES_APP_ORIGIN`         | Exact origin used for sign-in callbacks and cookies.                     |
+| `NANOGRES_WORKSPACE_ID`       | Stable ID for this VPS workspace.                                        |
+| `NANOGRES_API_URL`            | HTTPS origin for the VPS management API.                                 |
+| `NANOGRES_API_TOKEN`          | Bearer token generated by the VPS installer.                             |
 
-The dashboard uses authenticated Next.js Route Handlers as a server-side bridge to the VPS API. The
-browser never receives the VPS bearer token or connects to Postgres. Each operation checks the
-current Perminister session and authorizes the workspace action before forwarding the request. The
-workspace viewer action is `<product-id>:workspace:read`; create, delete, role, and backup actions
-require `<product-id>:members:manage` (workspace admin). A first workspace admin can initialize
-their own grant through the setup control shown after signing in; Perminister still requires that
-account to be an organization owner or admin.
+## Backups and recovery
 
-The server-side controls can list and create databases, prevent deletion while a database has active
-connections, create read-only or read-write login roles, create and download backups, restore a
-backup from the VPS or a local file into a new database, and review an operation log. A systemd
-timer creates daily custom-format pg_dump files and keeps 14 days on the VPS. Manual downloads and
-uploads pass through the authenticated Next.js route in 4 MiB chunks, so large files stay below
-Vercel's per-request and per-response payload limit without exposing the VPS API address or bearer
-token to the browser. Incomplete restore uploads are removed after 24 hours. See vps-api/README.md
-for the API contract. These backups stay on the same VPS disk until downloaded, so keep another copy
-for recovery from server or disk loss. Restore only custom-format .dump or .backup files from
-sources you trust.
+Nanogres schedules one custom-format PostgreSQL dump per day and retains 14 days on the VPS. You
+can also download a backup to your computer and restore a trusted `.dump` or `.backup` file into a
+new database. Restore uploads are transferred in chunks; incomplete uploads are removed after 24
+hours. Restores never overwrite an existing database.
 
-Vercel environment variables are server-only: `PERMINISTER_CLIENT_ID`,
-`PERMINISTER_CLIENT_SECRET`, `PERMINISTER_PRODUCT_ID`, `PERMINISTER_ORGANIZATION_ID`,
-`NANOGRES_WORKSPACE_ID`, `NANOGRES_API_URL`, and `NANOGRES_API_TOKEN`. The production origin must
-match the Perminister app client origin exactly, with callback
-`<origin>/auth/perminister/callback`.
+The scheduled copies share the VPS disk with PostgreSQL. Download a second copy to protect against
+loss of that server or disk. A PostgreSQL dump can contain executable SQL from its source, so restore
+only files from sources you trust.
 
-## Guardrails
+## Repository checks
+
+RepNix provides repository guardrails. Run the checks before proposing a change:
 
 ```sh
 pnpm health:audit
@@ -71,8 +119,12 @@ pnpm health
 pnpm typecheck
 pnpm lint
 pnpm format:check
+pnpm build
 ```
 
-RepNix is configured as the repository health entry point and runs in the GitHub Actions guardrail
-workflow. `ui-preview-kit` provides the unauthenticated local screen preview; it is not an alternate
-production login path.
+## Project layout
+
+- `src/app/` — Next.js pages, authentication callbacks, and server-side API routes.
+- `src/components/dashboard/` — dashboard shell, synthetic preview screens, and live VPS screens.
+- `src/lib/` — Perminister authorization and the server-side VPS API client.
+- `vps-api/` — Python API, systemd services, Nginx configuration, and VPS installation notes.

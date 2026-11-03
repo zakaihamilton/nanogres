@@ -1,113 +1,303 @@
 .page {
-  display: grid;
   min-height: 100svh;
-  align-content: center;
-  justify-items: center;
-  padding: 48px 20px 28px;
+  padding: clamp(28px, 6vw, 72px) clamp(18px, 7vw, 100px);
   background:
-    radial-gradient(ellipse at 49% 40%, var(--surface-green), transparent 45%), var(--canvas);
+    radial-gradient(ellipse at 18% 16%, var(--surface-green), transparent 36%),
+    radial-gradient(ellipse at 90% 90%, var(--blue-pale), transparent 28%), var(--canvas);
 }
 
 .themeControl {
   position: fixed;
-  top: 22px;
-  right: 26px;
+  z-index: 2;
+  top: 20px;
+  right: 25px;
 }
 
-.card {
-  width: min(100%, 430px);
-  padding: 29px 34px 31px;
-  border: 1px solid var(--line);
-  border-radius: 19px;
-  background: var(--surface);
-  box-shadow: var(--shadow-soft);
+.layout {
+  display: grid;
+  width: min(100%, 1190px);
+  min-height: calc(100svh - 144px);
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+  gap: clamp(38px, 7vw, 104px);
+  margin: 0 auto;
+}
+
+.intro {
+  display: grid;
+  gap: clamp(27px, 4vh, 42px);
 }
 
 .brand {
   display: inline-flex;
+  width: fit-content;
   align-items: center;
-  gap: 9px;
-  margin-bottom: 37px;
+  gap: 10px;
   color: var(--ink);
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 760;
-  letter-spacing: -0.05em;
-  text-decoration: none;
+  letter-spacing: -0.055em;
 }
 
 .brandMark {
   display: grid;
-  width: 26px;
-  height: 26px;
+  width: 31px;
+  height: 31px;
   align-content: center;
   justify-items: center;
   gap: 2px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--green);
+  box-shadow: 0 5px 13px color-mix(in srgb, var(--green) 22%, transparent);
 }
 
 .brandMark span {
-  width: 12px;
+  width: 14px;
   height: 3px;
-  border: 1px solid rgb(255 255 255 / 78%);
-  border-radius: 4px;
+  border: 1px solid rgb(255 255 255 / 80%);
+  border-radius: 5px;
 }
 
 .brandMark span:nth-child(2) {
-  width: 16px;
+  width: 19px;
 }
 
-.iconWrap {
-  display: grid;
-  width: 46px;
-  height: 46px;
-  margin-bottom: 23px;
-  place-items: center;
-  border: 1px solid var(--green-pale);
-  border-radius: 13px;
-  background: var(--surface-green);
-  color: var(--green);
+.introBody {
+  max-width: 660px;
 }
 
-.iconWrap svg {
-  width: 23px;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.6;
-}
-
-.eyebrow {
-  margin: 0 0 9px;
+.eyebrow,
+.loginEyebrow {
+  margin: 0 0 12px;
   color: var(--green);
   font-size: 10px;
   font-weight: 760;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
 }
 
-.card h1 {
-  max-width: 330px;
+.intro h1 {
+  max-width: 660px;
   margin: 0;
   color: var(--ink);
-  font-size: clamp(27px, 7vw, 32px);
+  font-size: clamp(38px, 5.4vw, 67px);
+  font-weight: 650;
+  letter-spacing: -0.068em;
+  line-height: 1.02;
+}
+
+.introDescription {
+  max-width: 570px;
+  margin: 19px 0 0;
+  color: var(--ink-soft);
+  font-size: clamp(14px, 1.45vw, 17px);
+  line-height: 1.7;
+}
+
+.featureList {
+  display: grid;
+  gap: 13px;
+  margin: 29px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.featureList li {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.featureIcon,
+.loginIcon,
+.securityIcon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--green);
+}
+
+.featureIcon {
+  width: 37px;
+  height: 37px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+}
+
+.featureIcon svg {
+  width: 18px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.featureList li > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.featureList strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.featureList small {
+  color: var(--ink-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.architectureCard {
+  padding: 17px 19px 15px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--shadow-soft);
+}
+
+.architectureHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.privateLabel {
+  padding: 5px 7px;
+  border: 1px solid var(--green-pale);
+  border-radius: 6px;
+  background: var(--surface-green);
+  color: var(--green-strong);
+  font-size: 8px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+}
+
+.architectureFlow {
+  display: grid;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 9px;
+  margin: 17px 0 12px;
+}
+
+.architectureNode {
+  display: grid;
+  min-width: 0;
+  min-height: 59px;
+  align-content: center;
+  gap: 5px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-muted);
+}
+
+.architectureNode small {
+  color: var(--ink-muted);
+  font-size: 8px;
+  font-weight: 720;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.architectureNode strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.architectureNodeAccent {
+  border-color: var(--green-pale);
+  background: var(--surface-green);
+}
+
+.architectureNodeAccent small,
+.architectureNodeAccent strong {
+  color: var(--green-strong);
+}
+
+.architectureArrow {
+  color: var(--green);
+  font-size: 14px;
+}
+
+.architectureCard > p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.footer {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.card {
+  width: 100%;
+  padding: 32px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow:
+    0 24px 64px rgb(22 45 34 / 8%),
+    0 3px 10px rgb(22 45 34 / 3%);
+}
+
+.loginIcon {
+  width: 46px;
+  height: 46px;
+  margin-bottom: 23px;
+  border: 1px solid var(--green-pale);
+  border-radius: 13px;
+  background: var(--surface-green);
+}
+
+.loginIcon svg {
+  width: 22px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.65;
+}
+
+.loginEyebrow {
+  margin-bottom: 8px;
+}
+
+.card h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(27px, 4vw, 34px);
   font-weight: 650;
   letter-spacing: -0.055em;
   line-height: 1.12;
 }
 
 .description {
-  margin: 12px 0 23px;
+  margin: 10px 0 23px;
   color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.65;
 }
 
 .notice {
-  margin: 0 0 15px;
-  padding: 10px 12px;
+  margin: 0 0 14px;
+  padding: 11px 12px;
   border: 1px solid var(--amber-pale);
   border-radius: 9px;
-  background: color-mix(in srgb, var(--amber-pale) 70%, var(--surface));
+  background: color-mix(in srgb, var(--amber-pale) 72%, var(--surface));
   color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.5;
@@ -116,31 +306,33 @@
 .signInButton {
   display: flex;
   width: 100%;
-  min-height: 46px;
+  min-height: 48px;
   align-items: center;
   justify-content: center;
-  gap: 9px;
-  border: 1px solid var(--green-strong);
+  gap: 10px;
+  border: 1px solid var(--green);
   border-radius: 10px;
   background: var(--green);
   color: #fff;
   cursor: pointer;
   font-size: 13px;
-  font-weight: 680;
+  font-weight: 690;
   text-decoration: none;
   transition:
-    background-color 140ms ease,
-    transform 140ms ease;
+    background-color 150ms ease,
+    transform 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .signInButton:hover:not(:disabled) {
   transform: translateY(-1px);
   background: var(--green-strong);
+  box-shadow: 0 7px 17px color-mix(in srgb, var(--green) 20%, transparent);
 }
 
 .signInButton:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--green) 32%, transparent);
-  outline-offset: 2px;
+  outline: 3px solid color-mix(in srgb, var(--green) 34%, transparent);
+  outline-offset: 3px;
 }
 
 .signInButton:disabled {
@@ -151,7 +343,7 @@
 }
 
 .setupHint {
-  margin: 9px 0 0;
+  margin: 10px 0 0;
   color: var(--ink-muted);
   font-size: 11px;
   line-height: 1.5;
@@ -161,21 +353,17 @@
 .securityNote {
   display: flex;
   align-items: flex-start;
-  gap: 11px;
+  gap: 10px;
   margin-top: 24px;
   padding-top: 19px;
   border-top: 1px solid var(--line);
 }
 
 .securityIcon {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  place-items: center;
+  width: 29px;
+  height: 29px;
   border-radius: 8px;
   background: var(--surface-green);
-  color: var(--green);
 }
 
 .securityIcon svg {
@@ -203,24 +391,99 @@
   line-height: 1.5;
 }
 
-.footer {
-  margin: 22px 0 0;
+.signInFootnote {
+  margin: 20px 0 0;
   color: var(--ink-muted);
   font-size: 10px;
+  text-align: center;
+}
+
+@media (width <= 960px) {
+  .page {
+    padding-right: clamp(24px, 5vw, 52px);
+    padding-left: clamp(24px, 5vw, 52px);
+  }
+
+  .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+    gap: 36px;
+  }
+
+  .intro h1 {
+    font-size: clamp(38px, 5.4vw, 54px);
+  }
+}
+
+@media (width <= 760px) {
+  .page {
+    padding: 74px 18px 30px;
+  }
+
+  .layout {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+
+  .intro {
+    order: 2;
+    gap: 24px;
+  }
+
+  .card {
+    max-width: 520px;
+    order: 1;
+    justify-self: center;
+  }
+
+  .brand {
+    margin-bottom: 3px;
+  }
+
+  .intro h1 {
+    max-width: 590px;
+    font-size: clamp(37px, 8vw, 54px);
+  }
 }
 
 @media (width <= 480px) {
-  .page {
-    padding-right: 13px;
-    padding-left: 13px;
-  }
-
   .themeControl {
     top: 13px;
     right: 14px;
   }
 
   .card {
-    padding: 25px 23px 26px;
+    padding: 25px 22px;
+  }
+
+  .architectureCard {
+    padding: 14px 13px 13px;
+  }
+
+  .architectureFlow {
+    gap: 5px;
+  }
+
+  .architectureNode {
+    min-height: 54px;
+    padding: 7px 6px;
+  }
+
+  .architectureNode small {
+    font-size: 7px;
+  }
+
+  .architectureNode strong {
+    font-size: 9px;
+  }
+
+  .architectureArrow {
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signInButton {
+    transition: none;
   }
 }

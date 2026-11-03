@@ -157,6 +157,154 @@
   font-size: 10px;
 }
 
+.firstRunCard {
+  display: grid;
+  overflow: hidden;
+  grid-template-columns: minmax(0, 1.08fr) minmax(310px, 0.92fr);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.firstRunIntro {
+  padding: clamp(21px, 3vw, 34px);
+}
+
+.firstRunLabel {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.12em;
+}
+
+.firstRunIcon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--surface-green);
+}
+
+.firstRunIntro h2 {
+  max-width: 510px;
+  margin: 19px 0 0;
+  color: var(--ink);
+  font-size: clamp(23px, 3vw, 32px);
+  font-weight: 640;
+  letter-spacing: -0.055em;
+  line-height: 1.12;
+}
+
+.firstRunIntro > p {
+  max-width: 520px;
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.setupLink {
+  display: inline-flex;
+  min-height: 37px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 19px;
+  padding: 0 12px;
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  background: var(--green);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 680;
+  text-decoration: none;
+}
+
+.setupLink:hover {
+  filter: brightness(0.95);
+}
+
+.setupLink:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+
+.connectionDetails {
+  margin-top: 16px;
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.connectionDetails summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.connectionDetails p {
+  margin: 7px 0 0;
+  line-height: 1.5;
+}
+
+.firstRunSteps {
+  display: grid;
+  align-content: center;
+  margin: 0;
+  padding: 14px 21px;
+  border-left: 1px solid var(--line);
+  background: var(--surface-muted);
+  list-style: none;
+}
+
+.firstRunStep {
+  display: grid;
+  min-height: 73px;
+  align-items: center;
+  grid-template-columns: 31px minmax(0, 1fr) 18px;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.firstRunStep:last-child {
+  border-bottom: 0;
+}
+
+.stepNumber {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.firstRunStep > span:nth-child(2) {
+  display: grid;
+  gap: 4px;
+}
+
+.firstRunStep strong {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.firstRunStep small {
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.firstRunStep > svg {
+  color: var(--green);
+}
+
 .twoColumns {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.9fr);
@@ -524,6 +672,15 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .firstRunCard {
+    grid-template-columns: 1fr;
+  }
+
+  .firstRunSteps {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
   .twoColumns {
     grid-template-columns: 1fr;
   }
@@ -546,6 +703,14 @@
 
   .pageHeader > :last-child {
     align-self: flex-start;
+  }
+
+  .firstRunIntro {
+    padding: 21px 18px;
+  }
+
+  .firstRunSteps {
+    padding: 5px 17px;
   }
 
   .formActions {

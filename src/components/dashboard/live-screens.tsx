@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
+import { Icon } from "./icons";
 import styles from "./live-screens.module.css";
 
 type Database = {
@@ -434,13 +435,14 @@ export function LiveOverviewScreen() {
   return (
     <div className={styles.screen}>
       <PageHeader
-        action={<PrimaryLink href="/databases">Manage databases</PrimaryLink>}
-        description="Postgres inventory and server health for your private VPS."
-        eyebrow="OVERVIEW"
-        title="Postgres, at a glance."
+        action={<PrimaryLink href="/databases">Create a database</PrimaryLink>}
+        description="A clear view of database health, storage, access, and recovery."
+        eyebrow="YOUR WORKSPACE"
+        title="Your Postgres, in one place."
       />
-      <ErrorNotice error={error} />
-      {loading && !data ? <Loading /> : null}
+      {loading && !data ? <Loading label="Connecting to your VPS…" /> : null}
+      {!loading && !data ? <FirstRunCard error={error} /> : null}
+      {data && !status ? <ErrorNotice error={error ?? "Server health is unavailable."} /> : null}
       {status ? (
         <div className={styles.metrics}>
           <Metric
@@ -465,56 +467,114 @@ export function LiveOverviewScreen() {
           />
         </div>
       ) : null}
-      <div className={styles.twoColumns}>
-        <Panel
-          title="Databases"
-          detail={`${databases.length} total · ${formatBytes(totalSize)} used`}
-        >
-          {loading && !data ? <Loading /> : <DatabaseTable databases={databases.slice(0, 6)} />}
-        </Panel>
-        <Panel title="Server health" detail="CloudFanatic VPS · Chicago">
-          {status ? (
-            <div className={styles.health}>
-              <span className={styles.healthyDot} />
-              <div>
-                <strong>PostgreSQL is responding</strong>
-                <small>Version {status.postgresVersion}</small>
+      {data && status ? (
+        <>
+          <div className={styles.twoColumns}>
+            <Panel
+              title="Databases"
+              detail={`${databases.length} total · ${formatBytes(totalSize)} used`}
+            >
+              <DatabaseTable databases={databases.slice(0, 6)} />
+            </Panel>
+            <Panel title="Server health" detail="PostgreSQL on your private VPS">
+              <div className={styles.health}>
+                <span className={styles.healthyDot} />
+                <div>
+                  <strong>PostgreSQL is responding</strong>
+                  <small>Version {status.postgresVersion}</small>
+                </div>
+                <Button onClick={() => void refresh()} variant="secondary">
+                  Refresh
+                </Button>
+                <dl>
+                  <div>
+                    <dt>Started</dt>
+                    <dd>{formatDate(status.startedAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Backup retention</dt>
+                    <dd>{status.backupRetentionDays} days on this VPS</dd>
+                  </div>
+                  <div>
+                    <dt>Latest backup</dt>
+                    <dd>
+                      {data.backups[0] ? formatDate(data.backups[0].createdAt) : "No backups yet"}
+                    </dd>
+                  </div>
+                </dl>
               </div>
-              <Button onClick={() => void refresh()} variant="secondary">
-                Refresh
-              </Button>
-              <dl>
-                <div>
-                  <dt>Started</dt>
-                  <dd>{formatDate(status.startedAt)}</dd>
-                </div>
-                <div>
-                  <dt>Backup retention</dt>
-                  <dd>{status.backupRetentionDays} days on this VPS</dd>
-                </div>
-                <div>
-                  <dt>Latest backup</dt>
-                  <dd>
-                    {data?.backups[0] ? formatDate(data.backups[0].createdAt) : "No backups yet"}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          ) : loading ? (
-            <Loading />
-          ) : (
-            <Empty>Server health is unavailable.</Empty>
-          )}
-        </Panel>
-      </div>
-      <Panel title="Recent activity" detail="Nanogres operations on this VPS">
-        <ActivityList events={data?.activity ?? []} loading={loading && !data} />
-      </Panel>
-      <Notice tone="info">
-        Backups are stored on the same VPS disk. Download copies to keep an off-server recovery
-        copy.
-      </Notice>
+            </Panel>
+          </div>
+          <Panel title="Recent activity" detail="Database and access changes on this VPS">
+            <ActivityList events={data.activity} loading={false} />
+          </Panel>
+          <Notice tone="info">
+            Backups are stored on the same VPS disk. Download copies to keep an off-server recovery
+            copy.
+          </Notice>
+        </>
+      ) : null}
     </div>
+  );
+}
+
+export function FirstRunCard({ error }: { error: string | null }) {
+  return (
+    <section aria-labelledby="first-run-title" className={styles.firstRunCard}>
+      <div className={styles.firstRunIntro}>
+        <div className={styles.firstRunLabel}>
+          <span className={styles.firstRunIcon}>
+            <Icon name="server" size={18} />
+          </span>
+          <span>GETTING STARTED</span>
+        </div>
+        <h2 id="first-run-title">Connect your VPS to see your Postgres workspace.</h2>
+        <p>
+          Once the private management API is connected, this page will show database health,
+          storage, backups, and recent changes.
+        </p>
+        <a
+          className={styles.setupLink}
+          href="https://github.com/zakaihamilton/nanogres#connect-your-vps"
+          rel="noreferrer"
+          target="_blank"
+        >
+          Open the setup guide <span aria-hidden="true">↗</span>
+        </a>
+        {error ? (
+          <details className={styles.connectionDetails}>
+            <summary>Connection details</summary>
+            <p>{error}</p>
+          </details>
+        ) : null}
+      </div>
+      <ol aria-label="Your first three steps" className={styles.firstRunSteps}>
+        <li className={styles.firstRunStep}>
+          <span className={styles.stepNumber}>01</span>
+          <span>
+            <strong>Connect your server</strong>
+            <small>Set up the private HTTPS API.</small>
+          </span>
+          <Icon name="server" size={16} />
+        </li>
+        <li className={styles.firstRunStep}>
+          <span className={styles.stepNumber}>02</span>
+          <span>
+            <strong>Create a database</strong>
+            <small>Give each project its own space.</small>
+          </span>
+          <Icon name="database" size={16} />
+        </li>
+        <li className={styles.firstRunStep}>
+          <span className={styles.stepNumber}>03</span>
+          <span>
+            <strong>Save a backup copy</strong>
+            <small>Download a dump for off-server recovery.</small>
+          </span>
+          <Icon name="backup" size={16} />
+        </li>
+      </ol>
+    </section>
   );
 }
 

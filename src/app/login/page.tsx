@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { ThemeControl } from "@/components/theme/theme-control";
 import { isPerministerConfigured } from "@/lib/perminister-auth";
 import styles from "./login.module.css";
@@ -8,6 +7,40 @@ const messages: Record<string, string> = {
   denied: "Sign-in was cancelled. You can try again when you’re ready.",
   callback: "We couldn’t complete sign-in. Please start again.",
 };
+
+function FeatureIcon({ kind }: { kind: "database" | "access" | "backup" }) {
+  if (kind === "database") {
+    return (
+      <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+        <ellipse cx="12" cy="5" rx="8" ry="3" />
+        <path d="M4 5v7c0 1.66 3.58 3 8 3s8-1.34 8-3V5M4 12v7c0 1.66 3.58 3 8 3s8-1.34 8-3v-7" />
+      </svg>
+    );
+  }
+  if (kind === "access") {
+    return (
+      <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+        <circle cx="9" cy="8" r="4" />
+        <path d="M2.5 21v-2a6.5 6.5 0 0 1 13 0v2M19 8v8M23 12h-8" />
+      </svg>
+    );
+  }
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+function SecurityIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+      <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
 
 export default async function LoginPage({
   searchParams,
@@ -25,66 +58,143 @@ export default async function LoginPage({
       <div className={styles.themeControl}>
         <ThemeControl />
       </div>
-      <section aria-labelledby="login-title" className={styles.card}>
-        <Link aria-label="Nanogres home" className={styles.brand} href="/">
-          <span aria-hidden="true" className={styles.brandMark}>
-            <span />
-            <span />
-            <span />
-          </span>
-          <span>nanogres</span>
-        </Link>
-        <div className={styles.iconWrap}>
-          <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
-            <ellipse cx="12" cy="5" rx="8" ry="3" />
-            <path d="M4 5v7c0 1.66 3.58 3 8 3s8-1.34 8-3V5" />
-            <path d="M4 12v7c0 1.66 3.58 3 8 3s8-1.34 8-3v-7" />
-            <path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" />
-          </svg>
-        </div>
-        <p className={styles.eyebrow}>PRIVATE POSTGRES CONTROL</p>
-        <h1 id="login-title">Your databases, in one place.</h1>
-        <p className={styles.description}>
-          Sign in with your Perminister account to manage the Postgres services connected to
-          Nanogres.
-        </p>
+      <div className={styles.layout}>
+        <section aria-labelledby="welcome-title" className={styles.intro}>
+          <div className={styles.brand}>
+            <span aria-hidden="true" className={styles.brandMark}>
+              <span />
+              <span />
+              <span />
+            </span>
+            <span>nanogres</span>
+          </div>
 
-        {message ? <p className={styles.notice}>{message}</p> : null}
-        {loggedOut ? <p className={styles.notice}>You’re signed out.</p> : null}
+          <div className={styles.introBody}>
+            <p className={styles.eyebrow}>POSTGRES FOR YOUR PROJECTS</p>
+            <h1 id="welcome-title">A clearer home for your Postgres databases.</h1>
+            <p className={styles.introDescription}>
+              Keep the essentials close: project databases, access roles, and recoverable backups
+              for the Postgres server you manage.
+            </p>
 
-        {configured ? (
-          <a className={styles.signInButton} href="/api/auth/login">
-            Continue with Perminister
-            <span aria-hidden="true">↗</span>
-          </a>
-        ) : (
-          <button className={styles.signInButton} disabled type="button">
-            Perminister sign-in not configured
-          </button>
-        )}
+            <ul className={styles.featureList}>
+              <li>
+                <span className={styles.featureIcon}>
+                  <FeatureIcon kind="database" />
+                </span>
+                <span>
+                  <strong>Know what is running</strong>
+                  <small>See database health, size, and active connections.</small>
+                </span>
+              </li>
+              <li>
+                <span className={styles.featureIcon}>
+                  <FeatureIcon kind="access" />
+                </span>
+                <span>
+                  <strong>Keep access intentional</strong>
+                  <small>Manage project roles with permissions checked on every action.</small>
+                </span>
+              </li>
+              <li>
+                <span className={styles.featureIcon}>
+                  <FeatureIcon kind="backup" />
+                </span>
+                <span>
+                  <strong>Recover with confidence</strong>
+                  <small>Download a dump or restore a trusted file into a new database.</small>
+                </span>
+              </li>
+            </ul>
+          </div>
 
-        {!configured ? (
-          <p className={styles.setupHint}>
-            Set the app client ID, secret, and origin in the server environment to enable sign-in.
+          <div className={styles.architectureCard}>
+            <div className={styles.architectureHeading}>
+              <span>Private by design</span>
+              <span className={styles.privateLabel}>SERVER-SIDE ACCESS</span>
+            </div>
+            <div
+              aria-label="Your browser connects to the Nanogres server, which manages Postgres on your VPS."
+              className={styles.architectureFlow}
+              role="img"
+            >
+              <span className={styles.architectureNode}>
+                <small>YOU</small>
+                <strong>Dashboard</strong>
+              </span>
+              <span aria-hidden="true" className={styles.architectureArrow}>
+                →
+              </span>
+              <span className={`${styles.architectureNode} ${styles.architectureNodeAccent}`}>
+                <small>SECURE API</small>
+                <strong>Nanogres</strong>
+              </span>
+              <span aria-hidden="true" className={styles.architectureArrow}>
+                →
+              </span>
+              <span className={styles.architectureNode}>
+                <small>YOUR VPS</small>
+                <strong>Postgres</strong>
+              </span>
+            </div>
+            <p>Postgres stays on your server. The browser never receives the VPS API token.</p>
+          </div>
+          <p className={styles.footer}>Built for personal projects and small teams.</p>
+        </section>
+
+        <section aria-labelledby="login-title" className={styles.card}>
+          <div className={styles.loginIcon}>
+            <FeatureIcon kind="database" />
+          </div>
+          <p className={styles.loginEyebrow}>WORKSPACE ACCESS</p>
+          <h2 id="login-title">Welcome back.</h2>
+          <p className={styles.description}>
+            Sign in with your Perminister account to open your Nanogres workspace.
           </p>
-        ) : null}
 
-        <div className={styles.securityNote}>
-          <span aria-hidden="true" className={styles.securityIcon}>
-            <svg fill="none" viewBox="0 0 24 24">
-              <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z" />
-              <path d="m9 12 2 2 4-4" />
-            </svg>
-          </span>
-          <span>
-            <strong>Private by design</strong>
-            <small>
-              Perminister verifies your identity. Your session stays in a secure, HttpOnly cookie.
-            </small>
-          </span>
-        </div>
-      </section>
-      <p className={styles.footer}>Nanogres · Postgres control plane</p>
+          {message ? (
+            <p className={styles.notice} role="alert">
+              {message}
+            </p>
+          ) : null}
+          {loggedOut ? (
+            <p className={styles.notice} role="status">
+              You’re signed out.
+            </p>
+          ) : null}
+
+          {configured ? (
+            <a className={styles.signInButton} href="/api/auth/login">
+              Continue with Perminister
+              <span aria-hidden="true">→</span>
+            </a>
+          ) : (
+            <button className={styles.signInButton} disabled type="button">
+              Perminister sign-in not configured
+            </button>
+          )}
+
+          {!configured ? (
+            <p className={styles.setupHint}>
+              Set the app client ID, secret, and origin in the server environment to enable sign-in.
+            </p>
+          ) : null}
+
+          <div className={styles.securityNote}>
+            <span className={styles.securityIcon}>
+              <SecurityIcon />
+            </span>
+            <span>
+              <strong>Your session stays private</strong>
+              <small>
+                Perminister verifies your identity. Nanogres checks workspace permissions on the
+                server.
+              </small>
+            </span>
+          </div>
+          <p className={styles.signInFootnote}>You’ll be redirected to Perminister to sign in.</p>
+        </section>
+      </div>
     </main>
   );
 }

@@ -8,6 +8,7 @@ import {
   BackupsScreen,
   DatabaseDetailScreen,
   DatabasesScreen,
+  GettingStartedScreen,
   OverviewScreen,
 } from "@/components/dashboard/screens";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
@@ -16,6 +17,7 @@ import styles from "./page.module.css";
 
 const screens = [
   { value: "overview", label: "Overview" },
+  { value: "getting-started", label: "Getting started" },
   { value: "databases", label: "Databases" },
   { value: "database-detail", label: "Database detail" },
   { value: "access", label: "Access & roles" },
@@ -33,6 +35,8 @@ function previewPath(screen: string): string {
 
 function PreviewScreen({ screen }: { screen: string }) {
   switch (screen) {
+    case "getting-started":
+      return <GettingStartedScreen />;
     case "databases":
       return <DatabasesScreen mode="preview" />;
     case "database-detail":

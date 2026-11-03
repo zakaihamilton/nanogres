@@ -71,10 +71,7 @@ export function DashboardShell({
           </span>
           <span className={styles.workspaceText}>
             <strong>Postgres workspace</strong>
-            <small>VPS · private</small>
-          </span>
-          <span aria-hidden="true" className={styles.workspaceChevron}>
-            ▾
+            <small>CloudFanatic VPS · private</small>
           </span>
         </div>
 
@@ -146,10 +143,10 @@ export function DashboardShell({
           </div>
           <div className={styles.topbarActions}>
             <div className={styles.apiStatus}>
-              <span className={styles.statusDot} />
-              {previewMode ? "Demo connection" : "Protected VPS API"}
+              <Icon name="shield" size={15} />
+              {previewMode ? "Synthetic data" : "Access protected"}
             </div>
-            <ThemeControl />
+            {!previewMode ? <ThemeControl /> : null}
           </div>
         </header>
         <main className={styles.mainContent}>{children}</main>
