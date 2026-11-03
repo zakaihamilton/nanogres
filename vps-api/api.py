@@ -192,7 +192,9 @@ def cleanup_old_backups() -> int:
     return removed
 
 
-def create_backup(database: str, actor: str | None = None) -> dict[str, object]:
+def create_backup(
+    database: str, actor: str | None = None, timeout_seconds: int = 3600
+) -> dict[str, object]:
     if not NAME_PATTERN.fullmatch(database) or database == "postgres":
         raise ApiError(400, "Choose a user database to back up.")
     exists = run_sql(
@@ -217,10 +219,12 @@ def create_backup(database: str, actor: str | None = None) -> dict[str, object]:
     env = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "PGCONNECT_TIMEOUT": "10"}
     old_umask = os.umask(0o077)
     try:
-        result = subprocess.run(command, capture_output=True, text=True, env=env, timeout=3600)
+        result = subprocess.run(
+            command, capture_output=True, text=True, env=env, timeout=timeout_seconds
+        )
     except subprocess.TimeoutExpired as error:
         partial_path.unlink(missing_ok=True)
-        raise ApiError(504, "Backup exceeded the one hour limit.") from error
+        raise ApiError(504, "Backup exceeded its time limit.") from error
     finally:
         os.umask(old_umask)
     if result.returncode:
@@ -236,6 +240,68 @@ def create_backup(database: str, actor: str | None = None) -> dict[str, object]:
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "sizeBytes": final_path.stat().st_size,
     }
+
+
+def restore_backup(encoded_name: str, target: object, actor: str | None = None) -> dict[str, object]:
+    filename = unquote(encoded_name)
+    match = BACKUP_PATTERN.fullmatch(filename)
+    if not match:
+        raise ApiError(404, "Backup not found.")
+    target_name = valid_name(target, "New database name")
+    if target_name in {"postgres", "template0", "template1"}:
+        raise ApiError(400, "Choose a new user database name.")
+
+    backup_path = BACKUP_DIR / filename
+    if not backup_path.is_file() or backup_path.is_symlink():
+        raise ApiError(404, "Backup not found.")
+
+    with backup_lock:
+        if run_sql(
+            f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(target_name)})"
+        ) == "t":
+            raise ApiError(409, "A database with that name already exists. Restore never overwrites a database.")
+
+        run_sql(
+            f"CREATE DATABASE {quote_identifier(target_name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
+        )
+        command = [
+            "/usr/bin/pg_restore",
+            "--exit-on-error",
+            "--single-transaction",
+            "--no-owner",
+            "--no-acl",
+            "--dbname",
+            target_name,
+            str(backup_path),
+        ]
+        env = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "PGCONNECT_TIMEOUT": "10"}
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=240,
+            )
+        except subprocess.TimeoutExpired:
+            result = None
+
+        if result is None or result.returncode:
+            try:
+                run_sql(f"DROP DATABASE {quote_identifier(target_name)}")
+            except (ApiError, OSError, subprocess.SubprocessError):
+                raise ApiError(
+                    503,
+                    "Restore failed; the new database may be incomplete and needs cleanup.",
+                )
+            raise ApiError(503, "Restore failed; the new database was removed.")
+
+    record_event(
+        "backup.restored",
+        f"Backup {filename} restored as new database {target_name}.",
+        actor,
+    )
+    return {"database": target_name, "restoredFrom": filename}
 
 
 def backup_all() -> int:
@@ -364,8 +430,12 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/v1/backups":
                 database = valid_name(body.get("database"), "Database name")
                 with backup_lock:
-                    backup = create_backup(database, actor)
+                    backup = create_backup(database, actor, timeout_seconds=240)
                 self._json(201, {"backup": backup})
+            elif path.startswith("/v1/backups/") and path.endswith("/restore"):
+                encoded_name = path.removeprefix("/v1/backups/").removesuffix("/restore")
+                restored = restore_backup(encoded_name, body.get("database"), actor)
+                self._json(201, restored)
             else:
                 self._json(404, {"error": "Route not found."})
         except ApiError as error:

@@ -590,7 +590,9 @@ export function BackupsScreen({ mode }: ScreenProps) {
       </Panel>
       <div className={styles.footerHint}>
         <Icon name="shield" size={15} />
-        <span>Restore actions will ask for confirmation before changing database state.</span>
+        <span>
+          Restore creates a separate database after confirmation; it never overwrites existing data.
+        </span>
       </div>
     </div>
   );
@@ -717,7 +719,9 @@ function BackupTable() {
             <span className={`${styles.statePill} ${styles.stateHealthy}`}>{backup.state}</span>
           </td>
           <td>
-            <StaticRowAction label={`Options for backup ${index + 1}`}>···</StaticRowAction>
+            <StaticRowAction label={`Restore backup ${index + 1} as a new database`}>
+              Restore
+            </StaticRowAction>
           </td>
         </tr>
       ))}

@@ -10,6 +10,7 @@ its existing loopback-only port. The Python API uses the system PostgreSQL CLI a
 - `GET /v1/databases`, `POST /v1/databases`, `DELETE /v1/databases/{name}`
 - `GET /v1/roles`, `POST /v1/roles`
 - `GET /v1/backups`, `POST /v1/backups`, `GET /v1/backups/{filename}`
+- `POST /v1/backups/{filename}/restore` with `{"database":"new_name"}`
 - `GET /v1/activity`
 
 All routes require a server-only bearer token. Database names and role names use lowercase letters,
@@ -19,6 +20,8 @@ digits, and underscores. New roles receive only the selected database and table 
 
 The timer creates custom-format `pg_dump` files every day near 02:00 UTC. It retains 14 days on
 the VPS. Manual backups use the same path. Downloads are proxied by the authenticated Next.js app.
+Restores create a new database and refuse to overwrite an existing one. If a restore fails, Nanogres
+removes the new database when possible and reports when manual cleanup may be needed.
 These local backups do not protect against loss of the VPS or its disk; copy them off-server before
 storing valuable data there.
 

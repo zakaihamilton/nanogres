@@ -4,6 +4,7 @@ import { callNanogresApi, relayApiResponse } from "@/lib/nanogres-api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ segments: string[] }> };
 

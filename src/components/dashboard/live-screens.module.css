@@ -311,7 +311,8 @@
 .form input,
 .formGrid input,
 .formGrid select,
-.inlineForm select {
+.inlineForm select,
+.restoreForm input {
   width: 100%;
   min-width: 0;
   min-height: 38px;
@@ -349,6 +350,45 @@
   max-width: 580px;
   gap: 9px;
   padding: 17px;
+}
+
+.backupActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.restoreForm {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  width: min(310px, 78vw);
+  margin: 10px 0 0 auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  text-align: left;
+}
+
+.restoreForm label {
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 640;
+}
+
+.restoreForm small {
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.restoreActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  width: 100%;
+  margin-top: 3px;
 }
 
 .backupSummary {

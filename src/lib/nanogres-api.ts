@@ -41,6 +41,7 @@ export async function callNanogresApi(
 ): Promise<Response> {
   const config = getApiConfig();
   if (!config) return apiNotConfigured();
+  const timeout = path.startsWith("/v1/backups") && init.method === "POST" ? 255_000 : 60_000;
   try {
     return await fetch(`${config.url}${path}`, {
       ...init,
@@ -50,7 +51,7 @@ export async function callNanogresApi(
         "X-Nanogres-Actor": session.account.subjectId,
       },
       cache: "no-store",
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(timeout),
     });
   } catch {
     return Response.json(

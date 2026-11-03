@@ -11,8 +11,8 @@ if ! id postgres >/dev/null 2>&1; then
   echo "The PostgreSQL operating-system account is missing." >&2
   exit 1
 fi
-if ! command -v psql >/dev/null 2>&1 || ! command -v pg_dump >/dev/null 2>&1; then
-  echo "Install PostgreSQL client tools before running this script." >&2
+if ! command -v psql >/dev/null 2>&1 || ! command -v pg_dump >/dev/null 2>&1 || ! command -v pg_restore >/dev/null 2>&1; then
+  echo "Install PostgreSQL client tools, including pg_restore, before running this script." >&2
   exit 1
 fi
 

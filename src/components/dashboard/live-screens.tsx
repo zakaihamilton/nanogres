@@ -729,7 +729,7 @@ export function LiveAccessScreen() {
 }
 
 export function LiveBackupsScreen() {
-  const { databases } = useDatabases();
+  const { databases, refresh: refreshDatabases } = useDatabases();
   const backupsQuery = useApiData<{ backups: Backup[] }>("/api/nanogres/backups");
   const backups = backupsQuery.data?.backups ?? [];
   const userDatabases = databases.filter((item) => !item.systemDatabase);
@@ -738,6 +738,9 @@ export function LiveBackupsScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [restoreBackup, setRestoreBackup] = useState<Backup | null>(null);
+  const [restoreName, setRestoreName] = useState("");
+  const [restoring, setRestoring] = useState<string | null>(null);
 
   async function createBackup() {
     if (!selectedDatabase) return;
@@ -756,6 +759,41 @@ export function LiveBackupsScreen() {
       setError(cause instanceof Error ? cause.message : "Could not create backup.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function startRestore(backup: Backup) {
+    setRestoreBackup(backup);
+    setRestoreName(`${backup.database.slice(0, 54)}_restore`);
+    setError(null);
+    setMessage(null);
+  }
+
+  async function restoreFromBackup(event: FormEvent<HTMLFormElement>, backup: Backup) {
+    event.preventDefault();
+    if (
+      !window.confirm(
+        `Restore ${backup.filename} as new database “${restoreName}”? Existing databases are never overwritten.`,
+      )
+    )
+      return;
+
+    setRestoring(backup.filename);
+    setError(null);
+    setMessage(null);
+    try {
+      await apiRequest(`/api/nanogres/backups/${encodeURIComponent(backup.filename)}/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ database: restoreName }),
+      });
+      setMessage(`Restored ${backup.filename} as ${restoreName}.`);
+      setRestoreBackup(null);
+      await Promise.all([backupsQuery.refresh(), refreshDatabases()]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not restore this backup.");
+    } finally {
+      setRestoring(null);
     }
   }
 
@@ -823,7 +861,7 @@ export function LiveBackupsScreen() {
                   <th scope="col">Created</th>
                   <th scope="col">Size</th>
                   <th scope="col">
-                    <span className={styles.srOnly}>Download</span>
+                    <span className={styles.srOnly}>Actions</span>
                   </th>
                 </tr>
               </thead>
@@ -836,12 +874,57 @@ export function LiveBackupsScreen() {
                     <td>{formatDate(backup.createdAt)}</td>
                     <td>{formatBytes(backup.sizeBytes)}</td>
                     <td className={styles.actionCell}>
-                      <a
-                        className={styles.button}
-                        href={`/api/nanogres/backups/${encodeURIComponent(backup.filename)}`}
-                      >
-                        Download
-                      </a>
+                      <div className={styles.backupActions}>
+                        <a
+                          className={styles.button}
+                          href={`/api/nanogres/backups/${encodeURIComponent(backup.filename)}`}
+                        >
+                          Download
+                        </a>
+                        <Button
+                          disabled={restoring !== null}
+                          onClick={() => startRestore(backup)}
+                          variant="secondary"
+                        >
+                          Restore as new
+                        </Button>
+                      </div>
+                      {restoreBackup?.filename === backup.filename ? (
+                        <form
+                          className={styles.restoreForm}
+                          onSubmit={(event) => void restoreFromBackup(event, backup)}
+                        >
+                          <label htmlFor={`restore-name-${backup.filename}`}>
+                            New database name
+                          </label>
+                          <input
+                            autoComplete="off"
+                            id={`restore-name-${backup.filename}`}
+                            maxLength={63}
+                            minLength={1}
+                            onChange={(event) => setRestoreName(event.target.value)}
+                            pattern="[a-z][a-z0-9_]{0,62}"
+                            required
+                            value={restoreName}
+                          />
+                          <small>
+                            Restores into a separate database. Existing databases are never
+                            replaced.
+                          </small>
+                          <div className={styles.restoreActions}>
+                            <Button
+                              disabled={restoring !== null}
+                              onClick={() => setRestoreBackup(null)}
+                              variant="secondary"
+                            >
+                              Cancel
+                            </Button>
+                            <Button disabled={restoring !== null} type="submit">
+                              {restoring === backup.filename ? "Restoring…" : "Restore"}
+                            </Button>
+                          </div>
+                        </form>
+                      ) : null}
                     </td>
                   </tr>
                 ))}
@@ -853,8 +936,8 @@ export function LiveBackupsScreen() {
         )}
       </Panel>
       <Notice tone="info">
-        Local backups protect against mistakes, but not VPS or disk loss. Download a copy for
-        off-server recovery.
+        Restore creates a separate database and never overwrites an existing one. Local backups
+        protect against mistakes, but not VPS or disk loss. Download a copy for off-server recovery.
       </Notice>
     </div>
   );
