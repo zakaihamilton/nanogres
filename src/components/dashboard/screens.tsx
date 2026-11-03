@@ -534,6 +534,10 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
                 <span>Last checked</span>
                 <strong>{preview ? "Just now" : "—"}</strong>
               </div>
+              <div>
+                <span>Off-site backup</span>
+                <strong>{preview ? "Verified today" : "—"}</strong>
+              </div>
             </div>
           </div>
         </Panel>
@@ -746,7 +750,7 @@ export function BackupsScreen({ mode }: ScreenProps) {
   return (
     <div className={styles.screen}>
       <ScreenHeading
-        description="Daily backups plus on-demand snapshots, stored on the VPS."
+        description="Daily recovery points, on-demand snapshots, and off-site copies."
         eyebrow="RECOVERY"
         title="Backups"
       />
@@ -766,7 +770,7 @@ export function BackupsScreen({ mode }: ScreenProps) {
           </span>
           <span>
             <small>Retention</small>
-            <strong>14 days</strong>
+            <strong>14 days locally</strong>
           </span>
         </div>
         <div>
@@ -775,9 +779,13 @@ export function BackupsScreen({ mode }: ScreenProps) {
           </span>
           <span>
             <small>Destination</small>
-            <strong>Private VPS disk</strong>
+            <strong>VPS + DigitalOcean Spaces</strong>
           </span>
         </div>
+      </div>
+      <div className={styles.previewNotice} role="status">
+        The latest off-site copy was verified today. Older Space copies remain available after local
+        14-day retention.
       </div>
       <Panel
         title="Create a backup now"

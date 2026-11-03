@@ -47,6 +47,15 @@ type ActivityEvent = {
   createdAt: string;
 };
 
+type OffsiteBackupStatus = {
+  configured: boolean;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  backupCount: number;
+  storedBytes: number;
+  lastError: string | null;
+};
+
 type ServerStatus = {
   postgresVersion: string;
   startedAt: string;
@@ -56,6 +65,9 @@ type ServerStatus = {
   backupRetentionDays: number;
   databaseGrowthPercent?: number;
   databaseQuotaEnforced?: boolean;
+  databaseQuotaReason?: string | null;
+  databaseQuotaCheckedAt?: string | null;
+  offsiteBackup?: OffsiteBackupStatus;
 };
 
 type ApiPayload = object;
@@ -654,6 +666,16 @@ export function LiveOverviewScreen() {
                       {data.backups[0] ? formatDate(data.backups[0].createdAt) : "No backups yet"}
                     </dd>
                   </div>
+                  <div>
+                    <dt>Off-site copy</dt>
+                    <dd>
+                      {!status.offsiteBackup?.configured
+                        ? "Not configured"
+                        : status.offsiteBackup.lastSuccessAt
+                          ? `Verified ${formatDate(status.offsiteBackup.lastSuccessAt)}`
+                          : "Waiting for first upload"}
+                    </dd>
+                  </div>
                 </dl>
               </div>
             </Panel>
@@ -665,6 +687,7 @@ export function LiveOverviewScreen() {
             <StorageCapacity
               databases={databases}
               disk={status.disk}
+              enforcementReason={status.databaseQuotaReason}
               growthPercent={status.databaseGrowthPercent ?? 25}
             />
           </Panel>
@@ -672,8 +695,9 @@ export function LiveOverviewScreen() {
             <ActivityList error={null} events={data.activity} loading={false} />
           </Panel>
           <Notice tone="info">
-            Backups are stored on the same VPS disk. Download copies to keep an off-server recovery
-            copy.
+            {status.offsiteBackup?.lastSuccessAt
+              ? `Off-site backups are verified in DigitalOcean Spaces. The latest successful copy is ${formatDate(status.offsiteBackup.lastSuccessAt)}.`
+              : "Backups are stored on the VPS until off-site storage is configured and the first upload is verified."}
           </Notice>
         </>
       ) : null}
@@ -1105,7 +1129,9 @@ export function LiveBackupsScreen() {
     refresh: refreshDatabases,
   } = useDatabases();
   const backupsQuery = useApiData<{ backups: Backup[] }>("/api/nanogres/backups");
+  const overviewQuery = useApiData<{ status: ServerStatus }>("/api/nanogres/overview");
   const backups = backupsQuery.data?.backups ?? [];
+  const offsite = overviewQuery.data?.status.offsiteBackup;
   const userDatabases = databases.filter((item) => !item.systemDatabase);
   const [database, setDatabase] = useState("");
   const selectedDatabase = database || userDatabases[0]?.name || "";
@@ -1371,7 +1397,7 @@ export function LiveBackupsScreen() {
   return (
     <div className={styles.screen}>
       <PageHeader
-        description="Daily backups plus on-demand snapshots, stored on the VPS."
+        description="Daily recovery points, on-demand snapshots, and off-site copies."
         eyebrow="RECOVERY"
         title="Backups"
       />
@@ -1392,13 +1418,32 @@ export function LiveBackupsScreen() {
         </div>
         <div>
           <span>Retention</span>
-          <strong>14 days</strong>
+          <strong>14 days locally</strong>
         </div>
         <div>
           <span>Destination</span>
-          <strong>Private VPS disk</strong>
+          <strong>
+            {offsite?.configured
+              ? offsite.lastSuccessAt
+                ? "VPS + DigitalOcean Spaces"
+                : "Spaces upload pending"
+              : "Private VPS disk"}
+          </strong>
         </div>
       </div>
+      {offsite?.configured ? (
+        <Notice tone={offsite.lastError ? "error" : "info"}>
+          {offsite.lastError
+            ? "The latest off-site upload needs attention. The VPS backup remains available; check the off-site service log."
+            : offsite.lastSuccessAt
+              ? `${offsite.backupCount} retained backup${offsite.backupCount === 1 ? "" : "s"} verified in Spaces (${formatBytes(offsite.storedBytes)}). Last successful upload: ${formatDate(offsite.lastSuccessAt)}. Remote copies are never removed automatically.`
+              : "Spaces is configured. The first off-site copy will run after the next backup cycle."}
+        </Notice>
+      ) : (
+        <Notice tone="info">
+          Off-site storage is not configured yet. Local backups remain on the VPS for 14 days.
+        </Notice>
+      )}
       <Panel
         title="Create a backup now"
         detail="Create a compressed PostgreSQL dump and save a copy to your device."

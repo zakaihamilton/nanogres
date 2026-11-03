@@ -1,8 +1,9 @@
 # VPS installation notes
 
 Run `vps-api/install-vps.sh` as root after copying this directory onto the server. It installs the
-loopback-only API, systemd backup timer, root-owned service config, and generates a random bearer
-token in `/etc/nanogres/api.env`. It does not enable the Nginx proxy or open a firewall port.
+loopback-only API, local and off-site backup units, quota reconciler, and generates a random bearer
+token in `/etc/nanogres/api.env`. It installs Ubuntu's `rclone` and `quota` packages if missing. It
+does not enable the Nginx proxy or open a firewall port.
 
 Before enabling the public proxy:
 
@@ -20,7 +21,33 @@ The first two public network changes are deliberate access-control changes. Revi
 Nginx diffs before applying them. The API token should be transferred only to the Nanogres Vercel
 project.
 
-The dashboard reports current free space on PostgreSQL's data volume and a per-database growth
-estimate. This estimate is advisory until filesystem quotas are configured and verified on the VPS;
-PostgreSQL itself does not enforce a database-size cap. See `vps-api/README.md` for the sizing
-formula and `NANOGRES_DATABASE_GROWTH_PERCENT` setting.
+## Enable hard per-database limits on the root ext4 volume
+
+The current `/dev/sda1` root filesystem has no ext4 `project` or `quota` features. The quota
+reconciler stays in advisory mode until project quotas are enabled and verified. This maintenance
+requires downtime and an offline filesystem check. Make sure a recent dump has completed and the
+dashboard shows a successful upload to Spaces before proceeding.
+
+1. In Cloudfanatic, boot the VPS into its rescue environment and open its root console or SSH into
+   the rescue system. PostgreSQL will be unavailable during this maintenance.
+2. Identify the root ext4 device with `lsblk -f`, then inspect the installed system's `/etc/fstab` to
+   confirm its root UUID and options. Do not assume the device name if it differs from `/dev/sda1`.
+3. Ensure the target root filesystem is unmounted. Run `e2fsck -f /dev/sda1` and stop if it reports
+   errors that need review. Enable project tracking and project quota metadata:
+
+   ```sh
+   tune2fs -O project -Q prjquota /dev/sda1
+   e2fsck -f /dev/sda1
+   ```
+
+4. Mount the installed system at `/mnt`. In `/mnt/etc/fstab`, add `prjquota` to the options for the
+   root filesystem without changing its UUID or other options. Confirm the ext4 feature list with
+   `tune2fs -l /dev/sda1` includes `project` and `quota`, then unmount `/mnt` and reboot normally.
+5. After boot, verify `findmnt -no FSTYPE,OPTIONS /` includes `ext4` and `prjquota`, and that
+   `repquota -P -v /` succeeds. The five-minute reconciler will assign existing databases and apply
+   their limits; the dashboard changes from “Advisory target” only after those limits are verified.
+
+If `e2fsck` requests interactive repair, the filesystem features are unsupported, or the normal
+boot fails, stop and use the provider rescue environment to restore the previous boot state. Do not
+force a mount or continue with quota enforcement disabled. See `vps-api/README.md` for quota scope,
+growth formula, and Spaces setup.

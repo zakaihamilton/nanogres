@@ -11,6 +11,7 @@ export type DatabaseStorage = {
   sizeBytes: number;
   growthHeadroomBytes?: number;
   recommendedMaxBytes?: number;
+  quotaUsedBytes?: number;
   hardLimitEnforced?: boolean;
   systemDatabase: boolean;
 };
@@ -36,10 +37,12 @@ export function StorageCapacity({
   disk,
   databases,
   growthPercent,
+  enforcementReason,
 }: {
   disk: StorageDisk;
   databases: DatabaseStorage[];
   growthPercent: number;
+  enforcementReason?: string | null;
 }) {
   const diskUsedPercent = percentage(disk.usedBytes, disk.totalBytes);
   const userDatabases = databases.filter((database) => !database.systemDatabase);
@@ -95,21 +98,24 @@ export function StorageCapacity({
       {userDatabases.length ? (
         <ul aria-label="Database storage usage and growth room" className={styles.databaseList}>
           {userDatabases.map((database) => {
-            const growthHeadroomBytes = database.growthHeadroomBytes ?? perDatabaseHeadroom;
+            const quotaUsage = database.hardLimitEnforced
+              ? (database.quotaUsedBytes ?? database.sizeBytes)
+              : database.sizeBytes;
             const recommendedMaxBytes =
-              database.recommendedMaxBytes ?? database.sizeBytes + growthHeadroomBytes;
-            const fill = percentage(database.sizeBytes, recommendedMaxBytes);
+              database.recommendedMaxBytes ?? quotaUsage + perDatabaseHeadroom;
+            const growthHeadroomBytes = Math.max(0, recommendedMaxBytes - quotaUsage);
+            const fill = percentage(quotaUsage, recommendedMaxBytes);
             return (
               <li className={styles.databaseItem} key={database.name}>
                 <div className={styles.databaseHeading}>
                   <code>{database.name}</code>
                   <span>
-                    {formatBytes(database.sizeBytes)} used · target{" "}
-                    {formatBytes(recommendedMaxBytes)}
+                    {formatBytes(quotaUsage)} {database.hardLimitEnforced ? "on disk" : "used"} ·
+                    cap {formatBytes(recommendedMaxBytes)}
                   </span>
                 </div>
                 <div
-                  aria-label={`${database.name}: ${formatBytes(database.sizeBytes)} used, ${formatBytes(growthHeadroomBytes)} growth room`}
+                  aria-label={`${database.name}: ${formatBytes(quotaUsage)} used, ${formatBytes(growthHeadroomBytes)} ${database.hardLimitEnforced ? "remaining before hard limit" : "estimated growth room"}`}
                   aria-valuemax={100}
                   aria-valuemin={0}
                   aria-valuenow={Math.round(fill)}
@@ -119,7 +125,10 @@ export function StorageCapacity({
                   <span className={styles.databaseFill} style={{ width: `${fill}%` }} />
                 </div>
                 <div className={styles.databaseMeta}>
-                  <span>{formatBytes(growthHeadroomBytes)} estimated growth room</span>
+                  <span>
+                    {formatBytes(growthHeadroomBytes)}{" "}
+                    {database.hardLimitEnforced ? "left before limit" : "estimated growth room"}
+                  </span>
                   <span>{Math.round(fill)}% of target</span>
                 </div>
               </li>
@@ -133,8 +142,15 @@ export function StorageCapacity({
       {!quotaEnforced ? (
         <p className={styles.advisoryNote} role="note">
           These targets update with free disk space, but are not hard limits. PostgreSQL does not
-          enforce per-database size caps; filesystem quotas must be enabled on the VPS to stop a
-          database at its target.
+          enforce per-database size caps; filesystem project quotas must be enabled and verified on
+          the VPS to stop a database at its target.{" "}
+          {enforcementReason ?? "The quota filesystem is not active yet."}
+        </p>
+      ) : null}
+      {quotaEnforced ? (
+        <p className={styles.advisoryNote} role="note">
+          Hard caps apply to files in the primary PostgreSQL tablespace. Shared WAL, backups, and
+          server files still use the same VPS disk, so keep an eye on free space.
         </p>
       ) : null}
     </div>

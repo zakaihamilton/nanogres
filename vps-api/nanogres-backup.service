@@ -2,6 +2,7 @@
 Description=Create daily Nanogres Postgres backups
 After=postgresql.service
 Wants=postgresql.service
+OnSuccess=nanogres-offsite-backup.service
 
 [Service]
 Type=oneshot

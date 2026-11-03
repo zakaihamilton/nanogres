@@ -1,0 +1,22 @@
+[Unit]
+Description=Copy retained Nanogres backups to DigitalOcean Spaces
+ConditionPathExists=/etc/nanogres/backup.env
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=postgres
+Group=postgres
+EnvironmentFile=-/etc/nanogres/backup.env
+Environment=NANOGRES_BACKUP_DIR=/var/backups/nanogres
+Environment=NANOGRES_STATE_DIR=/var/lib/nanogres
+ExecStart=/usr/bin/python3 /opt/nanogres-api/nanogres-offsite-backup.py
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/var/backups/nanogres
+ReadWritePaths=/var/lib/nanogres
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

@@ -1,0 +1,15 @@
+[Unit]
+Description=Reconcile Nanogres per-database ext4 project quotas
+After=postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/nanogres-quota reconcile
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/nanogres
+RestrictAddressFamilies=AF_UNIX

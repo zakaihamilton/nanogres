@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -20,6 +21,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 API_HOST = os.environ.get("NANOGRES_API_HOST", "127.0.0.1")
 API_PORT = int(os.environ.get("NANOGRES_API_PORT", "8765"))
+PG_BIN_DIR = Path(os.environ.get("NANOGRES_PG_BIN_DIR", "/usr/bin"))
 BACKUP_DIR = Path(os.environ.get("NANOGRES_BACKUP_DIR", "/var/backups/nanogres"))
 STATE_DIR = Path(os.environ.get("NANOGRES_STATE_DIR", "/var/lib/nanogres"))
 EVENTS_FILE = STATE_DIR / "events.jsonl"
@@ -33,6 +35,11 @@ TRANSFER_CHUNK_BYTES = 4 * 1024 * 1024
 RESTORE_UPLOAD_TTL = timedelta(hours=24)
 RESTORE_UPLOAD_DIR = STATE_DIR / "restore-uploads"
 RESTORE_UPLOAD_DISK_RESERVE_BYTES = 512 * 1024 * 1024
+QUOTA_STATUS_FILE = STATE_DIR / "database-quotas.json"
+OFFSITE_STATUS_FILE = STATE_DIR / "offsite-backup-status.json"
+OFFSITE_ENV_FILE = Path("/etc/nanogres/backup.env")
+QUOTA_REQUEST_FILE = STATE_DIR / "quota-reconcile.request"
+OFFSITE_REQUEST_FILE = STATE_DIR / "offsite-backup.request"
 event_lock = threading.Lock()
 backup_lock = threading.Lock()
 
@@ -41,6 +48,22 @@ class ApiError(Exception):
     def __init__(self, status: int, message: str):
         self.status = status
         self.message = message
+
+
+def pg_client(binary: str) -> str:
+    return str(PG_BIN_DIR / binary)
+
+
+def pg_client_env(timeout: str = "5") -> dict[str, str]:
+    env = {
+        "PATH": f"{PG_BIN_DIR}:/usr/bin:/bin",
+        "LC_ALL": "C",
+        "PGCONNECT_TIMEOUT": timeout,
+    }
+    for key in ("PGHOST", "PGPORT", "PGUSER", "PGSSLMODE"):
+        if os.environ.get(key):
+            env[key] = os.environ[key]
+    return env
 
 
 def quote_identifier(value: str) -> str:
@@ -55,7 +78,7 @@ def run_sql(statement: str, database: str = "postgres") -> str:
     if not NAME_PATTERN.fullmatch(database) and database not in {"postgres", "template0", "template1"}:
         raise ApiError(400, "Invalid database name.")
     command = [
-        "/usr/bin/psql",
+        pg_client("psql"),
         "--no-psqlrc",
         "--no-align",
         "--tuples-only",
@@ -66,7 +89,7 @@ def run_sql(statement: str, database: str = "postgres") -> str:
         "--command",
         statement,
     ]
-    env = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "PGCONNECT_TIMEOUT": "5"}
+    env = pg_client_env("5")
     result = subprocess.run(command, capture_output=True, text=True, env=env, timeout=20)
     if result.returncode:
         # Do not return SQL text or PostgreSQL internals to callers.
@@ -87,7 +110,8 @@ def list_databases() -> list[dict[str, object]]:
         """
         SELECT COALESCE(json_agg(row_to_json(items) ORDER BY items.name), '[]'::json)::text
         FROM (
-          SELECT d.datname AS name,
+          SELECT d.oid AS "quotaId",
+                 d.datname AS name,
                  pg_get_userbyid(d.datdba) AS owner,
                  pg_database_size(d.oid) AS "sizeBytes",
                  (SELECT count(*) FROM pg_stat_activity a WHERE a.datid = d.oid) AS connections,
@@ -112,15 +136,90 @@ def add_database_growth_targets(
     growth_budget = free_bytes * DATABASE_GROWTH_PERCENT // 100
     per_database_headroom = growth_budget // len(user_databases) if user_databases else 0
 
+    quota_state = read_status_file(QUOTA_STATUS_FILE)
+    quota_databases = quota_state.get("databases", {})
+    if not isinstance(quota_databases, dict):
+        quota_databases = {}
+
     for database in databases:
         size_bytes = int(database.get("sizeBytes", 0))
         headroom = 0 if database.get("systemDatabase") else per_database_headroom
         database["growthHeadroomBytes"] = headroom
         database["recommendedMaxBytes"] = size_bytes + headroom
-        # PostgreSQL has no native per-database size quota. Until the VPS filesystem
-        # is provisioned with project quotas, these values are guidance only.
-        database["hardLimitEnforced"] = False
+        quota_id = str(database.pop("quotaId", ""))
+        quota = quota_databases.get(quota_id)
+        enforced = (
+            not database.get("systemDatabase")
+            and quota_state.get("enabled") is True
+            and isinstance(quota, dict)
+            and quota.get("hardLimitEnforced") is True
+        )
+        database["hardLimitEnforced"] = enforced
+        if enforced and isinstance(quota, dict):
+            quota_used = max(0, int(quota.get("usedBytes", size_bytes)))
+            hard_limit = max(quota_used, int(quota.get("hardLimitBytes", quota_used)))
+            database["quotaUsedBytes"] = quota_used
+            database["growthHeadroomBytes"] = max(0, hard_limit - quota_used)
+            database["recommendedMaxBytes"] = hard_limit
     return databases
+
+
+def read_status_file(path: Path) -> dict[str, object]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return value if isinstance(value, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def offsite_backup_status() -> dict[str, object]:
+    saved = read_status_file(OFFSITE_STATUS_FILE)
+    configured = OFFSITE_ENV_FILE.is_file() and OFFSITE_ENV_FILE.stat().st_size > 0
+    return {
+        "configured": configured,
+        "lastAttemptAt": saved.get("lastAttemptAt"),
+        "lastSuccessAt": saved.get("lastSuccessAt"),
+        "backupCount": int(saved.get("backupCount", 0) or 0),
+        "storedBytes": int(saved.get("storedBytes", 0) or 0),
+        "lastError": saved.get("lastError") if configured else None,
+    }
+
+
+def request_quota_reconcile(database: str | None = None) -> None:
+    previous = read_status_file(QUOTA_STATUS_FILE)
+    try:
+        QUOTA_REQUEST_FILE.touch(mode=0o600, exist_ok=True)
+        if not (previous.get("filesystemEnabled") is True or previous.get("enabled") is True) or not database:
+            return
+        identifier = run_sql(
+            f"SELECT oid FROM pg_database WHERE datname = {quote_literal(database)}"
+        )
+        deadline = time.monotonic() + 25
+        while time.monotonic() < deadline:
+            state = read_status_file(QUOTA_STATUS_FILE)
+            quotas = state.get("databases", {})
+            if (
+                state.get("enabled") is True
+                and isinstance(quotas, dict)
+                and isinstance(quotas.get(identifier), dict)
+                and quotas[identifier].get("hardLimitEnforced") is True
+            ):
+                return
+            time.sleep(0.25)
+        raise ApiError(503, "The database storage limit could not be verified. Try again shortly.")
+    except OSError:
+        if previous.get("filesystemEnabled") is True or previous.get("enabled") is True:
+            raise ApiError(503, "The database storage limit could not be verified. Try again shortly.")
+
+
+def request_offsite_backup() -> None:
+    if not OFFSITE_ENV_FILE.is_file() or OFFSITE_ENV_FILE.stat().st_size == 0:
+        return
+    try:
+        OFFSITE_REQUEST_FILE.touch(mode=0o600, exist_ok=True)
+    except OSError:
+        # The local backup is still available; the offsite status remains explicit.
+        return
 
 
 def list_roles() -> list[dict[str, object]]:
@@ -200,12 +299,16 @@ def postgres_status() -> dict[str, object]:
         raise ApiError(503, "PostgreSQL is unavailable.")
     data_directory = run_sql("SHOW data_directory")
     disk = shutil.disk_usage(data_directory)
+    quota_state = read_status_file(QUOTA_STATUS_FILE)
     return {
         **status,
         "disk": {"totalBytes": disk.total, "usedBytes": disk.used, "freeBytes": disk.free},
         "backupRetentionDays": BACKUP_RETENTION_DAYS,
         "databaseGrowthPercent": DATABASE_GROWTH_PERCENT,
-        "databaseQuotaEnforced": False,
+        "databaseQuotaEnforced": quota_state.get("enabled") is True,
+        "databaseQuotaReason": quota_state.get("reason"),
+        "databaseQuotaCheckedAt": quota_state.get("lastReconciledAt"),
+        "offsiteBackup": offsite_backup_status(),
     }
 
 
@@ -224,7 +327,10 @@ def cleanup_old_backups() -> int:
 
 
 def create_backup(
-    database: str, actor: str | None = None, timeout_seconds: int = 3600
+    database: str,
+    actor: str | None = None,
+    timeout_seconds: int = 3600,
+    upload_offsite: bool = True,
 ) -> dict[str, object]:
     if not NAME_PATTERN.fullmatch(database) or database == "postgres":
         raise ApiError(400, "Choose a user database to back up.")
@@ -239,7 +345,7 @@ def create_backup(
     final_path = BACKUP_DIR / filename
     partial_path = BACKUP_DIR / f".{filename}.partial"
     command = [
-        "/usr/bin/pg_dump",
+        pg_client("pg_dump"),
         "--format=custom",
         "--no-owner",
         "--file",
@@ -247,7 +353,7 @@ def create_backup(
         "--dbname",
         database,
     ]
-    env = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "PGCONNECT_TIMEOUT": "10"}
+    env = pg_client_env("10")
     old_umask = os.umask(0o077)
     try:
         result = subprocess.run(
@@ -265,6 +371,8 @@ def create_backup(
     partial_path.replace(final_path)
     cleanup_old_backups()
     record_event("backup.created", f"Backup created for {database}.", actor)
+    if upload_offsite:
+        request_offsite_backup()
     return {
         "filename": filename,
         "database": database,
@@ -295,8 +403,13 @@ def restore_backup(encoded_name: str, target: object, actor: str | None = None) 
         run_sql(
             f"CREATE DATABASE {quote_identifier(target_name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
         )
+        try:
+            request_quota_reconcile(target_name)
+        except ApiError:
+            run_sql(f"DROP DATABASE {quote_identifier(target_name)}")
+            raise
         command = [
-            "/usr/bin/pg_restore",
+            pg_client("pg_restore"),
             "--exit-on-error",
             "--single-transaction",
             "--no-owner",
@@ -305,7 +418,7 @@ def restore_backup(encoded_name: str, target: object, actor: str | None = None) 
             target_name,
             str(backup_path),
         ]
-        env = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "PGCONNECT_TIMEOUT": "10"}
+        env = pg_client_env("10")
         try:
             result = subprocess.run(
                 command,
@@ -417,7 +530,7 @@ def store_restore_chunk(upload_id: str, chunk_index: int, body: bytes) -> dict[s
 def run_pg_restore_from_upload(
     command: list[str], upload_path: Path, chunk_count: int, timeout_seconds: int
 ) -> int | None:
-    env = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "PGCONNECT_TIMEOUT": "10"}
+    env = pg_client_env("10")
     process = subprocess.Popen(
         command,
         stdin=subprocess.PIPE,
@@ -501,16 +614,21 @@ def restore_uploaded_dump(
         run_sql(
             f"CREATE DATABASE {quote_identifier(target_name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
         )
+        try:
+            request_quota_reconcile(target_name)
+        except ApiError:
+            run_sql(f"DROP DATABASE {quote_identifier(target_name)}")
+            shutil.rmtree(upload_path, ignore_errors=True)
+            raise
         result = run_pg_restore_from_upload(
             [
-                "/usr/bin/pg_restore",
+                pg_client("pg_restore"),
                 "--exit-on-error",
                 "--single-transaction",
                 "--no-owner",
                 "--no-acl",
                 "--dbname",
                 target_name,
-                "-",
             ],
             upload_path,
             expected_chunks,
@@ -541,7 +659,7 @@ def backup_all() -> int:
     databases = [row["name"] for row in list_databases() if row.get("name") != "postgres"]
     completed = 0
     for database in databases:
-        create_backup(str(database))
+        create_backup(str(database), upload_offsite=False)
         completed += 1
     cleanup_old_backups()
     return completed
@@ -665,6 +783,11 @@ class Handler(BaseHTTPRequestHandler):
                 run_sql(
                     f"CREATE DATABASE {quote_identifier(name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
                 )
+                try:
+                    request_quota_reconcile(name)
+                except ApiError:
+                    run_sql(f"DROP DATABASE {quote_identifier(name)}")
+                    raise
                 record_event("database.created", f"Database {name} created.", actor)
                 status = postgres_status()
                 databases = add_database_growth_targets(
@@ -755,6 +878,7 @@ class Handler(BaseHTTPRequestHandler):
             if count != "0":
                 raise ApiError(409, "Close active connections before deleting this database.")
             run_sql(f"DROP DATABASE {quote_identifier(name)}")
+            request_quota_reconcile()
             record_event("database.deleted", f"Database {name} deleted.", self._actor())
             self._json(200, {"deleted": True, "name": name})
         except ApiError as error:
