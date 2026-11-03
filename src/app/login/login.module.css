@@ -1,0 +1,226 @@
+.page {
+  display: grid;
+  min-height: 100svh;
+  align-content: center;
+  justify-items: center;
+  padding: 48px 20px 28px;
+  background:
+    radial-gradient(ellipse at 49% 40%, var(--surface-green), transparent 45%), var(--canvas);
+}
+
+.themeControl {
+  position: fixed;
+  top: 22px;
+  right: 26px;
+}
+
+.card {
+  width: min(100%, 430px);
+  padding: 29px 34px 31px;
+  border: 1px solid var(--line);
+  border-radius: 19px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 37px;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 760;
+  letter-spacing: -0.05em;
+  text-decoration: none;
+}
+
+.brandMark {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  align-content: center;
+  justify-items: center;
+  gap: 2px;
+  border-radius: 8px;
+  background: var(--green);
+}
+
+.brandMark span {
+  width: 12px;
+  height: 3px;
+  border: 1px solid rgb(255 255 255 / 78%);
+  border-radius: 4px;
+}
+
+.brandMark span:nth-child(2) {
+  width: 16px;
+}
+
+.iconWrap {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 23px;
+  place-items: center;
+  border: 1px solid var(--green-pale);
+  border-radius: 13px;
+  background: var(--surface-green);
+  color: var(--green);
+}
+
+.iconWrap svg {
+  width: 23px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.eyebrow {
+  margin: 0 0 9px;
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.12em;
+}
+
+.card h1 {
+  max-width: 330px;
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(27px, 7vw, 32px);
+  font-weight: 650;
+  letter-spacing: -0.055em;
+  line-height: 1.12;
+}
+
+.description {
+  margin: 12px 0 23px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.notice {
+  margin: 0 0 15px;
+  padding: 10px 12px;
+  border: 1px solid var(--amber-pale);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--amber-pale) 70%, var(--surface));
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.signInButton {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 1px solid var(--green-strong);
+  border-radius: 10px;
+  background: var(--green);
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 680;
+  text-decoration: none;
+  transition:
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+
+.signInButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: var(--green-strong);
+}
+
+.signInButton:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--green) 32%, transparent);
+  outline-offset: 2px;
+}
+
+.signInButton:disabled {
+  border-color: var(--line-strong);
+  background: var(--surface-muted);
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+
+.setupHint {
+  margin: 9px 0 0;
+  color: var(--ink-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.securityNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-top: 24px;
+  padding-top: 19px;
+  border-top: 1px solid var(--line);
+}
+
+.securityIcon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--surface-green);
+  color: var(--green);
+}
+
+.securityIcon svg {
+  width: 15px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.securityNote > span:last-child {
+  display: grid;
+  gap: 4px;
+}
+
+.securityNote strong {
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 690;
+}
+
+.securityNote small {
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.footer {
+  margin: 22px 0 0;
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+@media (width <= 480px) {
+  .page {
+    padding-right: 13px;
+    padding-left: 13px;
+  }
+
+  .themeControl {
+    top: 13px;
+    right: 14px;
+  }
+
+  .card {
+    padding: 25px 23px 26px;
+  }
+}

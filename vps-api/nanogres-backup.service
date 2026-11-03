@@ -1,0 +1,21 @@
+[Unit]
+Description=Create daily Nanogres Postgres backups
+After=postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=oneshot
+User=postgres
+Group=postgres
+Environment=NANOGRES_BACKUP_DIR=/var/backups/nanogres
+Environment=NANOGRES_STATE_DIR=/var/lib/nanogres
+Environment=NANOGRES_BACKUP_RETENTION_DAYS=14
+ExecStart=/usr/bin/python3 /opt/nanogres-api/api.py --backup-all
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/backups/nanogres /var/lib/nanogres
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+

@@ -1,0 +1,48 @@
+{
+  "name": "nanogres",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=24.22.0 <25"
+  },
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "health": "repnix check",
+    "health:audit": "repnix audit",
+    "health:plan": "repnix setup --plan --format json",
+    "health:dead-code": "knip",
+    "health:duplication": "jscpd src",
+    "health:styles": "stylelint \"src/**/*.module.css\""
+  },
+  "dependencies": {
+    "next": "^16.4.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "server-only": "^0.0.1",
+    "ui-preview-kit": "^0.1.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "jscpd": "^5.4.2",
+    "knip": "^6.44.1",
+    "prettier": "^3.9.9",
+    "repnix": "^1.1.0",
+    "stylelint": "^17.16.0",
+    "stylelint-config-standard": "^40.0.0",
+    "typescript": "^6.0.3"
+  }
+}

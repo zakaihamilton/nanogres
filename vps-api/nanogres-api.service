@@ -1,0 +1,32 @@
+[Unit]
+Description=Nanogres private Postgres management API
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=postgres
+Group=postgres
+EnvironmentFile=/etc/nanogres/api.env
+Environment=NANOGRES_API_HOST=127.0.0.1
+Environment=NANOGRES_API_PORT=8765
+Environment=NANOGRES_BACKUP_DIR=/var/backups/nanogres
+Environment=NANOGRES_STATE_DIR=/var/lib/nanogres
+Environment=NANOGRES_BACKUP_RETENTION_DAYS=14
+ExecStart=/usr/bin/python3 /opt/nanogres-api/api.py
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/backups/nanogres /var/lib/nanogres
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

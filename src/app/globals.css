@@ -1,0 +1,78 @@
+:root {
+  color-scheme: light dark;
+  --canvas: light-dark(#f5f7f5, #101714);
+  --surface: light-dark(#ffffff, #161f1b);
+  --surface-raised: light-dark(#ffffff, #1c2722);
+  --surface-muted: light-dark(#f0f4f1, #202c26);
+  --surface-green: light-dark(#edf6f1, #1c332a);
+  --ink: light-dark(#182622, #e6eee9);
+  --ink-soft: light-dark(#54635d, #b1beb7);
+  --ink-muted: light-dark(#85928c, #7f9087);
+  --line: light-dark(#e1e8e3, #293830);
+  --line-strong: light-dark(#cfd9d2, #3a4d42);
+  --green: light-dark(#16735d, #74c7a5);
+  --green-strong: light-dark(#105541, #a1e2c1);
+  --green-pale: light-dark(#dff1e8, #203b30);
+  --blue: light-dark(#476e9c, #9dbce3);
+  --blue-pale: light-dark(#eaf1fa, #233246);
+  --amber: light-dark(#a56a20, #e6b568);
+  --amber-pale: light-dark(#fff2db, #3a2e1c);
+  --red: light-dark(#a84e4c, #e1978e);
+  --red-pale: light-dark(#fae9e7, #3b2524);
+  --shadow-soft: light-dark(0 12px 32px rgb(25 48 38 / 5%), 0 12px 32px rgb(0 0 0 / 18%));
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--canvas);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  font-size: 14px;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+a,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  background: var(--green-pale);
+  color: var(--ink);
+}

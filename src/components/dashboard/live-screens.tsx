@@ -1,0 +1,907 @@
+"use client";
+
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import Link from "next/link";
+import styles from "./live-screens.module.css";
+
+type Database = {
+  name: string;
+  owner: string;
+  sizeBytes: number;
+  connections: number;
+  maxConnections: number;
+  encoding: string;
+  systemDatabase: boolean;
+};
+
+type Backup = {
+  filename: string;
+  database: string;
+  createdAt: string;
+  sizeBytes: number;
+};
+
+type Role = {
+  name: string;
+  superuser: boolean;
+  canCreateDatabase: boolean;
+  canCreateRole: boolean;
+  validUntil: string | null;
+  systemRole: boolean;
+};
+
+type ActivityEvent = {
+  action: string;
+  detail: string;
+  actor: string | null;
+  createdAt: string;
+};
+
+type ServerStatus = {
+  postgresVersion: string;
+  startedAt: string;
+  connections: number;
+  maxConnections: number;
+  disk: { totalBytes: number; usedBytes: number; freeBytes: number };
+  backupRetentionDays: number;
+};
+
+type ApiPayload = object;
+
+async function apiRequest<T extends ApiPayload>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, { ...init, cache: "no-store" });
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  if (!response.ok) {
+    const message =
+      typeof payload === "object" &&
+      payload !== null &&
+      typeof (payload as Record<string, unknown>).error === "string"
+        ? String((payload as Record<string, unknown>).error)
+        : `Request failed (${response.status}).`;
+    throw new Error(message);
+  }
+  if (typeof payload !== "object" || payload === null)
+    throw new Error("The VPS API returned an invalid response.");
+  return payload as T;
+}
+
+function useApiData<T extends ApiPayload>(path: string) {
+  const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const payload = await apiRequest<T>(path);
+      setData(payload);
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not load server data.");
+    } finally {
+      setLoading(false);
+    }
+  }, [path]);
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      try {
+        const payload = await apiRequest<T>(path);
+        if (active) {
+          setData(payload);
+          setError(null);
+        }
+      } catch (cause) {
+        if (active)
+          setError(cause instanceof Error ? cause.message : "Could not load server data.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [path]);
+  return { data, error, loading, refresh };
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
+}
+
+function formatDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function PageHeader({
+  eyebrow,
+  title,
+  description,
+  action,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className={styles.pageHeader}>
+      <div>
+        <p className={styles.eyebrow}>{eyebrow}</p>
+        <h1>{title}</h1>
+        <p className={styles.description}>{description}</p>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function PrimaryLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link className={styles.primaryButton} href={href}>
+      {children}
+    </Link>
+  );
+}
+
+function Button({
+  children,
+  disabled = false,
+  onClick,
+  variant = "primary",
+  type = "button",
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  onClick?: () => void;
+  variant?: "primary" | "secondary" | "danger";
+  type?: "button" | "submit";
+}) {
+  return (
+    <button
+      className={`${styles.button} ${styles[variant]}`}
+      disabled={disabled}
+      onClick={onClick}
+      type={type}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Panel({
+  title,
+  detail,
+  children,
+}: {
+  title: string;
+  detail?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className={styles.panel}>
+      <div className={styles.panelHeader}>
+        <div>
+          <h2>{title}</h2>
+          {detail ? <p>{detail}</p> : null}
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Notice({ children, tone = "error" }: { children: ReactNode; tone?: "error" | "info" }) {
+  return <div className={`${styles.notice} ${styles[tone]}`}>{children}</div>;
+}
+
+function Loading({ label = "Loading server data…" }: { label?: string }) {
+  return (
+    <div className={styles.loading} role="status">
+      {label}
+    </div>
+  );
+}
+
+function Empty({ children }: { children: ReactNode }) {
+  return <div className={styles.empty}>{children}</div>;
+}
+
+function DatabaseTable({
+  databases,
+  onDelete,
+  busyName,
+}: {
+  databases: Database[];
+  onDelete?: (database: Database) => void;
+  busyName?: string | null;
+}) {
+  if (!databases.length) return <Empty>No user databases yet. Create one to get started.</Empty>;
+  return (
+    <div className={styles.tableWrap}>
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Database</th>
+            <th scope="col">Owner</th>
+            <th scope="col">Size</th>
+            <th scope="col">Connections</th>
+            <th scope="col">Encoding</th>
+            {onDelete ? (
+              <th scope="col">
+                <span className={styles.srOnly}>Actions</span>
+              </th>
+            ) : null}
+          </tr>
+        </thead>
+        <tbody>
+          {databases.map((database) => (
+            <tr key={database.name}>
+              <td>
+                <span className={styles.databaseName}>{database.name}</span>
+                {database.systemDatabase ? (
+                  <small className={styles.systemTag}>default</small>
+                ) : null}
+              </td>
+              <td>{database.owner}</td>
+              <td>{formatBytes(database.sizeBytes)}</td>
+              <td>
+                {database.connections} / {database.maxConnections}
+              </td>
+              <td>{database.encoding}</td>
+              {onDelete ? (
+                <td className={styles.actionCell}>
+                  {database.systemDatabase ? (
+                    <span className={styles.muted}>Protected</span>
+                  ) : (
+                    <Button
+                      disabled={busyName === database.name}
+                      onClick={() => onDelete(database)}
+                      variant="danger"
+                    >
+                      {busyName === database.name ? "Deleting…" : "Delete"}
+                    </Button>
+                  )}
+                </td>
+              ) : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ErrorNotice({ error }: { error: string | null }) {
+  if (!error) return null;
+  const canBootstrap = error === "Perminister denied this action.";
+  return (
+    <>
+      <Notice>{error}</Notice>
+      {canBootstrap ? <WorkspaceBootstrap /> : null}
+    </>
+  );
+}
+
+function WorkspaceBootstrap() {
+  const [state, setState] = useState<"idle" | "saving" | "error">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+  async function initialize() {
+    setState("saving");
+    setMessage(null);
+    try {
+      const response = await fetch("/api/setup/workspace", {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const payload = await response.json();
+      if (!response.ok)
+        throw new Error(
+          typeof payload.error === "string" ? payload.error : "Could not initialize workspace.",
+        );
+      window.location.reload();
+    } catch (cause) {
+      setState("error");
+      setMessage(cause instanceof Error ? cause.message : "Could not initialize workspace.");
+    }
+  }
+  return (
+    <div className={styles.bootstrap}>
+      <p>
+        Your current account can initialize its Nanogres workspace. Perminister will grant the
+        signed-in account workspace admin access.
+      </p>
+      <Button disabled={state === "saving"} onClick={() => void initialize()}>
+        {state === "saving" ? "Initializing…" : "Initialize workspace access"}
+      </Button>
+      {message ? <small role="alert">{message}</small> : null}
+    </div>
+  );
+}
+
+function useDatabases() {
+  const query = useApiData<{ databases: Database[] }>("/api/nanogres/databases");
+  return { ...query, databases: query.data?.databases ?? [] };
+}
+
+export function LiveOverviewScreen() {
+  const { data, error, loading, refresh } = useApiData<{
+    status: ServerStatus;
+    databases: Database[];
+    backups: Backup[];
+    activity: ActivityEvent[];
+  }>("/api/nanogres/overview");
+  const status = data?.status;
+  const databases = data?.databases ?? [];
+  const totalSize = databases.reduce((sum, database) => sum + database.sizeBytes, 0);
+  return (
+    <div className={styles.screen}>
+      <PageHeader
+        action={<PrimaryLink href="/databases">Manage databases</PrimaryLink>}
+        description="Postgres inventory and server health for your private VPS."
+        eyebrow="OVERVIEW"
+        title="Postgres, at a glance."
+      />
+      <ErrorNotice error={error} />
+      {loading && !data ? <Loading /> : null}
+      {status ? (
+        <div className={styles.metrics}>
+          <Metric
+            label="Databases"
+            value={String(databases.filter((item) => !item.systemDatabase).length)}
+            detail="User databases"
+          />
+          <Metric
+            label="Connections"
+            value={String(status.connections)}
+            detail={`Maximum ${status.maxConnections}`}
+          />
+          <Metric
+            label="Database storage"
+            value={formatBytes(totalSize)}
+            detail="Across visible databases"
+          />
+          <Metric
+            label="Free disk"
+            value={formatBytes(status.disk.freeBytes)}
+            detail={`of ${formatBytes(status.disk.totalBytes)}`}
+          />
+        </div>
+      ) : null}
+      <div className={styles.twoColumns}>
+        <Panel
+          title="Databases"
+          detail={`${databases.length} total · ${formatBytes(totalSize)} used`}
+        >
+          {loading && !data ? <Loading /> : <DatabaseTable databases={databases.slice(0, 6)} />}
+        </Panel>
+        <Panel title="Server health" detail="CloudFanatic VPS · Chicago">
+          {status ? (
+            <div className={styles.health}>
+              <span className={styles.healthyDot} />
+              <div>
+                <strong>PostgreSQL is responding</strong>
+                <small>Version {status.postgresVersion}</small>
+              </div>
+              <Button onClick={() => void refresh()} variant="secondary">
+                Refresh
+              </Button>
+              <dl>
+                <div>
+                  <dt>Started</dt>
+                  <dd>{formatDate(status.startedAt)}</dd>
+                </div>
+                <div>
+                  <dt>Backup retention</dt>
+                  <dd>{status.backupRetentionDays} days on this VPS</dd>
+                </div>
+                <div>
+                  <dt>Latest backup</dt>
+                  <dd>
+                    {data?.backups[0] ? formatDate(data.backups[0].createdAt) : "No backups yet"}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          ) : loading ? (
+            <Loading />
+          ) : (
+            <Empty>Server health is unavailable.</Empty>
+          )}
+        </Panel>
+      </div>
+      <Panel title="Recent activity" detail="Nanogres operations on this VPS">
+        <ActivityList events={data?.activity ?? []} loading={loading && !data} />
+      </Panel>
+      <Notice tone="info">
+        Backups are stored on the same VPS disk. Download copies to keep an off-server recovery
+        copy.
+      </Notice>
+    </div>
+  );
+}
+
+function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <section className={styles.metric}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </section>
+  );
+}
+
+export function LiveDatabasesScreen() {
+  const { databases, error, loading, refresh } = useDatabases();
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [busyName, setBusyName] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function createDatabase(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setActionError(null);
+    setMessage(null);
+    try {
+      await apiRequest("/api/nanogres/databases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      setName("");
+      setMessage(`Database “${name}” created.`);
+      await refresh();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Could not create database.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteDatabase(database: Database) {
+    if (
+      !window.confirm(`Delete database “${database.name}”? This permanently removes all its data.`)
+    )
+      return;
+    setBusyName(database.name);
+    setActionError(null);
+    setMessage(null);
+    try {
+      await apiRequest(`/api/nanogres/databases/${encodeURIComponent(database.name)}`, {
+        method: "DELETE",
+      });
+      setMessage(`Database “${database.name}” deleted.`);
+      await refresh();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Could not delete database.");
+    } finally {
+      setBusyName(null);
+    }
+  }
+
+  return (
+    <div className={styles.screen}>
+      <PageHeader
+        description="Create databases and review size, owners, and active connections."
+        eyebrow="DATA"
+        title="Databases"
+      />
+      <ErrorNotice error={error} />
+      <ErrorNotice error={actionError} />
+      {message ? <Notice tone="info">{message}</Notice> : null}
+      <Panel
+        title="Create a database"
+        detail="Names use lowercase letters, numbers, and underscores."
+      >
+        <form className={styles.form} onSubmit={createDatabase}>
+          <label htmlFor="database-name">Database name</label>
+          <div className={styles.formRow}>
+            <input
+              autoComplete="off"
+              id="database-name"
+              maxLength={63}
+              minLength={2}
+              onChange={(event) => setName(event.target.value)}
+              pattern="[a-z][a-z0-9_]{1,62}"
+              placeholder="my_project"
+              required
+              value={name}
+            />
+            <Button disabled={saving} type="submit">
+              {saving ? "Creating…" : "Create database"}
+            </Button>
+          </div>
+        </form>
+      </Panel>
+      <Panel
+        title="All databases"
+        detail={
+          loading
+            ? "Refreshing inventory…"
+            : `${databases.length} database${databases.length === 1 ? "" : "s"}`
+        }
+      >
+        {loading && !databases.length ? (
+          <Loading />
+        ) : (
+          <DatabaseTable busyName={busyName} databases={databases} onDelete={deleteDatabase} />
+        )}
+      </Panel>
+      <Notice tone="info">
+        Postgres remains private on the VPS. Database access is granted through the Access &amp;
+        roles page.
+      </Notice>
+    </div>
+  );
+}
+
+export function LiveAccessScreen() {
+  const { databases, error: databaseError, loading: databaseLoading } = useDatabases();
+  const userDatabases = databases.filter((item) => !item.systemDatabase);
+  const rolesQuery = useApiData<{ roles: Role[] }>("/api/nanogres/roles");
+  const roles = rolesQuery.data?.roles ?? [];
+  const [name, setName] = useState("");
+  const [database, setDatabase] = useState("");
+  const selectedDatabase = database || userDatabases[0]?.name || "";
+  const [password, setPassword] = useState("");
+  const [access, setAccess] = useState<"readwrite" | "readonly">("readwrite");
+  const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function createRole(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setActionError(null);
+    setMessage(null);
+    try {
+      await apiRequest("/api/nanogres/roles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, database: selectedDatabase, password, access }),
+      });
+      setName("");
+      setPassword("");
+      setMessage(
+        `Role “${name}” created for ${selectedDatabase}. Store the password safely; Nanogres will not show it again.`,
+      );
+      await rolesQuery.refresh();
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Could not create role.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className={styles.screen}>
+      <PageHeader
+        description="Create least-privilege Postgres login roles for individual databases."
+        eyebrow="SECURITY"
+        title="Access & roles"
+      />
+      <ErrorNotice error={databaseError ?? rolesQuery.error} />
+      <ErrorNotice error={actionError} />
+      {message ? <Notice tone="info">{message}</Notice> : null}
+      <Notice tone="info">
+        People and their Nanogres permissions are managed in Perminister. These are database login
+        roles for your applications.
+      </Notice>
+      <Panel
+        title="Create a database role"
+        detail="Passwords are sent over HTTPS, stored by Postgres as SCRAM hashes, and never displayed again."
+      >
+        {databaseLoading ? (
+          <Loading />
+        ) : userDatabases.length ? (
+          <form className={styles.formGrid} onSubmit={createRole}>
+            <div className={styles.field}>
+              <label htmlFor="role-name">Role name</label>
+              <input
+                id="role-name"
+                maxLength={63}
+                minLength={2}
+                onChange={(event) => setName(event.target.value)}
+                pattern="[a-z][a-z0-9_]{1,62}"
+                placeholder="my_app_user"
+                required
+                value={name}
+              />
+            </div>
+            <div className={styles.field}>
+              <label htmlFor="role-database">Database</label>
+              <select
+                id="role-database"
+                onChange={(event) => setDatabase(event.target.value)}
+                required
+                value={selectedDatabase}
+              >
+                {userDatabases.map((item) => (
+                  <option key={item.name} value={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={styles.field}>
+              <label htmlFor="role-access">Access level</label>
+              <select
+                id="role-access"
+                onChange={(event) => setAccess(event.target.value as "readwrite" | "readonly")}
+                value={access}
+              >
+                <option value="readwrite">Read and write</option>
+                <option value="readonly">Read only</option>
+              </select>
+            </div>
+            <div className={styles.field}>
+              <label htmlFor="role-password">Initial password</label>
+              <input
+                autoComplete="new-password"
+                id="role-password"
+                minLength={16}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                type="password"
+                value={password}
+              />
+              <small>
+                Use at least 16 characters. Generate and store it in your password manager.
+              </small>
+            </div>
+            <div className={styles.formActions}>
+              <Button disabled={saving} type="submit">
+                {saving ? "Creating…" : "Create role"}
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <Empty>Create a database before adding a login role.</Empty>
+        )}
+      </Panel>
+      <Panel
+        title="Login roles"
+        detail={`${roles.length} Postgres login role${roles.length === 1 ? "" : "s"}`}
+      >
+        {rolesQuery.loading && !rolesQuery.data ? (
+          <Loading />
+        ) : roles.length ? (
+          <div className={styles.tableWrap}>
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Role</th>
+                  <th scope="col">Privileges</th>
+                  <th scope="col">Expires</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roles.map((role) => (
+                  <tr key={role.name}>
+                    <td>
+                      <span className={styles.databaseName}>{role.name}</span>
+                      {role.systemRole ? <small className={styles.systemTag}>system</small> : null}
+                    </td>
+                    <td>
+                      {role.superuser
+                        ? "Superuser"
+                        : [
+                            role.canCreateDatabase ? "Create database" : "",
+                            role.canCreateRole ? "Create roles" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "Database grants"}
+                    </td>
+                    <td>{role.validUntil ? formatDate(role.validUntil) : "Never"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <Empty>No login roles found.</Empty>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+export function LiveBackupsScreen() {
+  const { databases } = useDatabases();
+  const backupsQuery = useApiData<{ backups: Backup[] }>("/api/nanogres/backups");
+  const backups = backupsQuery.data?.backups ?? [];
+  const userDatabases = databases.filter((item) => !item.systemDatabase);
+  const [database, setDatabase] = useState("");
+  const selectedDatabase = database || userDatabases[0]?.name || "";
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function createBackup() {
+    if (!selectedDatabase) return;
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await apiRequest("/api/nanogres/backups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ database: selectedDatabase }),
+      });
+      setMessage(`Backup for ${selectedDatabase} completed.`);
+      await backupsQuery.refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not create backup.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className={styles.screen}>
+      <PageHeader
+        description="Daily backups plus on-demand snapshots, stored on the VPS."
+        eyebrow="RECOVERY"
+        title="Backups"
+      />
+      <ErrorNotice error={backupsQuery.error ?? error} />
+      {message ? <Notice tone="info">{message}</Notice> : null}
+      <div className={styles.backupSummary}>
+        <div>
+          <span>Schedule</span>
+          <strong>Daily near 02:00 UTC</strong>
+        </div>
+        <div>
+          <span>Retention</span>
+          <strong>14 days</strong>
+        </div>
+        <div>
+          <span>Destination</span>
+          <strong>Private VPS disk</strong>
+        </div>
+      </div>
+      <Panel
+        title="Create a backup now"
+        detail="Choose a database for a compressed custom-format pg_dump."
+      >
+        <div className={styles.inlineForm}>
+          <label className={styles.srOnly} htmlFor="backup-database">
+            Database
+          </label>
+          <select
+            id="backup-database"
+            disabled={!userDatabases.length}
+            onChange={(event) => setDatabase(event.target.value)}
+            value={selectedDatabase}
+          >
+            {!selectedDatabase ? <option value="">No user databases</option> : null}
+            {userDatabases.map((item) => (
+              <option key={item.name} value={item.name}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+          <Button disabled={saving || !selectedDatabase} onClick={() => void createBackup()}>
+            {saving ? "Creating backup…" : "Create backup"}
+          </Button>
+        </div>
+      </Panel>
+      <Panel
+        title="Backup history"
+        detail={`${backups.length} retained file${backups.length === 1 ? "" : "s"}`}
+      >
+        {backupsQuery.loading && !backupsQuery.data ? (
+          <Loading />
+        ) : backups.length ? (
+          <div className={styles.tableWrap}>
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Database</th>
+                  <th scope="col">Created</th>
+                  <th scope="col">Size</th>
+                  <th scope="col">
+                    <span className={styles.srOnly}>Download</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {backups.map((backup) => (
+                  <tr key={backup.filename}>
+                    <td>
+                      <span className={styles.databaseName}>{backup.database}</span>
+                    </td>
+                    <td>{formatDate(backup.createdAt)}</td>
+                    <td>{formatBytes(backup.sizeBytes)}</td>
+                    <td className={styles.actionCell}>
+                      <a
+                        className={styles.button}
+                        href={`/api/nanogres/backups/${encodeURIComponent(backup.filename)}`}
+                      >
+                        Download
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <Empty>No backup files yet. The daily timer runs near 02:00 UTC.</Empty>
+        )}
+      </Panel>
+      <Notice tone="info">
+        Local backups protect against mistakes, but not VPS or disk loss. Download a copy for
+        off-server recovery.
+      </Notice>
+    </div>
+  );
+}
+
+export function LiveActivityScreen() {
+  const { data, error, loading, refresh } = useApiData<{ events: ActivityEvent[] }>(
+    "/api/nanogres/activity",
+  );
+  return (
+    <div className={styles.screen}>
+      <PageHeader
+        action={
+          <Button onClick={() => void refresh()} variant="secondary">
+            Refresh
+          </Button>
+        }
+        description="A server-side record of database, role, and backup operations."
+        eyebrow="AUDIT TRAIL"
+        title="Activity"
+      />
+      <ErrorNotice error={error} />
+      <Panel title="Recent events" detail="Newest operations first">
+        <ActivityList events={data?.events ?? []} loading={loading && !data} />
+      </Panel>
+    </div>
+  );
+}
+
+function ActivityList({ events, loading }: { events: ActivityEvent[]; loading: boolean }) {
+  if (loading && !events.length) return <Loading />;
+  if (!events.length) return <Empty>No Nanogres operations recorded yet.</Empty>;
+  return (
+    <div className={styles.activityList}>
+      {events.map((event, index) => (
+        <div className={styles.activityItem} key={`${event.createdAt}-${index}`}>
+          <span className={styles.activityMark} aria-hidden="true" />
+          <div>
+            <strong>{event.action.replaceAll(".", " ")}</strong>
+            <p>
+              {event.detail}
+              {event.actor ? ` · actor ${event.actor}` : ""}
+            </p>
+          </div>
+          <time dateTime={event.createdAt}>{formatDate(event.createdAt)}</time>
+        </div>
+      ))}
+    </div>
+  );
+}

@@ -1,0 +1,13 @@
+{
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/coverage/**",
+    "**/.next/**",
+    "**/.turbo/**",
+    "**/generated/**",
+    "**/*.generated.*",
+    "**/*.css"
+  ]
+}

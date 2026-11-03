@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.vercel/
+coverage/
+.venv/
+__pycache__/
+*.py[cod]
+*.tsbuildinfo
+.env
+.env.*
+AGENTS.md
+.repnix/
+out/
+dist/
+.DS_Store
