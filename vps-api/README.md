@@ -6,23 +6,34 @@ its existing loopback-only port. The Python API uses the system PostgreSQL CLI a
 
 ## Routes
 
-- `GET /healthz` and `GET /v1/overview`
-- `GET /v1/databases`, `POST /v1/databases`, `DELETE /v1/databases/{name}`
-- `GET /v1/roles`, `POST /v1/roles`
-- `GET /v1/backups`, `POST /v1/backups`, `GET /v1/backups/{filename}`
-- `POST /v1/backups/{filename}/restore` with `{"database":"new_name"}`
-- `GET /v1/activity`
+- GET /healthz and /v1/overview
+- GET /v1/databases, POST /v1/databases, DELETE /v1/databases/{name}
+- GET /v1/roles, POST /v1/roles
+- GET /v1/backups, POST /v1/backups
+- GET /v1/backups/{filename}?offset={bytes}&length={bytes} downloads one range of up to 4 MiB
+- POST /v1/backups/{filename}/restore with {"database":"new_name"}
+- POST /v1/restore-uploads with {"sizeBytes":123} starts a temporary upload
+- PUT /v1/restore-uploads/{id}/chunks/{index} accepts one application/octet-stream chunk up to 4 MiB
+- POST /v1/restore-uploads/{id}/complete with {"database":"new_name"} restores the dump
+- DELETE /v1/restore-uploads/{id} removes an incomplete upload
+- GET /v1/activity
 
 All routes require a server-only bearer token. Database names and role names use lowercase letters,
 digits, and underscores. New roles receive only the selected database and table privileges.
 
 ## Backups
 
-The timer creates custom-format `pg_dump` files every day near 02:00 UTC. It retains 14 days on
-the VPS. Manual backups use the same path. Downloads are proxied by the authenticated Next.js app.
-Restores create a new database and refuse to overwrite an existing one. If a restore fails, Nanogres
-removes the new database when possible and reports when manual cleanup may be needed.
-These local backups do not protect against loss of the VPS or its disk; copy them off-server before
+The timer creates custom-format pg_dump files every day near 02:00 UTC. It retains 14 days on the
+VPS. Manual backups use the same path. The dashboard transfers downloads and restores in chunks
+through its authenticated serverless route, keeping the VPS API address and bearer token out of the
+browser. Temporary upload chunks are kept under /var/lib/nanogres/restore-uploads and removed after
+a successful restore, an explicit cancellation, or 24 hours.
+
+Restores accept custom-format pg_dump files (.dump or .backup) and always create a new database.
+They refuse to overwrite an existing database. If a restore fails, Nanogres removes the new database
+when possible and reports when manual cleanup may be needed. PostgreSQL restore files can contain
+code chosen by the source database superuser, so restore only files from sources you trust. These
+local backups do not protect against loss of the VPS or its disk; copy them off-server before
 storing valuable data there.
 
 The install procedure is documented in `install-vps.md` at the repository root. Do not expose the

@@ -538,7 +538,7 @@ export function BackupsScreen({ mode }: ScreenProps) {
   return (
     <div className={styles.screen}>
       <ScreenHeading
-        action="Create backup"
+        action="Create & download .dump"
         description="Review scheduled and completed database backups."
         eyebrow="RECOVERY"
         title="Backups"
@@ -573,6 +573,20 @@ export function BackupsScreen({ mode }: ScreenProps) {
           </span>
         </div>
       </div>
+      <Panel
+        detail="Upload a trusted custom-format dump and restore it into a fresh database."
+        title="Restore from a file"
+      >
+        <div className={styles.filePreview}>
+          <div>
+            <strong>PostgreSQL dump</strong>
+            <small>.dump or .backup · creates a separate database</small>
+          </div>
+          <button className={styles.primaryButton} disabled type="button">
+            Choose file to restore
+          </button>
+        </div>
+      </Panel>
       <Panel
         detail={
           preview ? "Automatic and manual backups" : "Backup history will appear after connection"

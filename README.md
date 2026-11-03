@@ -47,10 +47,15 @@ their own grant through the setup control shown after signing in; Perminister st
 account to be an organization owner or admin.
 
 The server-side controls can list and create databases, prevent deletion while a database has active
-connections, create read-only or read-write login roles, create and download backups, and review an
-operation log. A systemd timer creates daily custom-format `pg_dump` files and keeps 14 days on the
-VPS. See [`vps-api/README.md`](vps-api/README.md) for the API contract. These backups stay on the same
-VPS disk until downloaded, so keep another copy for recovery from server or disk loss.
+connections, create read-only or read-write login roles, create and download backups, restore a
+backup from the VPS or a local file into a new database, and review an operation log. A systemd
+timer creates daily custom-format pg_dump files and keeps 14 days on the VPS. Manual downloads and
+uploads pass through the authenticated Next.js route in 4 MiB chunks, so large files stay below
+Vercel's per-request and per-response payload limit without exposing the VPS API address or bearer
+token to the browser. Incomplete restore uploads are removed after 24 hours. See vps-api/README.md
+for the API contract. These backups stay on the same VPS disk until downloaded, so keep another copy
+for recovery from server or disk loss. Restore only custom-format .dump or .backup files from
+sources you trust.
 
 Vercel environment variables are server-only: `PERMINISTER_CLIENT_ID`,
 `PERMINISTER_CLIENT_SECRET`, `PERMINISTER_PRODUCT_ID`, `PERMINISTER_ORGANIZATION_ID`,

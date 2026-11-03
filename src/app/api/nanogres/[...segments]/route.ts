@@ -18,9 +18,11 @@ function actionFor(method: string, segments: string[]): string | null {
     if (["overview", "databases", "roles", "backups", "activity"].includes(resource)) return read;
   }
   if (method === "POST") {
-    if (["databases", "roles", "backups"].includes(resource)) return manage;
+    if (["databases", "roles", "backups", "restore-uploads"].includes(resource)) return manage;
   }
+  if (method === "PUT" && resource === "restore-uploads" && identifier) return manage;
   if (method === "DELETE" && resource === "databases" && identifier) return manage;
+  if (method === "DELETE" && resource === "restore-uploads" && identifier) return manage;
   return null;
 }
 
@@ -46,7 +48,7 @@ async function handle(request: NextRequest, context: RouteParams): Promise<Respo
   const auth = await authorizeNanogresAction(action);
   if (auth instanceof Response) return auth;
 
-  let body: string | undefined;
+  let body: BodyInit | undefined;
   if (request.method === "POST") {
     const length = Number(request.headers.get("content-length") ?? 0);
     if (length > 8192)
@@ -66,9 +68,56 @@ async function handle(request: NextRequest, context: RouteParams): Promise<Respo
     }
   }
 
-  const upstream = await callNanogresApi(apiPath(segments), auth.session, {
+  if (request.method === "PUT") {
+    const contentType = request.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
+    if (contentType !== "application/octet-stream") {
+      return Response.json(
+        { error: "Content-Type must be application/octet-stream." },
+        { status: 415 },
+      );
+    }
+    const length = Number(request.headers.get("content-length") ?? 0);
+    if (length > 4 * 1024 * 1024) {
+      return Response.json({ error: "Upload chunk is too large." }, { status: 413 });
+    }
+    const bytes = new Uint8Array(await request.arrayBuffer());
+    if (bytes.byteLength === 0 || bytes.byteLength > 4 * 1024 * 1024) {
+      return Response.json({ error: "Upload chunk has an invalid size." }, { status: 413 });
+    }
+    body = bytes;
+  }
+
+  let upstreamPath = apiPath(segments);
+  if (request.method === "GET" && segments[0] === "backups" && segments[1]) {
+    const query = request.nextUrl.searchParams;
+    const offset = query.get("offset");
+    const length = query.get("length");
+    const keys = Array.from(query.keys());
+    if (
+      keys.length !== 2 ||
+      keys.some((key) => key !== "offset" && key !== "length") ||
+      !offset ||
+      !length ||
+      !/^\d+$/.test(offset) ||
+      !/^\d+$/.test(length)
+    ) {
+      return Response.json({ error: "Specify one download offset and length." }, { status: 400 });
+    }
+    upstreamPath +=
+      "?offset=" + encodeURIComponent(offset) + "&length=" + encodeURIComponent(length);
+  }
+
+  const contentType =
+    request.method === "PUT"
+      ? "application/octet-stream"
+      : request.method === "POST"
+        ? "application/json"
+        : undefined;
+  const upstream = await callNanogresApi(upstreamPath, auth.session, {
     method: request.method,
-    ...(body === undefined ? {} : { body, headers: { "Content-Type": "application/json" } }),
+    ...(body === undefined
+      ? {}
+      : { body, headers: { "Content-Type": contentType ?? "application/json" } }),
   });
   return relayApiResponse(upstream);
 }
@@ -78,6 +127,10 @@ export function GET(request: NextRequest, context: RouteParams): Promise<Respons
 }
 
 export function POST(request: NextRequest, context: RouteParams): Promise<Response> {
+  return handle(request, context);
+}
+
+export function PUT(request: NextRequest, context: RouteParams): Promise<Response> {
   return handle(request, context);
 }
 

@@ -578,6 +578,30 @@
   color: var(--green);
 }
 
+.filePreview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 15px 17px;
+}
+
+.filePreview > div {
+  display: grid;
+  gap: 5px;
+}
+
+.filePreview strong {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 640;
+}
+
+.filePreview small {
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
 .detailCrumb {
   display: flex;
   align-items: center;
@@ -874,6 +898,11 @@
   .panelHeading {
     padding-right: 12px;
     padding-left: 12px;
+  }
+
+  .filePreview {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .table th,

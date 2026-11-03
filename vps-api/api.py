@@ -11,10 +11,11 @@ import shutil
 import subprocess
 import sys
 import threading
+import uuid
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 
 API_HOST = os.environ.get("NANOGRES_API_HOST", "127.0.0.1")
@@ -25,7 +26,12 @@ EVENTS_FILE = STATE_DIR / "events.jsonl"
 BACKUP_RETENTION_DAYS = int(os.environ.get("NANOGRES_BACKUP_RETENTION_DAYS", "14"))
 NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 BACKUP_PATTERN = re.compile(r"^([a-z][a-z0-9_]*)__([0-9]{8}T[0-9]{12}Z)\.dump$")
+UPLOAD_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 ACTOR_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+TRANSFER_CHUNK_BYTES = 4 * 1024 * 1024
+RESTORE_UPLOAD_TTL = timedelta(hours=24)
+RESTORE_UPLOAD_DIR = STATE_DIR / "restore-uploads"
+RESTORE_UPLOAD_DISK_RESERVE_BYTES = 512 * 1024 * 1024
 event_lock = threading.Lock()
 backup_lock = threading.Lock()
 
@@ -304,7 +310,209 @@ def restore_backup(encoded_name: str, target: object, actor: str | None = None) 
     return {"database": target_name, "restoredFrom": filename}
 
 
+def cleanup_old_restore_uploads() -> int:
+    removed = 0
+    if not RESTORE_UPLOAD_DIR.exists():
+        return removed
+    cutoff = datetime.now(timezone.utc) - RESTORE_UPLOAD_TTL
+    for path in RESTORE_UPLOAD_DIR.iterdir():
+        if not UPLOAD_ID_PATTERN.fullmatch(path.name) or path.is_symlink() or not path.is_dir():
+            continue
+        if datetime.fromtimestamp(path.stat().st_mtime, timezone.utc) < cutoff:
+            shutil.rmtree(path)
+            removed += 1
+    return removed
+
+
+def restore_upload_path(upload_id: str) -> Path:
+    if not UPLOAD_ID_PATTERN.fullmatch(upload_id):
+        raise ApiError(404, "Restore upload not found.")
+    path = RESTORE_UPLOAD_DIR / upload_id
+    if not path.is_dir() or path.is_symlink():
+        raise ApiError(404, "Restore upload not found.")
+    return path
+
+
+def read_restore_upload(upload_id: str) -> tuple[Path, dict[str, int]]:
+    path = restore_upload_path(upload_id)
+    try:
+        metadata = json.loads((path / "metadata.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ApiError(404, "Restore upload not found.") from error
+    size_bytes = metadata.get("sizeBytes") if isinstance(metadata, dict) else None
+    if not isinstance(size_bytes, int) or isinstance(size_bytes, bool) or size_bytes <= 0:
+        raise ApiError(400, "Restore upload metadata is invalid.")
+    chunk_count = (size_bytes + TRANSFER_CHUNK_BYTES - 1) // TRANSFER_CHUNK_BYTES
+    return path, {"sizeBytes": size_bytes, "chunkCount": chunk_count}
+
+
+def create_restore_upload(body: dict[str, object]) -> dict[str, object]:
+    size_bytes = body.get("sizeBytes")
+    if not isinstance(size_bytes, int) or isinstance(size_bytes, bool) or size_bytes <= 0:
+        raise ApiError(400, "Choose a non-empty PostgreSQL dump file.")
+
+    RESTORE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    cleanup_old_restore_uploads()
+    if shutil.disk_usage(STATE_DIR).free < size_bytes + RESTORE_UPLOAD_DISK_RESERVE_BYTES:
+        raise ApiError(413, "There is not enough free VPS disk space for this upload.")
+
+    upload_id = uuid.uuid4().hex
+    upload_path = RESTORE_UPLOAD_DIR / upload_id
+    upload_path.mkdir(mode=0o700)
+    metadata_path = upload_path / "metadata.json"
+    metadata_path.write_text(json.dumps({"sizeBytes": size_bytes}), encoding="utf-8")
+    os.chmod(metadata_path, 0o600)
+    return {
+        "uploadId": upload_id,
+        "chunkSizeBytes": TRANSFER_CHUNK_BYTES,
+        "chunkCount": (size_bytes + TRANSFER_CHUNK_BYTES - 1) // TRANSFER_CHUNK_BYTES,
+    }
+
+
+def store_restore_chunk(upload_id: str, chunk_index: int, body: bytes) -> dict[str, int]:
+    upload_path, metadata = read_restore_upload(upload_id)
+    chunk_count = metadata["chunkCount"]
+    if chunk_index < 0 or chunk_index >= chunk_count:
+        raise ApiError(404, "Restore upload chunk not found.")
+    expected_size = min(
+        TRANSFER_CHUNK_BYTES,
+        metadata["sizeBytes"] - chunk_index * TRANSFER_CHUNK_BYTES,
+    )
+    if len(body) != expected_size:
+        raise ApiError(400, "Restore upload chunk has an unexpected size.")
+
+    chunk_path = upload_path / f"chunk-{chunk_index:08d}.part"
+    partial_path = upload_path / f".chunk-{chunk_index:08d}.partial"
+    partial_path.write_bytes(body)
+    os.chmod(partial_path, 0o600)
+    partial_path.replace(chunk_path)
+    return {"chunkIndex": chunk_index, "receivedBytes": len(body)}
+
+
+def run_pg_restore_from_upload(
+    command: list[str], upload_path: Path, chunk_count: int, timeout_seconds: int
+) -> int | None:
+    env = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "PGCONNECT_TIMEOUT": "10"}
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=env,
+    )
+    if process.stdin is None:
+        process.kill()
+        process.wait()
+        raise ApiError(503, "PostgreSQL could not read the uploaded backup.")
+
+    feed_errors: list[Exception] = []
+
+    def feed_archive() -> None:
+        try:
+            for index in range(chunk_count):
+                chunk_path = upload_path / f"chunk-{index:08d}.part"
+                if not chunk_path.is_file() or chunk_path.is_symlink():
+                    raise ApiError(400, "The uploaded backup is incomplete.")
+                with chunk_path.open("rb") as chunk:
+                    shutil.copyfileobj(chunk, process.stdin, length=1024 * 1024)
+        except BrokenPipeError:
+            # pg_restore can reject an invalid archive before it reads all input.
+            pass
+        except Exception as error:
+            feed_errors.append(error)
+        finally:
+            try:
+                process.stdin.close()
+            except BrokenPipeError:
+                pass
+
+    feeder = threading.Thread(target=feed_archive, daemon=True)
+    feeder.start()
+    try:
+        result = process.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+        feeder.join(timeout=5)
+        return None
+    feeder.join()
+    if feed_errors:
+        if result == 0:
+            raise ApiError(400, "The uploaded backup could not be read completely.")
+    return result
+
+
+def restore_uploaded_dump(
+    upload_id: str, target: object, actor: str | None = None
+) -> dict[str, object]:
+    upload_path, metadata = read_restore_upload(upload_id)
+    target_name = valid_name(target, "New database name")
+    if target_name in {"postgres", "template0", "template1"}:
+        raise ApiError(400, "Choose a new user database name.")
+
+    expected_chunks = metadata["chunkCount"]
+    for index in range(expected_chunks):
+        chunk_path = upload_path / f"chunk-{index:08d}.part"
+        expected_size = min(
+            TRANSFER_CHUNK_BYTES,
+            metadata["sizeBytes"] - index * TRANSFER_CHUNK_BYTES,
+        )
+        if (
+            chunk_path.is_symlink()
+            or not chunk_path.is_file()
+            or chunk_path.stat().st_size != expected_size
+        ):
+            raise ApiError(400, "The uploaded backup is incomplete.")
+
+    with backup_lock:
+        if run_sql(
+            f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(target_name)})"
+        ) == "t":
+            raise ApiError(
+                409,
+                "A database with that name already exists. Restore never overwrites a database.",
+            )
+
+        run_sql(
+            f"CREATE DATABASE {quote_identifier(target_name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
+        )
+        result = run_pg_restore_from_upload(
+            [
+                "/usr/bin/pg_restore",
+                "--exit-on-error",
+                "--single-transaction",
+                "--no-owner",
+                "--no-acl",
+                "--dbname",
+                target_name,
+                "-",
+            ],
+            upload_path,
+            expected_chunks,
+            timeout_seconds=240,
+        )
+        if result is None or result != 0:
+            try:
+                run_sql(f"DROP DATABASE {quote_identifier(target_name)}")
+            except (ApiError, OSError, subprocess.SubprocessError):
+                raise ApiError(
+                    503,
+                    "Restore failed; the new database may be incomplete and needs cleanup.",
+                )
+            shutil.rmtree(upload_path, ignore_errors=True)
+            raise ApiError(503, "Restore failed; the new database was removed.")
+
+    shutil.rmtree(upload_path)
+    record_event(
+        "backup.restored",
+        f"Uploaded PostgreSQL dump restored as new database {target_name}.",
+        actor,
+    )
+    return {"database": target_name, "restoredFrom": "uploaded file"}
+
+
 def backup_all() -> int:
+    cleanup_old_restore_uploads()
     databases = [row["name"] for row in list_databases() if row.get("name") != "postgres"]
     completed = 0
     for database in databases:
@@ -398,7 +606,8 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/v1/activity":
                 self._json(200, {"events": list_activity()})
             elif path.startswith("/v1/backups/"):
-                self._download_backup(path.removeprefix("/v1/backups/"))
+                query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+                self._download_backup(path.removeprefix("/v1/backups/"), query)
             else:
                 self._json(404, {"error": "Route not found."})
         except ApiError as error:
@@ -436,6 +645,12 @@ class Handler(BaseHTTPRequestHandler):
                 encoded_name = path.removeprefix("/v1/backups/").removesuffix("/restore")
                 restored = restore_backup(encoded_name, body.get("database"), actor)
                 self._json(201, restored)
+            elif path == "/v1/restore-uploads":
+                self._json(201, create_restore_upload(body))
+            elif path.startswith("/v1/restore-uploads/") and path.endswith("/complete"):
+                upload_id = path.removeprefix("/v1/restore-uploads/").removesuffix("/complete")
+                restored = restore_uploaded_dump(upload_id, body.get("database"), actor)
+                self._json(201, restored)
             else:
                 self._json(404, {"error": "Route not found."})
         except ApiError as error:
@@ -445,11 +660,46 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, subprocess.SubprocessError):
             self._json(503, {"error": "Nanogres could not complete the operation."})
 
+    def do_PUT(self) -> None:
+        if not self._authorized():
+            return
+        try:
+            path = urlsplit(self.path).path
+            match = re.fullmatch(
+                r"/v1/restore-uploads/([a-f0-9]{32})/chunks/([0-9]+)", path
+            )
+            if not match:
+                raise ApiError(404, "Route not found.")
+            if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/octet-stream":
+                raise ApiError(415, "Content-Type must be application/octet-stream.")
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError as error:
+                raise ApiError(400, "Invalid upload chunk.") from error
+            if length <= 0 or length > TRANSFER_CHUNK_BYTES:
+                raise ApiError(413, "Upload chunk is too large.")
+            body = self.rfile.read(length)
+            if len(body) != length:
+                raise ApiError(400, "Upload chunk was incomplete.")
+            result = store_restore_chunk(match.group(1), int(match.group(2)), body)
+            self._json(200, {"chunk": result})
+        except ApiError as error:
+            self._json(error.status, {"error": error.message})
+        except (OSError, subprocess.SubprocessError):
+            self._json(503, {"error": "Nanogres could not store the upload chunk."})
+
     def do_DELETE(self) -> None:
         if not self._authorized():
             return
         try:
             path = urlsplit(self.path).path
+            upload_prefix = "/v1/restore-uploads/"
+            if path.startswith(upload_prefix):
+                upload_id = path.removeprefix(upload_prefix)
+                upload_path = restore_upload_path(upload_id)
+                shutil.rmtree(upload_path)
+                self._json(200, {"deleted": True})
+                return
             prefix = "/v1/databases/"
             if not path.startswith(prefix):
                 self._json(404, {"error": "Route not found."})
@@ -517,22 +767,46 @@ class Handler(BaseHTTPRequestHandler):
         record_event("role.created", f"Role {name} created for {database} ({access}).", actor)
         self._json(201, {"role": {"name": name, "database": database, "access": access}})
 
-    def _download_backup(self, encoded_name: str) -> None:
+    def _download_backup(self, encoded_name: str, query: dict[str, list[str]]) -> None:
         filename = unquote(encoded_name)
         if not BACKUP_PATTERN.fullmatch(filename):
             raise ApiError(404, "Backup not found.")
         path = BACKUP_DIR / filename
         if not path.is_file() or path.is_symlink():
             raise ApiError(404, "Backup not found.")
-        self.send_response(200)
+        if (
+            set(query) - {"offset", "length"}
+            or len(query.get("offset", [])) != 1
+            or len(query.get("length", [])) != 1
+        ):
+            raise ApiError(400, "Specify one download offset and length.")
+        try:
+            offset = int(query["offset"][0])
+            length = int(query["length"][0])
+        except ValueError as error:
+            raise ApiError(400, "Download offset and length must be whole numbers.") from error
+        total_size = path.stat().st_size
+        if offset < 0 or offset >= total_size or length <= 0 or length > TRANSFER_CHUNK_BYTES:
+            raise ApiError(416, "Download range is invalid.")
+        chunk_size = min(length, total_size - offset)
+        self.send_response(206)
         self.send_header("Content-Type", "application/octet-stream")
-        self.send_header("Content-Length", str(path.stat().st_size))
+        self.send_header("Content-Length", str(chunk_size))
+        self.send_header("Content-Range", f"bytes {offset}-{offset + chunk_size - 1}/{total_size}")
+        self.send_header("Accept-Ranges", "bytes")
         self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.send_header("Cache-Control", "private, no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         with path.open("rb") as handle:
-            shutil.copyfileobj(handle, self.wfile, length=1024 * 1024)
+            handle.seek(offset)
+            remaining = chunk_size
+            while remaining:
+                chunk = handle.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
 
 
 def main() -> int:

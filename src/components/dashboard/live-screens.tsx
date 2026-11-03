@@ -48,6 +48,28 @@ type ServerStatus = {
 
 type ApiPayload = object;
 
+const TRANSFER_CHUNK_BYTES = 4 * 1024 * 1024;
+const MAX_BUFFERED_DOWNLOAD_BYTES = 128 * 1024 * 1024;
+
+type TransferFileWriter = {
+  write: (chunk: Uint8Array) => Promise<void>;
+  close: () => Promise<void>;
+  abort?: () => Promise<void>;
+};
+
+type SaveFilePickerWindow = Window & {
+  showSaveFilePicker?: (options: {
+    suggestedName: string;
+    types: Array<{ description: string; accept: Record<string, string[]> }>;
+  }) => Promise<{ createWritable: () => Promise<TransferFileWriter> }>;
+};
+
+type TransferProgress = {
+  label: string;
+  transferred: number;
+  total: number;
+};
+
 async function apiRequest<T extends ApiPayload>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { ...init, cache: "no-store" });
   let payload: unknown;
@@ -129,6 +151,61 @@ function formatDate(value: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+function isFilePickerCancelled(cause: unknown): boolean {
+  return (
+    typeof cause === "object" && cause !== null && "name" in cause && cause.name === "AbortError"
+  );
+}
+
+async function chooseDownloadWriter(filename: string): Promise<TransferFileWriter | null> {
+  const picker = (window as SaveFilePickerWindow).showSaveFilePicker;
+  if (!picker) return null;
+  const handle = await picker({
+    suggestedName: filename,
+    types: [
+      {
+        description: "PostgreSQL custom-format dump",
+        accept: { "application/octet-stream": [".dump"] },
+      },
+    ],
+  });
+  return handle.createWritable();
+}
+
+async function responseError(response: Response): Promise<Error> {
+  try {
+    const payload: unknown = await response.json();
+    if (
+      typeof payload === "object" &&
+      payload !== null &&
+      typeof (payload as Record<string, unknown>).error === "string"
+    ) {
+      return new Error(String((payload as Record<string, unknown>).error));
+    }
+  } catch {
+    // Fall through to the status-based message.
+  }
+  return new Error("Transfer failed (" + response.status + ").");
+}
+
+function triggerBufferedDownload(chunks: Uint8Array[], filename: string): void {
+  const size = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+  const buffer = new ArrayBuffer(size);
+  const bytes = new Uint8Array(buffer);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const blob = new Blob([buffer], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function PageHeader({
@@ -741,30 +818,121 @@ export function LiveBackupsScreen() {
   const [restoreBackup, setRestoreBackup] = useState<Backup | null>(null);
   const [restoreName, setRestoreName] = useState("");
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restoreFileName, setRestoreFileName] = useState("");
+  const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
 
-  async function createBackup() {
+  async function downloadBackupFile(backup: Backup, writer: TransferFileWriter | null) {
+    if (!backup.sizeBytes) throw new Error("The backup file is empty.");
+    if (!writer && backup.sizeBytes > MAX_BUFFERED_DOWNLOAD_BYTES) {
+      throw new Error(
+        "This browser cannot save files larger than 128 MB directly. Use Chrome or Edge for large backups.",
+      );
+    }
+
+    const bufferedChunks: Uint8Array[] = [];
+    let transferred = 0;
+    try {
+      while (transferred < backup.sizeBytes) {
+        const length = Math.min(TRANSFER_CHUNK_BYTES, backup.sizeBytes - transferred);
+        const query = new URLSearchParams({
+          offset: String(transferred),
+          length: String(length),
+        });
+        const response = await fetch(
+          "/api/nanogres/backups/" + encodeURIComponent(backup.filename) + "?" + query.toString(),
+          { cache: "no-store" },
+        );
+        if (!response.ok) throw await responseError(response);
+        const chunk = new Uint8Array(await response.arrayBuffer());
+        if (chunk.byteLength !== length) {
+          throw new Error("The backup download ended before the complete file was received.");
+        }
+        if (writer) await writer.write(chunk);
+        else bufferedChunks.push(chunk);
+        transferred += chunk.byteLength;
+        setTransferProgress({
+          label: "Saving " + backup.filename,
+          transferred,
+          total: backup.sizeBytes,
+        });
+      }
+
+      if (writer) await writer.close();
+      else triggerBufferedDownload(bufferedChunks, backup.filename);
+    } catch (cause) {
+      await writer?.abort?.().catch(() => {});
+      throw cause;
+    } finally {
+      setTransferProgress(null);
+    }
+  }
+
+  async function createBackupAndDownload() {
     if (!selectedDatabase) return;
+    const suggestedName = selectedDatabase + "-" + new Date().toISOString().slice(0, 10) + ".dump";
+    let writer: TransferFileWriter | null;
+    try {
+      writer = await chooseDownloadWriter(suggestedName);
+    } catch (cause) {
+      if (!isFilePickerCancelled(cause)) {
+        setError(cause instanceof Error ? cause.message : "Could not open the save dialog.");
+      }
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setMessage(null);
     try {
-      await apiRequest("/api/nanogres/backups", {
+      const result = await apiRequest<{ backup: Backup }>("/api/nanogres/backups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ database: selectedDatabase }),
       });
-      setMessage(`Backup for ${selectedDatabase} completed.`);
       await backupsQuery.refresh();
+      await downloadBackupFile(result.backup, writer);
+      setMessage("Created and downloaded " + result.backup.filename + ".");
     } catch (cause) {
+      await writer?.abort?.().catch(() => {});
       setError(cause instanceof Error ? cause.message : "Could not create backup.");
+      await backupsQuery.refresh();
     } finally {
       setSaving(false);
+      setTransferProgress(null);
+    }
+  }
+
+  async function downloadExistingBackup(backup: Backup) {
+    let writer: TransferFileWriter | null;
+    try {
+      writer = await chooseDownloadWriter(backup.filename);
+    } catch (cause) {
+      if (!isFilePickerCancelled(cause)) {
+        setError(cause instanceof Error ? cause.message : "Could not open the save dialog.");
+      }
+      return;
+    }
+
+    setDownloading(backup.filename);
+    setError(null);
+    setMessage(null);
+    try {
+      await downloadBackupFile(backup, writer);
+      setMessage("Saved " + backup.filename + " to your device.");
+    } catch (cause) {
+      await writer?.abort?.().catch(() => {});
+      setError(cause instanceof Error ? cause.message : "Could not download this backup.");
+    } finally {
+      setDownloading(null);
+      setTransferProgress(null);
     }
   }
 
   function startRestore(backup: Backup) {
     setRestoreBackup(backup);
-    setRestoreName(`${backup.database.slice(0, 54)}_restore`);
+    setRestoreName(backup.database.slice(0, 54) + "_restore");
     setError(null);
     setMessage(null);
   }
@@ -773,21 +941,29 @@ export function LiveBackupsScreen() {
     event.preventDefault();
     if (
       !window.confirm(
-        `Restore ${backup.filename} as new database “${restoreName}”? Existing databases are never overwritten.`,
+        "Restore " +
+          backup.filename +
+          " as new database “" +
+          restoreName +
+          "”? Existing databases are never overwritten.",
       )
-    )
+    ) {
       return;
+    }
 
     setRestoring(backup.filename);
     setError(null);
     setMessage(null);
     try {
-      await apiRequest(`/api/nanogres/backups/${encodeURIComponent(backup.filename)}/restore`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ database: restoreName }),
-      });
-      setMessage(`Restored ${backup.filename} as ${restoreName}.`);
+      await apiRequest(
+        "/api/nanogres/backups/" + encodeURIComponent(backup.filename) + "/restore",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ database: restoreName }),
+        },
+      );
+      setMessage("Restored " + backup.filename + " as " + restoreName + ".");
       setRestoreBackup(null);
       await Promise.all([backupsQuery.refresh(), refreshDatabases()]);
     } catch (cause) {
@@ -796,6 +972,104 @@ export function LiveBackupsScreen() {
       setRestoring(null);
     }
   }
+
+  async function restoreFromFile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const file = restoreFile;
+    if (!file || !file.size) {
+      setError("Choose a non-empty PostgreSQL dump file.");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Restore " +
+          file.name +
+          " as new database “" +
+          restoreFileName +
+          "”? Existing databases are never overwritten. Only restore files you trust.",
+      )
+    ) {
+      return;
+    }
+
+    setRestoring("uploaded-file");
+    setError(null);
+    setMessage(null);
+    let uploadId: string | null = null;
+    try {
+      const upload = await apiRequest<{
+        uploadId: string;
+        chunkSizeBytes: number;
+        chunkCount: number;
+      }>("/api/nanogres/restore-uploads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sizeBytes: file.size }),
+      });
+      if (
+        !/^[a-f0-9]{32}$/.test(upload.uploadId) ||
+        upload.chunkSizeBytes < 1 ||
+        upload.chunkSizeBytes > TRANSFER_CHUNK_BYTES ||
+        upload.chunkCount !== Math.ceil(file.size / upload.chunkSizeBytes)
+      ) {
+        throw new Error("The VPS returned invalid upload settings.");
+      }
+      uploadId = upload.uploadId;
+
+      for (let offset = 0, index = 0; offset < file.size; index += 1) {
+        const end = Math.min(offset + upload.chunkSizeBytes, file.size);
+        const chunk = file.slice(offset, end);
+        const response = await fetch(
+          "/api/nanogres/restore-uploads/" + uploadId + "/chunks/" + index,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: chunk,
+            cache: "no-store",
+          },
+        );
+        if (!response.ok) throw await responseError(response);
+        offset = end;
+        setTransferProgress({
+          label: "Uploading " + file.name,
+          transferred: offset,
+          total: file.size,
+        });
+      }
+
+      setTransferProgress({
+        label: "Restoring into " + restoreFileName,
+        transferred: file.size,
+        total: file.size,
+      });
+      await apiRequest("/api/nanogres/restore-uploads/" + uploadId + "/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ database: restoreFileName }),
+      });
+      uploadId = null;
+      setMessage("Restored " + file.name + " as " + restoreFileName + ".");
+      setRestoreFile(null);
+      setRestoreFileName("");
+      form.reset();
+      await Promise.all([backupsQuery.refresh(), refreshDatabases()]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not restore this file.");
+      if (uploadId) {
+        try {
+          await apiRequest("/api/nanogres/restore-uploads/" + uploadId, { method: "DELETE" });
+        } catch {
+          // The VPS also removes abandoned uploads after 24 hours.
+        }
+      }
+    } finally {
+      setRestoring(null);
+      setTransferProgress(null);
+    }
+  }
+
+  const transferBusy = saving || downloading !== null || restoring !== null;
 
   return (
     <div className={styles.screen}>
@@ -806,6 +1080,12 @@ export function LiveBackupsScreen() {
       />
       <ErrorNotice error={backupsQuery.error ?? error} />
       {message ? <Notice tone="info">{message}</Notice> : null}
+      {transferProgress ? (
+        <Notice tone="info">
+          {transferProgress.label}: {formatBytes(transferProgress.transferred)} /{" "}
+          {formatBytes(transferProgress.total)}
+        </Notice>
+      ) : null}
       <div className={styles.backupSummary}>
         <div>
           <span>Schedule</span>
@@ -822,7 +1102,7 @@ export function LiveBackupsScreen() {
       </div>
       <Panel
         title="Create a backup now"
-        detail="Choose a database for a compressed custom-format pg_dump."
+        detail="Create a compressed PostgreSQL dump and save a copy to your device."
       >
         <div className={styles.inlineForm}>
           <label className={styles.srOnly} htmlFor="backup-database">
@@ -830,7 +1110,7 @@ export function LiveBackupsScreen() {
           </label>
           <select
             id="backup-database"
-            disabled={!userDatabases.length}
+            disabled={!userDatabases.length || transferBusy}
             onChange={(event) => setDatabase(event.target.value)}
             value={selectedDatabase}
           >
@@ -841,14 +1121,17 @@ export function LiveBackupsScreen() {
               </option>
             ))}
           </select>
-          <Button disabled={saving || !selectedDatabase} onClick={() => void createBackup()}>
-            {saving ? "Creating backup…" : "Create backup"}
+          <Button
+            disabled={transferBusy || !selectedDatabase}
+            onClick={() => void createBackupAndDownload()}
+          >
+            {saving ? "Creating and downloading…" : "Create & download .dump"}
           </Button>
         </div>
       </Panel>
       <Panel
         title="Backup history"
-        detail={`${backups.length} retained file${backups.length === 1 ? "" : "s"}`}
+        detail={backups.length + " retained file" + (backups.length === 1 ? "" : "s")}
       >
         {backupsQuery.loading && !backupsQuery.data ? (
           <Loading />
@@ -875,14 +1158,15 @@ export function LiveBackupsScreen() {
                     <td>{formatBytes(backup.sizeBytes)}</td>
                     <td className={styles.actionCell}>
                       <div className={styles.backupActions}>
-                        <a
-                          className={styles.button}
-                          href={`/api/nanogres/backups/${encodeURIComponent(backup.filename)}`}
-                        >
-                          Download
-                        </a>
                         <Button
-                          disabled={restoring !== null}
+                          disabled={transferBusy}
+                          onClick={() => void downloadExistingBackup(backup)}
+                          variant="secondary"
+                        >
+                          {downloading === backup.filename ? "Downloading…" : "Download file"}
+                        </Button>
+                        <Button
+                          disabled={transferBusy}
                           onClick={() => startRestore(backup)}
                           variant="secondary"
                         >
@@ -894,12 +1178,12 @@ export function LiveBackupsScreen() {
                           className={styles.restoreForm}
                           onSubmit={(event) => void restoreFromBackup(event, backup)}
                         >
-                          <label htmlFor={`restore-name-${backup.filename}`}>
+                          <label htmlFor={"restore-name-" + backup.filename}>
                             New database name
                           </label>
                           <input
                             autoComplete="off"
-                            id={`restore-name-${backup.filename}`}
+                            id={"restore-name-" + backup.filename}
                             maxLength={63}
                             minLength={1}
                             onChange={(event) => setRestoreName(event.target.value)}
@@ -913,13 +1197,13 @@ export function LiveBackupsScreen() {
                           </small>
                           <div className={styles.restoreActions}>
                             <Button
-                              disabled={restoring !== null}
+                              disabled={transferBusy}
                               onClick={() => setRestoreBackup(null)}
                               variant="secondary"
                             >
                               Cancel
                             </Button>
-                            <Button disabled={restoring !== null} type="submit">
+                            <Button disabled={transferBusy} type="submit">
                               {restoring === backup.filename ? "Restoring…" : "Restore"}
                             </Button>
                           </div>
@@ -935,14 +1219,66 @@ export function LiveBackupsScreen() {
           <Empty>No backup files yet. The daily timer runs near 02:00 UTC.</Empty>
         )}
       </Panel>
+      <Panel
+        title="Restore from a file"
+        detail="Import a trusted custom-format PostgreSQL dump into a new database."
+      >
+        <form className={styles.formGrid} onSubmit={(event) => void restoreFromFile(event)}>
+          <div className={styles.field}>
+            <label htmlFor="restore-file">PostgreSQL dump file</label>
+            <input
+              accept=".dump,.backup,application/octet-stream"
+              id="restore-file"
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                setRestoreFile(file);
+                if (file && !restoreFileName) {
+                  const base = file.name
+                    .replace(/\.(dump|backup)$/i, "")
+                    .toLowerCase()
+                    .replace(/[^a-z0-9_]/g, "_")
+                    .replace(/^[^a-z]+/, "")
+                    .slice(0, 54);
+                  setRestoreFileName((base || "restored_db") + "_restore");
+                }
+              }}
+              required
+              type="file"
+            />
+            <small>
+              Supports compressed custom-format .dump and .backup files. The upload is sent in small
+              encrypted chunks and removed from the VPS after restore.
+            </small>
+          </div>
+          <div className={styles.field}>
+            <label htmlFor="restore-file-database">New database name</label>
+            <input
+              autoComplete="off"
+              id="restore-file-database"
+              maxLength={63}
+              minLength={1}
+              onChange={(event) => setRestoreFileName(event.target.value)}
+              pattern="[a-z][a-z0-9_]{0,62}"
+              placeholder="restored_project"
+              required
+              value={restoreFileName}
+            />
+            <small>Existing databases are never overwritten.</small>
+          </div>
+          <div className={styles.formActions}>
+            <Button disabled={transferBusy || restoreFile === null} type="submit">
+              {restoring === "uploaded-file" ? "Uploading and restoring…" : "Restore from file"}
+            </Button>
+          </div>
+        </form>
+      </Panel>
       <Notice tone="info">
-        Restore creates a separate database and never overwrites an existing one. Local backups
-        protect against mistakes, but not VPS or disk loss. Download a copy for off-server recovery.
+        Restores create a separate database and never overwrite an existing one. Keep downloaded
+        copies somewhere separate from this VPS for off-server recovery.
       </Notice>
     </div>
   );
 }
-
 export function LiveActivityScreen() {
   const { data, error, loading, refresh } = useApiData<{ events: ActivityEvent[] }>(
     "/api/nanogres/activity",

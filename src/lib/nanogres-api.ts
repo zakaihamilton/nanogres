@@ -41,7 +41,10 @@ export async function callNanogresApi(
 ): Promise<Response> {
   const config = getApiConfig();
   if (!config) return apiNotConfigured();
-  const timeout = path.startsWith("/v1/backups") && init.method === "POST" ? 255_000 : 60_000;
+  const longRunningPost =
+    init.method === "POST" &&
+    (path.startsWith("/v1/backups") || /\/restore-uploads\/[a-f0-9]{32}\/complete$/.test(path));
+  const timeout = longRunningPost ? 255_000 : 60_000;
   try {
     return await fetch(`${config.url}${path}`, {
       ...init,
@@ -71,6 +74,12 @@ export async function relayApiResponse(upstream: Response): Promise<Response> {
   }
   if (upstream.headers.get("content-length")) {
     headers.set("Content-Length", upstream.headers.get("content-length")!);
+  }
+  if (upstream.headers.get("content-range")) {
+    headers.set("Content-Range", upstream.headers.get("content-range")!);
+  }
+  if (upstream.headers.get("accept-ranges")) {
+    headers.set("Accept-Ranges", upstream.headers.get("accept-ranges")!);
   }
   if (upstream.status >= 500) {
     return Response.json(
