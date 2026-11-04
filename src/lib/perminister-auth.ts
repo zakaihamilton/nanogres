@@ -372,16 +372,14 @@ export function getAccessibleWorkspaces(
       continue;
     }
 
-    const isOrgAdmin =
-      org.organizationRole === "owner" ||
-      org.organizationRole === "admin" ||
-      org.platformAdmin === true;
-
-    // 1. Collect explicitly assigned workspaces from resourceRoles
+    // Workspace choices come from the current Perminister grants.
     if (Array.isArray(org.resourceRoles)) {
       for (const r of org.resourceRoles) {
         if (
           r.scope.kind === "workspace" &&
+          r.scope.organizationId.toLowerCase() === org.organizationId.toLowerCase() &&
+          r.scope.productId.toLowerCase() === targetProductId &&
+          r.actions.includes(`${targetProductId}:workspace:read`) &&
           typeof r.scope.workspaceId === "string" &&
           r.scope.workspaceId.trim().length > 0
         ) {
@@ -390,7 +388,7 @@ export function getAccessibleWorkspaces(
           if (!seen.has(key)) {
             seen.add(key);
             const role: NanogresRole =
-              r.role === "admin" || r.actions.includes("nanogres:members:manage")
+              r.role === "admin" || r.actions.includes(`${targetProductId}:members:manage`)
                 ? "admin"
                 : r.role === "manager"
                   ? "manager"
@@ -406,26 +404,6 @@ export function getAccessibleWorkspaces(
             });
           }
         }
-      }
-    }
-
-    // 2. If the user is an organization admin or owner, include any workspace configured in environment
-    if (isOrgAdmin && process.env.NANOGRES_WORKSPACE_ID) {
-      const defaultWs = process.env.NANOGRES_WORKSPACE_ID.trim();
-      const key = `${org.organizationId}:${defaultWs}`.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        const displayName =
-          customNames?.[defaultWs] ||
-          customNames?.[defaultWs.toLowerCase()] ||
-          formatWorkspaceName(defaultWs);
-        choices.push({
-          id: defaultWs,
-          name: displayName,
-          organizationId: org.organizationId,
-          organizationName: org.organizationName,
-          role: "admin",
-        });
       }
     }
   }
@@ -501,28 +479,6 @@ export async function getNanogresWorkspaceContext(
       )
     : undefined;
 
-  // If not found in accessibleWorkspaces, but user is an org admin in that org, allow it
-  if (!selectedWorkspace && cookieWorkspaceId && cookieOrgId) {
-    const org = orgs.find((o) => o.organizationId.toLowerCase() === cookieOrgId);
-    if (
-      org &&
-      (org.organizationRole === "owner" ||
-        org.organizationRole === "admin" ||
-        org.platformAdmin === true)
-    ) {
-      selectedWorkspace = {
-        id: cookieWorkspaceId,
-        name:
-          customNames[cookieWorkspaceId] ||
-          customNames[cookieWorkspaceId.toLowerCase()] ||
-          formatWorkspaceName(cookieWorkspaceId),
-        organizationId: org.organizationId,
-        organizationName: org.organizationName,
-        role: "admin",
-      };
-    }
-  }
-
   // Fallback to the first accessible workspace
   if (!selectedWorkspace && accessibleWorkspaces.length > 0) {
     selectedWorkspace = accessibleWorkspaces[0];
@@ -566,8 +522,7 @@ export async function getNanogresWorkspaceContext(
     productId,
     workspaceId: selectedWorkspace.id,
     workspaceName: selectedWorkspace.name,
-    availableWorkspaces:
-      accessibleWorkspaces.length > 0 ? accessibleWorkspaces : [selectedWorkspace],
+    availableWorkspaces: accessibleWorkspaces,
     role: selectedWorkspace.role,
   };
 }

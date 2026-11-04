@@ -35,13 +35,19 @@ export async function POST(request: NextRequest): Promise<Response> {
       w.id.toLowerCase() === workspaceId.toLowerCase() &&
       w.organizationId.toLowerCase() === targetOrgId.toLowerCase(),
   );
+  if (!targetWs) {
+    return NextResponse.json(
+      { error: "This workspace is not available to your Perminister account." },
+      { status: 403, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   const res = NextResponse.json(
     {
       success: true,
       workspaceId,
       organizationId: targetOrgId,
-      workspaceName: targetWs?.name ?? workspaceId,
+      workspaceName: targetWs.name,
     },
     { headers: { "Cache-Control": "no-store" } },
   );

@@ -31,33 +31,6 @@ function parseApiConfig(rawUrl?: string, rawToken?: string): ApiConfig | null {
 }
 
 function getApiConfig(target: WorkspaceApiTarget): ApiConfig | null {
-  const workspaceApis = process.env.NANOGRES_WORKSPACE_APIS?.trim();
-  if (workspaceApis) {
-    let entries: unknown;
-    try {
-      entries = JSON.parse(workspaceApis);
-    } catch {
-      return null;
-    }
-
-    if (!Array.isArray(entries)) return null;
-    const matches = entries.filter(
-      (entry): entry is Record<string, unknown> =>
-        typeof entry === "object" &&
-        entry !== null &&
-        typeof entry.organizationId === "string" &&
-        typeof entry.workspaceId === "string" &&
-        entry.organizationId.trim().toLowerCase() === target.organizationId.trim().toLowerCase() &&
-        entry.workspaceId.trim().toLowerCase() === target.workspaceId.trim().toLowerCase(),
-    );
-    if (matches.length !== 1) return null;
-    const match = matches[0];
-    return parseApiConfig(
-      typeof match.url === "string" ? match.url : undefined,
-      typeof match.token === "string" ? match.token : undefined,
-    );
-  }
-
   const configuredOrganization = process.env.PERMINISTER_ORGANIZATION_ID?.trim().toLowerCase();
   const configuredWorkspace = process.env.NANOGRES_WORKSPACE_ID?.trim().toLowerCase();
   if (
