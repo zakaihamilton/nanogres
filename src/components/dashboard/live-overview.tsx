@@ -91,8 +91,10 @@ export function LiveOverviewScreen() {
             ) : null}
             <button
               className={styles.actionSecondaryButton}
+              disabled={databases.length === 0}
               onClick={() => setConnectModalOpen(true)}
               type="button"
+              title={databases.length === 0 ? "Create an organization database first" : undefined}
             >
               <Icon name="terminal" size={14} />
               Connect
@@ -156,7 +158,7 @@ export function LiveOverviewScreen() {
             <Metric
               label="Database storage"
               value={formatBytes(totalSize)}
-              detail="Across all databases"
+              detail="Across organization databases"
             />
             <Metric
               label="Free disk"
@@ -243,8 +245,8 @@ export function LiveOverviewScreen() {
       ) : null}
 
       <ConnectionModal
-        database={databases[0]?.name || "postgres"}
-        isOpen={connectModalOpen}
+        database={databases[0]?.connectionName ?? ""}
+        isOpen={connectModalOpen && databases.length > 0}
         onClose={() => setConnectModalOpen(false)}
       />
     </div>

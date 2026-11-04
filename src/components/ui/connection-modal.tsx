@@ -10,7 +10,7 @@ export function ConnectionModal({
   database,
   host = "127.0.0.1",
   port = 5432,
-  user = "postgres",
+  user = "your_role",
   isOpen,
   onClose,
 }: {
@@ -178,8 +178,9 @@ PGPASSWORD="[YOUR_PASSWORD]"`;
           </div>
 
           <p className={styles.note}>
-            Note: Replace <code>[PASSWORD]</code> with your database role password. For remote
-            access, ensure your network or firewall allows connection to port 5432.
+            Use a login role created for this organization's database in Nanogres Access. Replace{" "}
+            <code>[PASSWORD]</code> with that role's password. PostgreSQL stays private on the VPS;
+            connect through your approved network or tunnel.
           </p>
         </div>
       </div>

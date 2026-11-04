@@ -393,10 +393,10 @@ function DatabaseCreatePreviewForm({ onSubmit }: { onSubmit?: (name: string) => 
         <input
           autoComplete="off"
           id="preview-database-name"
-          maxLength={63}
+          maxLength={37}
           minLength={2}
           name="database-name"
-          pattern="[a-z][a-z0-9_]{1,62}"
+          pattern="[a-z][a-z0-9_]{1,36}"
           placeholder="my_project"
           required
         />
@@ -424,10 +424,10 @@ function RoleCreatePreviewForm({ onSubmit }: { onSubmit?: (name: string) => void
         <input
           autoComplete="off"
           id="preview-role-name"
-          maxLength={63}
+          maxLength={37}
           minLength={2}
           name="role-name"
-          pattern="[a-z][a-z0-9_]{1,62}"
+          pattern="[a-z][a-z0-9_]{1,36}"
           placeholder="my_app_user"
           required
         />

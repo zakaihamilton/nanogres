@@ -17,6 +17,11 @@ Before enabling the public proxy:
 5. Copy the token from `/etc/nanogres/api.env` into Vercel's encrypted production environment
    variable `NANOGRES_API_TOKEN`. Keep it out of source files and browser code.
 
+The API uses the local peer-auth socket for administrative operations and loopback TCP password
+authentication for restricted organization SQL roles. Keep PostgreSQL listening on loopback and make
+sure its `pg_hba.conf` permits `127.0.0.1/32` connections using `scram-sha-256` (Ubuntu's default
+local TCP rule). Do not add a remote PostgreSQL listener or a `trust` authentication rule.
+
 The first two public network changes are deliberate access-control changes. Review the firewall and
 Nginx diffs before applying them. The API token should be transferred only to the Nanogres Vercel
 project.

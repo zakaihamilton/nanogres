@@ -2,7 +2,8 @@
 
 The API binds to `127.0.0.1:8765`; Nginx terminates HTTPS on port `8443`. PostgreSQL remains on
 its existing loopback-only port. The Python API runs as the `postgres` operating-system account and
-connects through the local peer-auth socket.
+uses local peer authentication for administration. SQL editor queries and restores connect over
+`127.0.0.1` as a restricted, organization-specific PostgreSQL role.
 
 ## Routes
 
@@ -19,19 +20,32 @@ connects through the local peer-auth socket.
 - `DELETE /v1/restore-uploads/{id}` removes an incomplete upload
 - `GET /v1/activity`
 
-All routes require a server-only bearer token. Database and role names use lowercase letters,
-digits, and underscores. New roles receive only the selected database and table privileges.
+All management routes require a server-only bearer token. Every `/v1` request also requires the
+`X-Nanogres-Organization` header, supplied by the authorized dashboard server. The API hashes that
+organization ID into an internal prefix and stores each organization's databases, login roles,
+backups, activity, and temporary restores in that scope. Organization database and role names use
+lowercase letters, digits, and underscores and can be up to 37 characters; the dashboard displays
+logical names while connection snippets use the internal PostgreSQL names. The shared `postgres`
+system database is hidden from organization workspaces. New databases are owned by a restricted
+organization query role, and `CONNECT` is revoked from `PUBLIC` so one organization's login roles
+cannot connect to another organization's databases.
+
+The SQL editor uses the organization's restricted query role instead of the PostgreSQL superuser.
+That role can create and modify objects in the organization's databases but cannot create databases,
+manage roles, or connect to other organizations' databases. The VPS API token is used to derive its
+loopback database password; the password is not returned to the dashboard.
 
 ## Storage reporting and limits
 
-The API's `sizeBytes` field uses PostgreSQL's `pg_database_size` for each returned database, and
-includes `postgres`. The dashboard sums these values for the all-database total. When a database has
+The API's `sizeBytes` field uses PostgreSQL's `pg_database_size` for each returned organization
+database. The dashboard sums these values for that organization's database total. When a database has
 a verified ext4 project quota, `quotaUsedBytes` reports allocated blocks for its primary database
 directory and drives its quota meter; otherwise the meter uses `sizeBytes`. Data in additional
 tablespaces is included in `pg_database_size` but is outside the hard quota. Shared WAL, backups,
-and system files are separate from the all-database total.
+and system files are separate from that organization's database total.
 
-The default growth budget is 25% of free disk after a 1 GiB system reserve. Set
+The default growth budget is 25% of free disk after a 1 GiB system reserve. It is shared by all
+organizations on the VPS so their combined recommendations cannot over-allocate the disk. Set
 `NANOGRES_DATABASE_GROWTH_PERCENT` in `/etc/nanogres/api.env` to a value from 1 to 50. Set
 `NANOGRES_DATABASE_QUOTA_RESERVE_BYTES` there to change the reserve. Per-database settings are
 stored in `/var/lib/nanogres/database-quota-policy.json` and are changed through the authenticated
@@ -109,6 +123,41 @@ database superuser, so restore only files you trust.
 ## Install
 
 Follow `install-vps.md`. The installer does not enable the Nginx proxy or open firewall ports.
+
+## Assign existing databases to an organization
+
+Existing databases and login roles were created before organization scoping and need to be assigned
+once. Back up the databases first, pause Nanogres and any applications that connect to them, and
+close their remaining sessions. The migration renames existing database and login-role identifiers
+internally; passwords and database contents are preserved. Old connections must use the new login
+and physical database names shown in Nanogres connection snippets.
+
+Run a dry plan first as the `postgres` operating-system user:
+
+```sh
+sudo -u postgres python3 /opt/nanogres-api/api.py --migrate-legacy-organization <PERMINISTER-ORGANIZATION-ID>
+```
+
+If the plan is correct, stop the Nanogres API and backup/off-site jobs during the maintenance
+window, then apply it:
+
+```sh
+sudo systemctl stop \
+  nanogres-api.service \
+  nanogres-backup.timer nanogres-backup.service \
+  nanogres-offsite-backup.path nanogres-offsite-backup.service \
+  nanogres-quota.timer nanogres-quota.path nanogres-quota.service
+sudo -u postgres python3 /opt/nanogres-api/api.py --migrate-legacy-organization <PERMINISTER-ORGANIZATION-ID> --apply
+sudo systemctl start \
+  nanogres-api.service nanogres-backup.timer nanogres-offsite-backup.path \
+  nanogres-quota.path nanogres-quota.timer
+```
+
+The migration stops if a database or login role is longer than the 37-character logical-name
+limit, if a scoped name already exists, or if a database still has active connections. Shorten
+unsupported legacy names and retry. The installer does not run the migration automatically.
+If an application is interrupted after the database rename, rerun the plan and apply command; the
+migration finishes securing databases already bearing that organization's prefix.
 
 ## Recovery checks
 

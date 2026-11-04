@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import hmac
 import io
 import json
@@ -37,6 +38,10 @@ DATABASE_QUOTA_RESERVE_BYTES = int(
 if DATABASE_QUOTA_RESERVE_BYTES < 0:
     DATABASE_QUOTA_RESERVE_BYTES = 1024**3
 NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
+ORGANIZATION_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+TENANT_PREFIX_PATTERN = re.compile(r"^n[0-9a-f]{24}_")
+TENANT_NAME_MAX_LENGTH = 37
+TENANT_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,36}$")
 BACKUP_PATTERN = re.compile(r"^([a-z][a-z0-9_]*)__([0-9]{8}T[0-9]{12}Z)\.dump$")
 UPLOAD_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 ACTOR_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
@@ -54,6 +59,7 @@ OFFSITE_REQUEST_FILE = STATE_DIR / "offsite-backup.request"
 event_lock = threading.Lock()
 backup_lock = threading.Lock()
 quota_policy_lock = threading.Lock()
+query_role_lock = threading.Lock()
 
 
 class ApiError(Exception):
@@ -86,13 +92,209 @@ def quote_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def normalized_organization_id(value: object) -> str:
+    if not isinstance(value, str) or not ORGANIZATION_PATTERN.fullmatch(value.strip()):
+        raise ApiError(400, "A valid organization scope is required.")
+    return value.strip().lower()
+
+
+def organization_prefix(organization_id: object) -> str:
+    normalized = normalized_organization_id(organization_id)
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:24]
+    return f"n{digest}_"
+
+
+def organization_query_role(organization_id: object) -> str:
+    return organization_prefix(organization_id) + "_nanogres_query"
+
+
+def tenant_resource_name(organization_id: object, value: object, label: str) -> str:
+    if not isinstance(value, str) or not TENANT_NAME_PATTERN.fullmatch(value):
+        raise ApiError(
+            400,
+            f"{label} must start with a lowercase letter and contain only lowercase letters, numbers, or underscores (up to {TENANT_NAME_MAX_LENGTH} characters).",
+        )
+    return organization_prefix(organization_id) + value
+
+
+def tenant_resource_label(organization_id: object, physical_name: object) -> str | None:
+    prefix = organization_prefix(organization_id)
+    if not isinstance(physical_name, str) or not physical_name.startswith(prefix):
+        return None
+    return physical_name[len(prefix):]
+
+
+def organization_backup_dir(organization_id: object) -> Path:
+    return BACKUP_DIR / organization_prefix(organization_id).rstrip("_")
+
+
+def organization_database_name(organization_id: object, logical_name: object) -> str:
+    if not isinstance(logical_name, str) or logical_name in {"postgres", "template0", "template1"}:
+        raise ApiError(400, "Choose a user database in your organization.")
+    return tenant_resource_name(organization_id, logical_name, "Database name")
+
+
+def require_organization_database(organization_id: object, logical_name: object) -> str:
+    physical_name = organization_database_name(organization_id, logical_name)
+    exists = run_sql(
+        f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(physical_name)})"
+    )
+    if exists != "t":
+        raise ApiError(404, "Database not found.")
+    return physical_name
+
+
+def ensure_organization_query_role(organization_id: object) -> str:
+    org_id = normalized_organization_id(organization_id)
+    role_name = organization_query_role(org_id)
+    api_token = os.environ.get("NANOGRES_API_TOKEN", "")
+    if len(api_token) < 32:
+        raise ApiError(503, "Management API is not configured.")
+    password = hmac.new(
+        api_token.encode("utf-8"),
+        f"nanogres-query:{org_id}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    with query_role_lock:
+        exists = run_sql(
+            f"SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {quote_literal(role_name)})"
+        )
+        flags = "LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS"
+        if exists == "t":
+            statement = (
+                f"ALTER ROLE {quote_identifier(role_name)} WITH {flags} "
+                f"PASSWORD {quote_literal(password)}"
+            )
+        else:
+            statement = (
+                f"CREATE ROLE {quote_identifier(role_name)} WITH {flags} "
+                f"PASSWORD {quote_literal(password)}"
+            )
+        run_sql(statement)
+    return role_name
+
+
+def secure_organization_database(physical_name: str, role_name: str) -> None:
+    run_sql(
+        f"REVOKE CONNECT ON DATABASE {quote_identifier(physical_name)} FROM PUBLIC; "
+        f"GRANT CONNECT ON DATABASE {quote_identifier(physical_name)} TO {quote_identifier(role_name)}"
+    )
+    run_sql(
+        f"REVOKE CREATE ON SCHEMA public FROM PUBLIC; "
+        f"GRANT USAGE, CREATE ON SCHEMA public TO {quote_identifier(role_name)}",
+        database=physical_name,
+    )
+
+
+def prepare_organization_database(organization_id: object, physical_name: str) -> None:
+    role_name = ensure_organization_query_role(organization_id)
+    secure_organization_database(physical_name, role_name)
+
+
+def transfer_database_objects(database: str, owner_role: str) -> None:
+    schemas = json_query(
+        "SELECT COALESCE(json_agg(nspname ORDER BY nspname), '[]'::json)::text "
+        "FROM pg_namespace WHERE nspname <> 'information_schema' "
+        "AND nspname !~ '^pg_' "
+        "AND NOT EXISTS (SELECT 1 FROM pg_extension e WHERE e.extnamespace = pg_namespace.oid)",
+        database=database,
+    )
+    if not isinstance(schemas, list):
+        raise ApiError(503, "PostgreSQL returned invalid schema metadata.")
+    for schema in schemas:
+        if not isinstance(schema, str):
+            continue
+        if schema == "public":
+            run_sql(
+                f"REVOKE CREATE ON SCHEMA public FROM PUBLIC; "
+                f"GRANT USAGE, CREATE ON SCHEMA public TO {quote_identifier(owner_role)}",
+                database=database,
+            )
+        else:
+            run_sql(
+                f"ALTER SCHEMA {quote_identifier(schema)} OWNER TO {quote_identifier(owner_role)}",
+                database=database,
+            )
+        relations = json_query(
+            "SELECT COALESCE(json_agg(json_build_object('name', c.relname, 'kind', c.relkind) "
+            "ORDER BY c.relname), '[]'::json)::text "
+            "FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+            f"WHERE n.nspname = {quote_literal(schema)} "
+            "AND c.relkind IN ('r', 'v', 'm', 'p', 'S', 'f') "
+            "AND NOT EXISTS (SELECT 1 FROM pg_depend dep "
+            "WHERE dep.classid = 'pg_class'::regclass AND dep.objid = c.oid AND dep.deptype = 'e')",
+            database=database,
+        )
+        if not isinstance(relations, list):
+            raise ApiError(503, "PostgreSQL returned invalid relation metadata.")
+        for relation in relations:
+            if not isinstance(relation, dict):
+                continue
+            relation_name = relation.get("name")
+            kind = relation.get("kind")
+            if not isinstance(relation_name, str):
+                continue
+            keyword = "SEQUENCE" if kind == "S" else "TABLE"
+            run_sql(
+                f"ALTER {keyword} {quote_identifier(schema)}.{quote_identifier(relation_name)} "
+                f"OWNER TO {quote_identifier(owner_role)}",
+                database=database,
+            )
+
+
+def organization_query_env(organization_id: object) -> dict[str, str]:
+    org_id = normalized_organization_id(organization_id)
+    role_name = ensure_organization_query_role(org_id)
+    api_token = os.environ["NANOGRES_API_TOKEN"]
+    password = hmac.new(
+        api_token.encode("utf-8"),
+        f"nanogres-query:{org_id}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    env = pg_client_env("10")
+    env.update({"PGHOST": "127.0.0.1", "PGSSLMODE": "disable", "PGUSER": role_name, "PGPASSWORD": password})
+    return env
+
+
+def public_tenant_databases(
+    organization_id: object, databases: list[dict[str, object]]
+) -> list[dict[str, object]]:
+    prefix = organization_prefix(organization_id)
+    query_role = organization_query_role(organization_id)
+    result = []
+    for database in databases:
+        physical_name = database.get("name")
+        if (
+            not isinstance(physical_name, str)
+            or not physical_name.startswith(prefix)
+            or database.get("systemDatabase")
+        ):
+            continue
+        owner = database.get("owner")
+        if owner == query_role:
+            owner = "Nanogres"
+        else:
+            owner = tenant_resource_label(organization_id, owner) or owner
+        result.append({
+            **database,
+            "name": physical_name[len(prefix):],
+            "connectionName": physical_name,
+            "owner": owner,
+        })
+    return result
+
+
 def quota_growth_bytes(requested_max_bytes: int, used_bytes: int) -> int:
     requested_kib = (requested_max_bytes + 1023) // 1024
     used_kib = used_bytes // 1024
     return max(0, requested_kib - used_kib) * 1024
 
 
-def run_sql(statement: str, database: str = "postgres") -> str:
+def run_sql(
+    statement: str,
+    database: str = "postgres",
+    env: dict[str, str] | None = None,
+) -> str:
     if not NAME_PATTERN.fullmatch(database) and database not in {"postgres", "template0", "template1"}:
         raise ApiError(400, "Invalid database name.")
     command = [
@@ -107,8 +309,8 @@ def run_sql(statement: str, database: str = "postgres") -> str:
         "--command",
         statement,
     ]
-    env = pg_client_env("5")
-    result = subprocess.run(command, capture_output=True, text=True, env=env, timeout=20)
+    environment = env if env is not None else pg_client_env("5")
+    result = subprocess.run(command, capture_output=True, text=True, env=environment, timeout=20)
     if result.returncode:
         # Do not return SQL text or PostgreSQL internals to callers.
         raise ApiError(400, "PostgreSQL rejected the operation.")
@@ -414,29 +616,68 @@ def request_offsite_backup() -> None:
         return
 
 
-def list_roles() -> list[dict[str, object]]:
+def list_roles(organization_id: object) -> list[dict[str, object]]:
+    prefix = organization_prefix(organization_id)
     rows = json_query(
-        """
+        f"""
         SELECT COALESCE(json_agg(row_to_json(items) ORDER BY items.name), '[]'::json)::text
         FROM (
-          SELECT rolname AS name,
-                 rolsuper AS superuser,
-                 rolcreatedb AS "canCreateDatabase",
-                 rolcreaterole AS "canCreateRole",
-                 rolvaliduntil AS "validUntil",
-                 rolname = 'postgres' AS "systemRole"
-          FROM pg_roles
-          WHERE rolcanlogin AND rolname !~ '^pg_'
+          SELECT r.rolname AS name,
+                 r.rolsuper AS superuser,
+                 r.rolcreatedb AS "canCreateDatabase",
+                 r.rolcreaterole AS "canCreateRole",
+                 r.rolvaliduntil AS "validUntil",
+                 r.rolname = 'postgres' AS "systemRole",
+                 (
+                   SELECT COALESCE(
+                     json_agg(substr(d.datname, {len(prefix) + 1}) ORDER BY d.datname),
+                     '[]'::json
+                   )
+                   FROM pg_database d
+                   WHERE left(d.datname, {len(prefix)}) = {quote_literal(prefix)}
+                     AND has_database_privilege(r.rolname, d.oid, 'CONNECT')
+                 ) AS databases
+          FROM pg_roles r
+          WHERE r.rolcanlogin AND r.rolname !~ '^pg_'
         ) items
         """
     )
-    return rows if isinstance(rows, list) else []
+    if not isinstance(rows, list):
+        return []
+    internal_role = organization_query_role(organization_id)
+    result = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        physical_name = row.get("name")
+        logical_name = tenant_resource_label(organization_id, physical_name)
+        if logical_name is None or physical_name == internal_role:
+            continue
+        databases = row.get("databases")
+        physical_databases = databases if isinstance(databases, list) else []
+        logical_databases = [
+            label
+            for value in physical_databases
+            if (label := tenant_resource_label(organization_id, value)) is not None
+        ]
+        result.append(
+            {
+                **row,
+                "name": logical_name,
+                "loginName": physical_name,
+                "database": logical_databases[0] if logical_databases else None,
+                "connectionDatabase": physical_databases[0] if physical_databases else None,
+                "databases": logical_databases,
+            }
+        )
+    return result
 
 
-def list_backups() -> list[dict[str, object]]:
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+def list_backups(organization_id: object) -> list[dict[str, object]]:
+    backup_dir = organization_backup_dir(organization_id)
+    backup_dir.mkdir(parents=True, exist_ok=True)
     entries: list[dict[str, object]] = []
-    for path in BACKUP_DIR.iterdir():
+    for path in backup_dir.iterdir():
         match = BACKUP_PATTERN.fullmatch(path.name)
         if not match or not path.is_file() or path.is_symlink():
             continue
@@ -452,17 +693,39 @@ def list_backups() -> list[dict[str, object]]:
     return sorted(entries, key=lambda entry: str(entry["createdAt"]), reverse=True)
 
 
-def list_activity(limit: int = 50) -> list[dict[str, object]]:
+def list_activity(
+    organization_id: object,
+    limit: int = 50,
+) -> list[dict[str, object]]:
     if not EVENTS_FILE.exists():
         return []
     try:
-        lines = EVENTS_FILE.read_text(encoding="utf-8").splitlines()[-limit:]
-        return [json.loads(line) for line in reversed(lines) if line]
+        org_id = normalized_organization_id(organization_id)
+        events = [
+            json.loads(line)
+            for line in EVENTS_FILE.read_text(encoding="utf-8").splitlines()
+            if line
+        ]
+        return [
+            event
+            for event in reversed(events)
+            if isinstance(event, dict)
+            and (
+                str(event.get("organizationId", "")).lower() == org_id
+                or event.get("organizationPrefix") == organization_prefix(org_id)
+            )
+        ][:limit]
     except (OSError, json.JSONDecodeError):
         return []
 
 
-def record_event(action: str, detail: str, actor: str | None = None) -> None:
+def record_event(
+    action: str,
+    detail: str,
+    actor: str | None = None,
+    organization_id: object | None = None,
+    organization_prefix_value: str | None = None,
+) -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     event = {
         "action": action,
@@ -470,6 +733,13 @@ def record_event(action: str, detail: str, actor: str | None = None) -> None:
         "actor": actor if actor and ACTOR_PATTERN.fullmatch(actor) else None,
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
+    if organization_id is not None:
+        event["organizationId"] = normalized_organization_id(organization_id)
+        event["organizationPrefix"] = organization_prefix(organization_id)
+    elif organization_prefix_value is not None:
+        if not TENANT_PREFIX_PATTERN.fullmatch(organization_prefix_value):
+            raise ApiError(400, "Invalid organization event scope.")
+        event["organizationPrefix"] = organization_prefix_value
     with event_lock:
         with EVENTS_FILE.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, separators=(",", ":")) + "\n")
@@ -594,13 +864,13 @@ def complete_csv_prefix(output: str) -> str:
 
 def run_user_query(
     sql: str,
-    database: str = "postgres",
+    organization_id: object,
+    database: str,
     read_only: bool = False,
     timeout_seconds: int = 15,
     max_rows: int = 100,
 ) -> dict[str, object]:
-    if not NAME_PATTERN.fullmatch(database) and database not in {"postgres", "template0", "template1"}:
-        raise ApiError(400, "Invalid database name.")
+    database = require_organization_database(organization_id, database)
     if not sql or not sql.strip():
         raise ApiError(400, "Query cannot be empty.")
 
@@ -634,7 +904,7 @@ def run_user_query(
         "--command",
         full_sql,
     ]
-    env = pg_client_env("10")
+    env = organization_query_env(organization_id)
     env["PGOPTIONS"] = f"-c statement_timeout={timeout_ms}"
     start_time = time.perf_counter()
     try:
@@ -791,10 +1061,21 @@ def get_database_schema(database: str) -> dict[str, object]:
     return data if isinstance(data, dict) else {"schemas": []}
 
 
-def execute_ddl(database: str, payload: dict[str, object], actor: str | None = None) -> dict[str, object]:
+def execute_ddl(
+    database: str,
+    payload: dict[str, object],
+    actor: str | None = None,
+    organization_id: object | None = None,
+) -> dict[str, object]:
     if not NAME_PATTERN.fullmatch(database) and database != "postgres":
         raise ApiError(400, "Invalid database name.")
     op = str(payload.get("operation", ""))
+    database_label = (
+        tenant_resource_label(organization_id, database)
+        if organization_id is not None
+        else database
+    ) or database
+    sql_env = organization_query_env(organization_id) if organization_id is not None else None
     if op == "create_table":
         table_name = valid_name(payload.get("name"), "Table name")
         columns_data = payload.get("columns")
@@ -819,8 +1100,10 @@ def execute_ddl(database: str, payload: dict[str, object], actor: str | None = N
         if pk_cols:
             col_defs.append(f"PRIMARY KEY ({', '.join(pk_cols)})")
         sql = f"CREATE TABLE {quote_identifier(table_name)} (\n  " + ",\n  ".join(col_defs) + "\n);"
-        run_sql(sql, database=database)
-        record_event("table.created", f"Table {table_name} created in {database}.", actor)
+        run_sql(sql, database=database, env=sql_env)
+        record_event(
+            "table.created", f"Table {table_name} created in {database_label}.", actor, organization_id
+        )
         return {"created": True, "table": table_name}
 
     elif op == "add_column":
@@ -833,8 +1116,10 @@ def execute_ddl(database: str, payload: dict[str, object], actor: str | None = N
         sql = f"ALTER TABLE {quote_identifier(table_name)} ADD COLUMN {quote_identifier(col_name)} {col_type}"
         if not nullable:
             sql += " NOT NULL"
-        run_sql(sql, database=database)
-        record_event("column.added", f"Column {col_name} added to {table_name} in {database}.", actor)
+        run_sql(sql, database=database, env=sql_env)
+        record_event(
+            "column.added", f"Column {col_name} added to {table_name} in {database_label}.", actor, organization_id
+        )
         return {"added": True, "column": col_name}
 
     elif op == "create_index":
@@ -849,8 +1134,10 @@ def execute_ddl(database: str, payload: dict[str, object], actor: str | None = N
         if idx_type not in {"btree", "hash", "gin", "gist"}:
             idx_type = "btree"
         sql = f"CREATE {unique}INDEX {quote_identifier(idx_name)} ON {quote_identifier(table_name)} USING {idx_type} ({', '.join(quoted_cols)});"
-        run_sql(sql, database=database)
-        record_event("index.created", f"Index {idx_name} created on {table_name} in {database}.", actor)
+        run_sql(sql, database=database, env=sql_env)
+        record_event(
+            "index.created", f"Index {idx_name} created on {table_name} in {database_label}.", actor, organization_id
+        )
         return {"created": True, "index": idx_name}
 
     elif op == "maintenance":
@@ -877,17 +1164,25 @@ def execute_ddl(database: str, payload: dict[str, object], actor: str | None = N
                 sql = "ANALYZE"
             else:
                 sql = f"REINDEX DATABASE {quote_identifier(database)}"
-        run_sql(sql, database=database)
-        record_event(f"database.{action}", f"{action.upper()} executed in {database}.", actor)
+        run_sql(sql, database=database, env=sql_env)
+        record_event(
+            f"database.{action}", f"{action.upper()} executed in {database_label}.", actor, organization_id
+        )
         return {"success": True, "action": action}
 
     raise ApiError(400, f"Unsupported operation: {op}")
 
 
-def get_active_queries(database: str | None = None) -> list[dict[str, object]]:
+def get_active_queries(
+    organization_id: object,
+    database: str | None = None,
+) -> list[dict[str, object]]:
+    prefix = organization_prefix(organization_id)
     where_clause = "WHERE a.pid <> pg_backend_pid() AND a.state IS NOT NULL"
-    if database and NAME_PATTERN.fullmatch(database):
-        where_clause += f" AND a.datname = {quote_literal(database)}"
+    where_clause += f" AND left(a.datname, {len(prefix)}) = {quote_literal(prefix)}"
+    if database:
+        physical_name = require_organization_database(organization_id, database)
+        where_clause += f" AND a.datname = {quote_literal(physical_name)}"
     sql = f"""
     SELECT COALESCE(json_agg(row_to_json(q) ORDER BY q."durationSeconds" DESC), '[]'::json)::text
     FROM (
@@ -907,16 +1202,50 @@ def get_active_queries(database: str | None = None) -> list[dict[str, object]]:
     ) q
     """
     rows = json_query(sql)
-    return rows if isinstance(rows, list) else []
+    if not isinstance(rows, list):
+        return []
+    result = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        logical_database = tenant_resource_label(organization_id, row.get("database"))
+        physical_user = row.get("userName")
+        logical_user = (
+            "Nanogres"
+            if physical_user == organization_query_role(organization_id)
+            else tenant_resource_label(organization_id, physical_user)
+        )
+        result.append(
+            {
+                **row,
+                "database": logical_database or row.get("database"),
+                "userName": logical_user or physical_user,
+            }
+        )
+    return result
 
 
-def terminate_query(pid: int, signal: str = "cancel", actor: str | None = None) -> dict[str, object]:
+def terminate_query(
+    pid: int,
+    organization_id: object,
+    signal: str = "cancel",
+    actor: str | None = None,
+) -> dict[str, object]:
     if not isinstance(pid, int) or pid <= 0:
         raise ApiError(400, "Invalid process ID.")
+    prefix = organization_prefix(organization_id)
+    belongs_to_organization = run_sql(
+        f"SELECT EXISTS (SELECT 1 FROM pg_stat_activity "
+        f"WHERE pid = {pid} AND left(datname, {len(prefix)}) = {quote_literal(prefix)})"
+    )
+    if belongs_to_organization != "t":
+        raise ApiError(404, "Query not found.")
     func = "pg_cancel_backend" if signal == "cancel" else "pg_terminate_backend"
     res = run_sql(f"SELECT {func}({pid})")
     success = res == "t"
-    record_event(f"query.{signal}", f"{signal.capitalize()} sent to backend pid {pid}.", actor)
+    record_event(
+        f"query.{signal}", f"{signal.capitalize()} sent to backend pid {pid}.", actor, organization_id
+    )
     return {"success": success, "pid": pid, "action": signal}
 
 
@@ -956,7 +1285,7 @@ def cleanup_old_backups() -> int:
     removed = 0
     if not BACKUP_DIR.exists():
         return removed
-    for path in BACKUP_DIR.iterdir():
+    for path in BACKUP_DIR.rglob("*"):
         if not BACKUP_PATTERN.fullmatch(path.name) or path.is_symlink() or not path.is_file():
             continue
         if datetime.fromtimestamp(path.stat().st_mtime, timezone.utc) < cutoff:
@@ -965,24 +1294,28 @@ def cleanup_old_backups() -> int:
     return removed
 
 
-def create_backup(
-    database: str,
+def _create_backup_physical(
+    physical_database: str,
+    display_database: str,
+    backup_dir: Path,
     actor: str | None = None,
     timeout_seconds: int = 3600,
     upload_offsite: bool = True,
+    organization_id: object | None = None,
+    organization_prefix_value: str | None = None,
 ) -> dict[str, object]:
-    if not NAME_PATTERN.fullmatch(database) or database == "postgres":
+    if not NAME_PATTERN.fullmatch(physical_database) or physical_database == "postgres":
         raise ApiError(400, "Choose a user database to back up.")
     exists = run_sql(
-        f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(database)})"
+        f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(physical_database)})"
     )
     if exists != "t":
         raise ApiError(404, "Database not found.")
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    backup_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    filename = f"{database}__{timestamp}.dump"
-    final_path = BACKUP_DIR / filename
-    partial_path = BACKUP_DIR / f".{filename}.partial"
+    filename = f"{display_database}__{timestamp}.dump"
+    final_path = backup_dir / filename
+    partial_path = backup_dir / f".{filename}.partial"
     command = [
         pg_client("pg_dump"),
         "--format=custom",
@@ -990,7 +1323,7 @@ def create_backup(
         "--file",
         str(partial_path),
         "--dbname",
-        database,
+        physical_database,
     ]
     env = pg_client_env("10")
     old_umask = os.umask(0o077)
@@ -1009,27 +1342,59 @@ def create_backup(
     os.chmod(partial_path, 0o600)
     partial_path.replace(final_path)
     cleanup_old_backups()
-    record_event("backup.created", f"Backup created for {database}.", actor)
+    record_event(
+        "backup.created",
+        f"Backup created for {display_database}.",
+        actor,
+        organization_id,
+        organization_prefix_value,
+    )
     if upload_offsite:
         request_offsite_backup()
     return {
         "filename": filename,
-        "database": database,
+        "database": display_database,
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "sizeBytes": final_path.stat().st_size,
     }
 
 
-def restore_backup(encoded_name: str, target: object, actor: str | None = None) -> dict[str, object]:
+def create_backup(
+    organization_id: object,
+    database: object,
+    actor: str | None = None,
+    timeout_seconds: int = 3600,
+    upload_offsite: bool = True,
+) -> dict[str, object]:
+    tenant_resource_name(organization_id, database, "Database name")
+    physical_name = organization_database_name(organization_id, database)
+    return _create_backup_physical(
+        physical_name,
+        str(database),
+        organization_backup_dir(organization_id),
+        actor,
+        timeout_seconds,
+        upload_offsite,
+        organization_id,
+    )
+
+
+def restore_backup(
+    organization_id: object,
+    encoded_name: str,
+    target: object,
+    actor: str | None = None,
+) -> dict[str, object]:
     filename = unquote(encoded_name)
     match = BACKUP_PATTERN.fullmatch(filename)
     if not match:
         raise ApiError(404, "Backup not found.")
-    target_name = valid_name(target, "New database name")
-    if target_name in {"postgres", "template0", "template1"}:
-        raise ApiError(400, "Choose a new user database name.")
+    tenant_resource_name(organization_id, match.group(1), "Backup database name")
+    logical_target = str(target) if isinstance(target, str) else ""
+    target_name = organization_database_name(organization_id, logical_target)
+    query_role = ensure_organization_query_role(organization_id)
 
-    backup_path = BACKUP_DIR / filename
+    backup_path = organization_backup_dir(organization_id) / filename
     if not backup_path.is_file() or backup_path.is_symlink():
         raise ApiError(404, "Backup not found.")
 
@@ -1042,8 +1407,9 @@ def restore_backup(encoded_name: str, target: object, actor: str | None = None) 
 
             clear_database_quota_setting(target_name)
             run_sql(
-                f"CREATE DATABASE {quote_identifier(target_name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
+                f"CREATE DATABASE {quote_identifier(target_name)} OWNER {quote_identifier(query_role)} ENCODING 'UTF8' TEMPLATE template0"
             )
+            prepare_organization_database(organization_id, target_name)
             try:
                 request_quota_reconcile(target_name)
             except ApiError:
@@ -1059,7 +1425,7 @@ def restore_backup(encoded_name: str, target: object, actor: str | None = None) 
             target_name,
             str(backup_path),
         ]
-        env = pg_client_env("10")
+        env = organization_query_env(organization_id)
         try:
             result = subprocess.run(
                 command,
@@ -1080,13 +1446,15 @@ def restore_backup(encoded_name: str, target: object, actor: str | None = None) 
                     "Restore failed; the new database may be incomplete and needs cleanup.",
                 )
             raise ApiError(503, "Restore failed; the new database was removed.")
+        transfer_database_objects(target_name, query_role)
 
     record_event(
         "backup.restored",
-        f"Backup {filename} restored as new database {target_name}.",
+        f"Backup {filename} restored as new database {logical_target}.",
         actor,
+        organization_id,
     )
-    return {"database": target_name, "restoredFrom": filename}
+    return {"database": logical_target, "restoredFrom": filename}
 
 
 def cleanup_old_restore_uploads() -> int:
@@ -1112,20 +1480,29 @@ def restore_upload_path(upload_id: str) -> Path:
     return path
 
 
-def read_restore_upload(upload_id: str) -> tuple[Path, dict[str, int]]:
+def read_restore_upload(
+    upload_id: str,
+    organization_id: object,
+) -> tuple[Path, dict[str, int]]:
     path = restore_upload_path(upload_id)
     try:
         metadata = json.loads((path / "metadata.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise ApiError(404, "Restore upload not found.") from error
     size_bytes = metadata.get("sizeBytes") if isinstance(metadata, dict) else None
+    expected_prefix = organization_prefix(organization_id)
+    if not isinstance(metadata, dict) or metadata.get("organizationPrefix") != expected_prefix:
+        raise ApiError(404, "Restore upload not found.")
     if not isinstance(size_bytes, int) or isinstance(size_bytes, bool) or size_bytes <= 0:
         raise ApiError(400, "Restore upload metadata is invalid.")
     chunk_count = (size_bytes + TRANSFER_CHUNK_BYTES - 1) // TRANSFER_CHUNK_BYTES
     return path, {"sizeBytes": size_bytes, "chunkCount": chunk_count}
 
 
-def create_restore_upload(body: dict[str, object]) -> dict[str, object]:
+def create_restore_upload(
+    body: dict[str, object],
+    organization_id: object,
+) -> dict[str, object]:
     size_bytes = body.get("sizeBytes")
     if not isinstance(size_bytes, int) or isinstance(size_bytes, bool) or size_bytes <= 0:
         raise ApiError(400, "Choose a non-empty PostgreSQL dump file.")
@@ -1139,7 +1516,15 @@ def create_restore_upload(body: dict[str, object]) -> dict[str, object]:
     upload_path = RESTORE_UPLOAD_DIR / upload_id
     upload_path.mkdir(mode=0o700)
     metadata_path = upload_path / "metadata.json"
-    metadata_path.write_text(json.dumps({"sizeBytes": size_bytes}), encoding="utf-8")
+    metadata_path.write_text(
+        json.dumps(
+            {
+                "sizeBytes": size_bytes,
+                "organizationPrefix": organization_prefix(organization_id),
+            }
+        ),
+        encoding="utf-8",
+    )
     os.chmod(metadata_path, 0o600)
     return {
         "uploadId": upload_id,
@@ -1148,8 +1533,13 @@ def create_restore_upload(body: dict[str, object]) -> dict[str, object]:
     }
 
 
-def store_restore_chunk(upload_id: str, chunk_index: int, body: bytes) -> dict[str, int]:
-    upload_path, metadata = read_restore_upload(upload_id)
+def store_restore_chunk(
+    upload_id: str,
+    chunk_index: int,
+    body: bytes,
+    organization_id: object,
+) -> dict[str, int]:
+    upload_path, metadata = read_restore_upload(upload_id, organization_id)
     chunk_count = metadata["chunkCount"]
     if chunk_index < 0 or chunk_index >= chunk_count:
         raise ApiError(404, "Restore upload chunk not found.")
@@ -1169,9 +1559,13 @@ def store_restore_chunk(upload_id: str, chunk_index: int, body: bytes) -> dict[s
 
 
 def run_pg_restore_from_upload(
-    command: list[str], upload_path: Path, chunk_count: int, timeout_seconds: int
+    command: list[str],
+    upload_path: Path,
+    chunk_count: int,
+    timeout_seconds: int,
+    env: dict[str, str] | None = None,
 ) -> int | None:
-    env = pg_client_env("10")
+    env = env or pg_client_env("10")
     process = subprocess.Popen(
         command,
         stdin=subprocess.PIPE,
@@ -1222,12 +1616,15 @@ def run_pg_restore_from_upload(
 
 
 def restore_uploaded_dump(
-    upload_id: str, target: object, actor: str | None = None
+    upload_id: str,
+    target: object,
+    actor: str | None,
+    organization_id: object,
 ) -> dict[str, object]:
-    upload_path, metadata = read_restore_upload(upload_id)
-    target_name = valid_name(target, "New database name")
-    if target_name in {"postgres", "template0", "template1"}:
-        raise ApiError(400, "Choose a new user database name.")
+    upload_path, metadata = read_restore_upload(upload_id, organization_id)
+    logical_target = str(target) if isinstance(target, str) else ""
+    target_name = organization_database_name(organization_id, logical_target)
+    query_role = ensure_organization_query_role(organization_id)
 
     expected_chunks = metadata["chunkCount"]
     for index in range(expected_chunks):
@@ -1255,8 +1652,9 @@ def restore_uploaded_dump(
 
             clear_database_quota_setting(target_name)
             run_sql(
-                f"CREATE DATABASE {quote_identifier(target_name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
+                f"CREATE DATABASE {quote_identifier(target_name)} OWNER {quote_identifier(query_role)} ENCODING 'UTF8' TEMPLATE template0"
             )
+            prepare_organization_database(organization_id, target_name)
             try:
                 request_quota_reconcile(target_name)
             except ApiError:
@@ -1276,8 +1674,21 @@ def restore_uploaded_dump(
             upload_path,
             expected_chunks,
             timeout_seconds=240,
+            env=organization_query_env(organization_id),
         )
         if result is None or result != 0:
+            try:
+                run_sql(f"DROP DATABASE {quote_identifier(target_name)}")
+            except (ApiError, OSError, subprocess.SubprocessError):
+                raise ApiError(
+                    503,
+                    "Restore failed; the new database may be incomplete and needs cleanup.",
+                )
+            shutil.rmtree(upload_path, ignore_errors=True)
+            raise ApiError(503, "Restore failed; the new database was removed.")
+        try:
+            transfer_database_objects(target_name, query_role)
+        except (ApiError, OSError, subprocess.SubprocessError):
             try:
                 run_sql(f"DROP DATABASE {quote_identifier(target_name)}")
             except (ApiError, OSError, subprocess.SubprocessError):
@@ -1291,18 +1702,35 @@ def restore_uploaded_dump(
     shutil.rmtree(upload_path)
     record_event(
         "backup.restored",
-        f"Uploaded PostgreSQL dump restored as new database {target_name}.",
+        f"Uploaded PostgreSQL dump restored as new database {logical_target}.",
         actor,
+        organization_id,
     )
-    return {"database": target_name, "restoredFrom": "uploaded file"}
+    return {"database": logical_target, "restoredFrom": "uploaded file"}
 
 
 def backup_all() -> int:
     cleanup_old_restore_uploads()
     databases = [row["name"] for row in list_databases() if row.get("name") != "postgres"]
     completed = 0
-    for database in databases:
-        create_backup(str(database), upload_offsite=False)
+    for physical_name in databases:
+        if not isinstance(physical_name, str) or not NAME_PATTERN.fullmatch(physical_name):
+            continue
+        match = re.fullmatch(r"(n[0-9a-f]{24}_)([a-z][a-z0-9_]{0,36})", physical_name)
+        if match:
+            backup_dir = BACKUP_DIR / match.group(1).rstrip("_")
+            display_name = match.group(2)
+        else:
+            # Keep pre-tenant databases backed up until the operator migrates them.
+            backup_dir = BACKUP_DIR / "legacy"
+            display_name = physical_name
+        _create_backup_physical(
+            physical_name,
+            display_name,
+            backup_dir,
+            upload_offsite=False,
+            organization_prefix_value=match.group(1) if match else None,
+        )
         completed += 1
     cleanup_old_backups()
     return completed
@@ -1315,11 +1743,13 @@ def valid_name(value: object, label: str) -> str:
 
 
 def update_database_quota(
-    name_value: object, body: dict[str, object], actor: str | None
+    organization_id: object,
+    name_value: object,
+    body: dict[str, object],
+    actor: str | None,
 ) -> dict[str, object]:
-    name = valid_name(name_value, "Database name")
-    if name in {"postgres", "template0", "template1"}:
-        raise ApiError(400, "Choose a user database to change its quota.")
+    logical_name = str(name_value) if isinstance(name_value, str) else ""
+    name = organization_database_name(organization_id, logical_name)
 
     mode = body.get("mode")
     if mode != "auto" and mode != "custom":
@@ -1404,16 +1834,17 @@ def update_database_quota(
             raise
 
     description = (
-        f"Database {name} quota returned to Auto."
+        f"Database {logical_name} quota returned to Auto."
         if mode == "auto"
-        else f"Database {name} custom maximum set to {requested_max_bytes} bytes."
+        else f"Database {logical_name} custom maximum set to {requested_max_bytes} bytes."
     )
-    record_event("database.quota.updated", description, actor)
+    record_event("database.quota.updated", description, actor, organization_id)
     refreshed_status = postgres_status()
     databases = add_database_growth_targets(
         list_databases(), int(refreshed_status["disk"]["freeBytes"])
     )
-    return next(item for item in databases if item["name"] == name)
+    scoped_databases = public_tenant_databases(organization_id, databases)
+    return next(item for item in scoped_databases if item["name"] == logical_name)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1451,6 +1882,15 @@ class Handler(BaseHTTPRequestHandler):
         actor = self.headers.get("X-Nanogres-Actor", "")
         return actor if ACTOR_PATTERN.fullmatch(actor) else None
 
+    def _organization(self) -> str | None:
+        try:
+            return normalized_organization_id(
+                self.headers.get("X-Nanogres-Organization", "")
+            )
+        except ApiError as error:
+            self._json(error.status, {"error": error.message})
+            return None
+
     def _body(self, max_length: int = 8192) -> dict[str, object]:
         if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
             raise ApiError(415, "Content-Type must be application/json.")
@@ -1475,7 +1915,11 @@ class Handler(BaseHTTPRequestHandler):
             path = urlsplit(self.path).path
             if path == "/healthz":
                 self._json(200, {"ok": True, **postgres_status()})
-            elif path == "/v1/overview":
+                return
+            organization_id = self._organization()
+            if organization_id is None:
+                return
+            if path == "/v1/overview":
                 status = postgres_status()
                 databases = add_database_growth_targets(
                     list_databases(), int(status["disk"]["freeBytes"])
@@ -1484,9 +1928,9 @@ class Handler(BaseHTTPRequestHandler):
                     200,
                     {
                         "status": status,
-                        "databases": databases,
-                        "backups": list_backups()[:8],
-                        "activity": list_activity(8),
+                        "databases": public_tenant_databases(organization_id, databases),
+                        "backups": list_backups(organization_id)[:8],
+                        "activity": list_activity(organization_id, 8),
                     },
                 )
             elif path == "/v1/databases":
@@ -1494,25 +1938,35 @@ class Handler(BaseHTTPRequestHandler):
                 databases = add_database_growth_targets(
                     list_databases(), int(status["disk"]["freeBytes"])
                 )
-                self._json(200, {"status": status, "databases": databases})
+                self._json(
+                    200,
+                    {
+                        "status": status,
+                        "databases": public_tenant_databases(organization_id, databases),
+                    },
+                )
             elif path == "/v1/roles":
-                self._json(200, {"roles": list_roles()})
+                self._json(200, {"roles": list_roles(organization_id)})
             elif path == "/v1/backups":
-                self._json(200, {"backups": list_backups()})
+                self._json(200, {"backups": list_backups(organization_id)})
             elif path == "/v1/activity":
-                self._json(200, {"events": list_activity()})
+                self._json(200, {"events": list_activity(organization_id)})
             elif path == "/v1/activity/queries":
-                self._json(200, {"queries": get_active_queries()})
+                self._json(200, {"queries": get_active_queries(organization_id)})
             elif path.startswith("/v1/databases/") and path.endswith("/schema"):
                 encoded_name = path.removeprefix("/v1/databases/").removesuffix("/schema")
                 if "/" in encoded_name:
                     raise ApiError(404, "Route not found.")
-                self._json(200, get_database_schema(unquote(encoded_name)))
+                database = require_organization_database(organization_id, unquote(encoded_name))
+                self._json(200, get_database_schema(database))
             elif path.startswith("/v1/databases/") and path.endswith("/queries"):
                 encoded_name = path.removeprefix("/v1/databases/").removesuffix("/queries")
                 if "/" in encoded_name:
                     raise ApiError(404, "Route not found.")
-                self._json(200, {"queries": get_active_queries(unquote(encoded_name))})
+                self._json(
+                    200,
+                    {"queries": get_active_queries(organization_id, unquote(encoded_name))},
+                )
             elif path == "/v1/events/stream":
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
@@ -1526,7 +1980,7 @@ class Handler(BaseHTTPRequestHandler):
                         payload = {
                             "type": "telemetry",
                             "status": status,
-                            "activity": list_activity(6),
+                            "activity": list_activity(organization_id, 6),
                             "timestamp": time.time(),
                         }
                         self.wfile.write(
@@ -1538,7 +1992,11 @@ class Handler(BaseHTTPRequestHandler):
                     time.sleep(5)
             elif path.startswith("/v1/backups/"):
                 query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
-                self._download_backup(path.removeprefix("/v1/backups/"), query)
+                self._download_backup(
+                    organization_id,
+                    path.removeprefix("/v1/backups/"),
+                    query,
+                )
             else:
                 self._json(404, {"error": "Route not found."})
         except ApiError as error:
@@ -1551,10 +2009,13 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             path = urlsplit(self.path).path
+            organization_id = self._organization()
+            if organization_id is None:
+                return
             actor = self._actor()
             if path == "/v1/query":
                 body = self._body(max_length=65536)
-                db = str(body.get("database", "postgres"))
+                db = str(body.get("database", ""))
                 sql = str(body.get("sql", ""))
                 read_only = body.get("readOnly", False)
                 if not isinstance(read_only, bool):
@@ -1564,14 +2025,23 @@ class Handler(BaseHTTPRequestHandler):
                     max_rows = int(body.get("maxRows", 100))
                 except (TypeError, ValueError) as error:
                     raise ApiError(400, "timeoutSeconds and maxRows must be integers.") from error
-                result = run_user_query(sql, database=db, read_only=read_only, timeout_seconds=timeout, max_rows=max_rows)
-                record_event("query.executed", f"Query executed on {db}.", actor)
+                result = run_user_query(
+                    sql,
+                    organization_id=organization_id,
+                    database=db,
+                    read_only=read_only,
+                    timeout_seconds=timeout,
+                    max_rows=max_rows,
+                )
+                record_event("query.executed", f"Query executed on {db}.", actor, organization_id)
                 self._json(200, result)
                 return
 
             body = self._body()
             if path == "/v1/databases":
-                name = valid_name(body.get("name"), "Database name")
+                logical_name = str(body.get("name", ""))
+                name = organization_database_name(organization_id, logical_name)
+                query_role = ensure_organization_query_role(organization_id)
                 with quota_policy_lock:
                     exists = run_sql(
                         f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(name)})"
@@ -1580,54 +2050,91 @@ class Handler(BaseHTTPRequestHandler):
                         raise ApiError(409, "A database with that name already exists.")
                     clear_database_quota_setting(name)
                     run_sql(
-                        f"CREATE DATABASE {quote_identifier(name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
+                        f"CREATE DATABASE {quote_identifier(name)} OWNER {quote_identifier(query_role)} ENCODING 'UTF8' TEMPLATE template0"
                     )
                     try:
+                        prepare_organization_database(organization_id, name)
                         request_quota_reconcile(name)
                     except ApiError:
                         run_sql(f"DROP DATABASE {quote_identifier(name)}")
                         raise
-                record_event("database.created", f"Database {name} created.", actor)
+                record_event(
+                    "database.created", f"Database {logical_name} created.", actor, organization_id
+                )
                 status = postgres_status()
                 databases = add_database_growth_targets(
                     list_databases(), int(status["disk"]["freeBytes"])
                 )
-                self._json(201, {"database": next(row for row in databases if row["name"] == name)})
+                scoped_databases = public_tenant_databases(organization_id, databases)
+                self._json(
+                    201,
+                    {
+                        "database": next(
+                            row for row in scoped_databases if row["name"] == logical_name
+                        )
+                    },
+                )
             elif path.startswith("/v1/databases/") and path.endswith("/quota"):
                 encoded_name = path.removeprefix("/v1/databases/").removesuffix("/quota")
                 if "/" in encoded_name:
                     raise ApiError(404, "Route not found.")
-                database = update_database_quota(unquote(encoded_name), body, actor)
+                database = update_database_quota(
+                    organization_id,
+                    unquote(encoded_name),
+                    body,
+                    actor,
+                )
                 self._json(200, {"database": database})
             elif path == "/v1/roles":
-                self._create_role(body, actor)
+                self._create_role(body, actor, organization_id)
             elif path == "/v1/backups":
-                database = valid_name(body.get("database"), "Database name")
+                database = str(body.get("database", ""))
                 with backup_lock:
-                    backup = create_backup(database, actor, timeout_seconds=240)
+                    backup = create_backup(
+                        organization_id,
+                        database,
+                        actor,
+                        timeout_seconds=240,
+                    )
                 self._json(201, {"backup": backup})
             elif path.startswith("/v1/backups/") and path.endswith("/restore"):
                 encoded_name = path.removeprefix("/v1/backups/").removesuffix("/restore")
-                restored = restore_backup(encoded_name, body.get("database"), actor)
+                restored = restore_backup(
+                    organization_id,
+                    encoded_name,
+                    body.get("database"),
+                    actor,
+                )
                 self._json(201, restored)
             elif path == "/v1/restore-uploads":
-                self._json(201, create_restore_upload(body))
+                self._json(201, create_restore_upload(body, organization_id))
             elif path.startswith("/v1/restore-uploads/") and path.endswith("/complete"):
                 upload_id = path.removeprefix("/v1/restore-uploads/").removesuffix("/complete")
-                restored = restore_uploaded_dump(upload_id, body.get("database"), actor)
+                restored = restore_uploaded_dump(
+                    upload_id,
+                    body.get("database"),
+                    actor,
+                    organization_id,
+                )
                 self._json(201, restored)
             elif path.startswith("/v1/databases/") and path.endswith("/ddl"):
                 encoded_name = path.removeprefix("/v1/databases/").removesuffix("/ddl")
                 if "/" in encoded_name:
                     raise ApiError(404, "Route not found.")
-                res = execute_ddl(unquote(encoded_name), body, actor)
+                database = require_organization_database(organization_id, unquote(encoded_name))
+                res = execute_ddl(database, body, actor, organization_id)
                 self._json(200, res)
             elif path.startswith("/v1/activity/queries/") and path.endswith("/terminate"):
                 pid_str = path.removeprefix("/v1/activity/queries/").removesuffix("/terminate")
                 if not pid_str.isdigit():
                     raise ApiError(400, "Invalid process ID.")
                 signal = str(body.get("action", "cancel"))
-                res = terminate_query(int(pid_str), signal=signal, actor=actor)
+                res = terminate_query(
+                    int(pid_str),
+                    organization_id,
+                    signal=signal,
+                    actor=actor,
+                )
                 self._json(200, res)
             else:
                 self._json(404, {"error": "Route not found."})
@@ -1642,6 +2149,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self._authorized():
             return
         try:
+            organization_id = self._organization()
+            if organization_id is None:
+                return
             path = urlsplit(self.path).path
             match = re.fullmatch(
                 r"/v1/restore-uploads/([a-f0-9]{32})/chunks/([0-9]+)", path
@@ -1659,7 +2169,12 @@ class Handler(BaseHTTPRequestHandler):
             body = self.rfile.read(length)
             if len(body) != length:
                 raise ApiError(400, "Upload chunk was incomplete.")
-            result = store_restore_chunk(match.group(1), int(match.group(2)), body)
+            result = store_restore_chunk(
+                match.group(1),
+                int(match.group(2)),
+                body,
+                organization_id,
+            )
             self._json(200, {"chunk": result})
         except ApiError as error:
             self._json(error.status, {"error": error.message})
@@ -1670,11 +2185,14 @@ class Handler(BaseHTTPRequestHandler):
         if not self._authorized():
             return
         try:
+            organization_id = self._organization()
+            if organization_id is None:
+                return
             path = urlsplit(self.path).path
             upload_prefix = "/v1/restore-uploads/"
             if path.startswith(upload_prefix):
                 upload_id = path.removeprefix(upload_prefix)
-                upload_path = restore_upload_path(upload_id)
+                upload_path, _metadata = read_restore_upload(upload_id, organization_id)
                 shutil.rmtree(upload_path)
                 self._json(200, {"deleted": True})
                 return
@@ -1682,9 +2200,8 @@ class Handler(BaseHTTPRequestHandler):
             if not path.startswith(prefix):
                 self._json(404, {"error": "Route not found."})
                 return
-            name = valid_name(unquote(path.removeprefix(prefix)), "Database name")
-            if name in {"postgres", "template0", "template1"}:
-                raise ApiError(400, "A default PostgreSQL database cannot be removed.")
+            logical_name = unquote(path.removeprefix(prefix))
+            name = require_organization_database(organization_id, logical_name)
             with quota_policy_lock:
                 exists = run_sql(
                     f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(name)})"
@@ -1699,16 +2216,25 @@ class Handler(BaseHTTPRequestHandler):
                 run_sql(f"DROP DATABASE {quote_identifier(name)}")
                 clear_database_quota_setting(name)
                 request_quota_reconcile()
-            record_event("database.deleted", f"Database {name} deleted.", self._actor())
-            self._json(200, {"deleted": True, "name": name})
+            record_event(
+                "database.deleted", f"Database {logical_name} deleted.", self._actor(), organization_id
+            )
+            self._json(200, {"deleted": True, "name": logical_name})
         except ApiError as error:
             self._json(error.status, {"error": error.message})
         except (OSError, subprocess.SubprocessError):
             self._json(503, {"error": "Nanogres could not complete the operation."})
 
-    def _create_role(self, body: dict[str, object], actor: str | None) -> None:
-        name = valid_name(body.get("name"), "Role name")
-        database = valid_name(body.get("database"), "Database name")
+    def _create_role(
+        self,
+        body: dict[str, object],
+        actor: str | None,
+        organization_id: object,
+    ) -> None:
+        logical_name = str(body.get("name", ""))
+        name = tenant_resource_name(organization_id, logical_name, "Role name")
+        logical_database = str(body.get("database", ""))
+        database = require_organization_database(organization_id, logical_database)
         password = body.get("password")
         access = body.get("access")
         if (
@@ -1719,13 +2245,14 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(400, "Password must contain 16 to 256 printable characters.")
         if access not in {"readwrite", "readonly"}:
             raise ApiError(400, "Choose readwrite or readonly access.")
-        if name in {"postgres", "nanogres_api"}:
+        if logical_name in {"postgres", "nanogres_api", "nanogres_internal_query"}:
             raise ApiError(400, "That role name is reserved.")
         if run_sql(
             f"SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {quote_literal(name)})",
             database,
         ) == "t":
             raise ApiError(409, "A role with that name already exists.")
+        query_role = ensure_organization_query_role(organization_id)
         table_privileges = "SELECT, INSERT, UPDATE, DELETE" if access == "readwrite" else "SELECT"
         statements = [
             "BEGIN",
@@ -1734,25 +2261,48 @@ class Handler(BaseHTTPRequestHandler):
             f"GRANT CONNECT ON DATABASE {quote_identifier(database)} TO {quote_identifier(name)}",
             f"GRANT USAGE ON SCHEMA public TO {quote_identifier(name)}",
             f"GRANT {table_privileges} ON ALL TABLES IN SCHEMA public TO {quote_identifier(name)}",
-            f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT {table_privileges} ON TABLES TO {quote_identifier(name)}",
+            f"ALTER DEFAULT PRIVILEGES FOR ROLE {quote_identifier(query_role)} IN SCHEMA public GRANT {table_privileges} ON TABLES TO {quote_identifier(name)}",
         ]
         if access == "readwrite":
             statements.extend(
                 [
                     f"GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO {quote_identifier(name)}",
-                    f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {quote_identifier(name)}",
+                    f"ALTER DEFAULT PRIVILEGES FOR ROLE {quote_identifier(query_role)} IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {quote_identifier(name)}",
                 ]
             )
         statements.append("COMMIT")
         run_sql("; ".join(statements), database)
-        record_event("role.created", f"Role {name} created for {database} ({access}).", actor)
-        self._json(201, {"role": {"name": name, "database": database, "access": access}})
+        record_event(
+            "role.created",
+            f"Role {logical_name} created for {logical_database} ({access}).",
+            actor,
+            organization_id,
+        )
+        self._json(
+            201,
+            {
+                "role": {
+                    "name": logical_name,
+                    "loginName": name,
+                    "database": logical_database,
+                    "connectionDatabase": database,
+                    "access": access,
+                }
+            },
+        )
 
-    def _download_backup(self, encoded_name: str, query: dict[str, list[str]]) -> None:
+    def _download_backup(
+        self,
+        organization_id: object,
+        encoded_name: str,
+        query: dict[str, list[str]],
+    ) -> None:
         filename = unquote(encoded_name)
-        if not BACKUP_PATTERN.fullmatch(filename):
+        match = BACKUP_PATTERN.fullmatch(filename)
+        if not match:
             raise ApiError(404, "Backup not found.")
-        path = BACKUP_DIR / filename
+        tenant_resource_name(organization_id, match.group(1), "Backup database name")
+        path = organization_backup_dir(organization_id) / filename
         if not path.is_file() or path.is_symlink():
             raise ApiError(404, "Backup not found.")
         if (
@@ -1790,7 +2340,244 @@ class Handler(BaseHTTPRequestHandler):
                 remaining -= len(chunk)
 
 
+def legacy_organization_migration_plan(organization_id: object) -> dict[str, object]:
+    org_id = normalized_organization_id(organization_id)
+    prefix = organization_prefix(org_id)
+    existing_databases = {
+        str(row.get("name")) for row in list_databases() if isinstance(row, dict)
+    }
+    databases: list[tuple[str, str]] = []
+    for row in list_databases():
+        old_name = row.get("name")
+        if not isinstance(old_name, str) or row.get("systemDatabase"):
+            continue
+        if old_name.startswith(prefix):
+            logical_name = old_name[len(prefix):]
+            if TENANT_NAME_PATTERN.fullmatch(logical_name):
+                if int(row.get("connections", 0)) > 0:
+                    raise ApiError(
+                        409,
+                        f"Organization database {logical_name!r} still has active connections. Stop clients and retry.",
+                    )
+                databases.append((old_name, old_name))
+            continue
+        if TENANT_PREFIX_PATTERN.match(old_name):
+            continue
+        if not TENANT_NAME_PATTERN.fullmatch(old_name):
+            raise ApiError(
+                400,
+                f"Legacy database {old_name!r} is longer than the {TENANT_NAME_MAX_LENGTH}-character organization limit or has an unsupported name.",
+            )
+        if int(row.get("connections", 0)) > 0:
+            raise ApiError(
+                409,
+                f"Legacy database {old_name!r} still has active connections. Stop clients and retry.",
+            )
+        new_name = prefix + old_name
+        if len(new_name.encode("utf-8")) > 63 or (
+            new_name in existing_databases and new_name != old_name
+        ):
+            raise ApiError(409, f"The organization-scoped name for {old_name!r} is unavailable.")
+        databases.append((old_name, new_name))
+
+    role_rows = json_query(
+        "SELECT COALESCE(json_agg(rolname ORDER BY rolname), '[]'::json)::text "
+        "FROM pg_roles WHERE rolcanlogin AND rolname !~ '^pg_' "
+        "AND rolname NOT IN ('postgres', 'nanogres_api')"
+    )
+    if not isinstance(role_rows, list):
+        raise ApiError(503, "PostgreSQL returned invalid role metadata.")
+    existing_roles = {
+        str(row["name"])
+        for row in json_query(
+            "SELECT COALESCE(json_agg(json_build_object('name', rolname) ORDER BY rolname), '[]'::json)::text "
+            "FROM pg_roles"
+        )
+        if isinstance(row, dict) and isinstance(row.get("name"), str)
+    }
+    roles: list[tuple[str, str]] = []
+    for old_name in role_rows:
+        if not isinstance(old_name, str) or TENANT_PREFIX_PATTERN.match(old_name):
+            continue
+        if not TENANT_NAME_PATTERN.fullmatch(old_name):
+            raise ApiError(
+                400,
+                f"Legacy login role {old_name!r} is longer than the {TENANT_NAME_MAX_LENGTH}-character organization limit or has an unsupported name.",
+            )
+        new_name = prefix + old_name
+        if len(new_name.encode("utf-8")) > 63 or (
+            new_name in existing_roles and new_name != old_name
+        ):
+            raise ApiError(409, f"The organization-scoped name for role {old_name!r} is unavailable.")
+        roles.append((old_name, new_name))
+
+    backup_sources: list[Path] = []
+    for directory in (BACKUP_DIR, BACKUP_DIR / "legacy"):
+        if not directory.exists() or directory.is_symlink():
+            continue
+        for path in directory.iterdir():
+            if (
+                path.is_file()
+                and not path.is_symlink()
+                and BACKUP_PATTERN.fullmatch(path.name)
+            ):
+                backup_database = path.name.split("__", 1)[0]
+                if not TENANT_NAME_PATTERN.fullmatch(backup_database):
+                    raise ApiError(
+                        400,
+                        f"Legacy backup {path.name!r} cannot be moved because its database name exceeds the organization limit.",
+                    )
+                backup_sources.append(path)
+
+    destination_dir = organization_backup_dir(org_id)
+    if destination_dir.exists() and destination_dir.is_symlink():
+        raise ApiError(409, "The organization backup directory is not a regular directory.")
+    for path in backup_sources:
+        if (destination_dir / path.name).exists():
+            raise ApiError(409, f"The organization backup {path.name!r} already exists.")
+
+    old_policy = read_quota_policy()
+    policy: dict[str, int] = {}
+    database_names = dict(databases)
+    for name, max_bytes in old_policy.items():
+        if TENANT_PREFIX_PATTERN.match(name):
+            policy[name] = max_bytes
+        elif not TENANT_NAME_PATTERN.fullmatch(name):
+            raise ApiError(
+                400,
+                f"Legacy quota setting for {name!r} must be removed or shortened before migration.",
+            )
+        else:
+            policy[database_names.get(name, prefix + name)] = max_bytes
+
+    if EVENTS_FILE.exists():
+        try:
+            for line in EVENTS_FILE.read_text(encoding="utf-8").splitlines():
+                if line:
+                    json.loads(line)
+        except (OSError, json.JSONDecodeError) as error:
+            raise ApiError(503, "The activity log is invalid and cannot be migrated safely.") from error
+
+    return {
+        "organizationId": org_id,
+        "prefix": prefix,
+        "databases": databases,
+        "roles": roles,
+        "backups": backup_sources,
+        "quotaPolicy": policy,
+    }
+
+
+def migrate_legacy_organization(organization_id: object) -> dict[str, int]:
+    plan = legacy_organization_migration_plan(organization_id)
+    org_id = str(plan["organizationId"])
+    prefix = str(plan["prefix"])
+    role_name = organization_query_role(org_id)
+    databases = plan["databases"]
+    roles = plan["roles"]
+    backups = plan["backups"]
+    policy = plan["quotaPolicy"]
+    assert isinstance(databases, list)
+    assert isinstance(roles, list)
+    assert isinstance(backups, list)
+    assert isinstance(policy, dict)
+
+    role_exists = run_sql(
+        f"SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = {quote_literal(role_name)})"
+    )
+    if role_exists != "t":
+        run_sql(
+            f"CREATE ROLE {quote_identifier(role_name)} WITH NOLOGIN NOSUPERUSER "
+            "NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS"
+        )
+
+    for old_name, new_name in roles:
+        run_sql(
+            f"ALTER ROLE {quote_identifier(old_name)} RENAME TO {quote_identifier(new_name)}"
+        )
+
+    for old_name, new_name in databases:
+        if old_name != new_name:
+            run_sql(
+                f"ALTER DATABASE {quote_identifier(old_name)} RENAME TO {quote_identifier(new_name)}"
+            )
+        run_sql(
+            f"ALTER DATABASE {quote_identifier(new_name)} OWNER TO {quote_identifier(role_name)}"
+        )
+        secure_organization_database(new_name, role_name)
+        transfer_database_objects(new_name, role_name)
+
+    destination_dir = organization_backup_dir(org_id)
+    destination_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    for source in backups:
+        source.replace(destination_dir / source.name)
+    legacy_dir = BACKUP_DIR / "legacy"
+    if legacy_dir.exists() and not any(legacy_dir.iterdir()):
+        legacy_dir.rmdir()
+
+    write_quota_policy(policy)
+    try:
+        QUOTA_REQUEST_FILE.touch(mode=0o600, exist_ok=True)
+    except OSError:
+        pass
+
+    if EVENTS_FILE.exists():
+        events = [
+            json.loads(line)
+            for line in EVENTS_FILE.read_text(encoding="utf-8").splitlines()
+            if line
+        ]
+        migrated = [
+            {**event, "organizationId": org_id}
+            if isinstance(event, dict) and "organizationId" not in event
+            else event
+            for event in events
+        ]
+        fd, temporary = tempfile.mkstemp(prefix=".events.", dir=STATE_DIR)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                for event in migrated:
+                    handle.write(json.dumps(event, separators=(",", ":")) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, EVENTS_FILE)
+        finally:
+            Path(temporary).unlink(missing_ok=True)
+
+    return {
+        "databases": len(databases),
+        "roles": len(roles),
+        "backups": len(backups),
+    }
+
+
 def main() -> int:
+    if "--migrate-legacy-organization" in sys.argv:
+        index = sys.argv.index("--migrate-legacy-organization")
+        if index + 1 >= len(sys.argv) or sys.argv.count("--migrate-legacy-organization") != 1:
+            raise ApiError(400, "Provide one organization ID for the legacy migration.")
+        organization_id = normalized_organization_id(sys.argv[index + 1])
+        plan = legacy_organization_migration_plan(organization_id)
+        counts = {
+            "databases": len(plan["databases"]),
+            "roles": len(plan["roles"]),
+            "backups": len(plan["backups"]),
+        }
+        if "--apply" not in sys.argv:
+            print(
+                "Legacy organization migration plan: "
+                f"{counts['databases']} database(s), {counts['roles']} role(s), "
+                f"{counts['backups']} backup(s). No changes made."
+            )
+            return 0
+        counts = migrate_legacy_organization(organization_id)
+        print(
+            "Migrated legacy Nanogres data: "
+            f"{counts['databases']} database(s), {counts['roles']} role(s), "
+            f"{counts['backups']} backup(s)."
+        )
+        return 0
     if "--backup-all" in sys.argv:
         with backup_lock:
             print(f"Created {backup_all()} Nanogres backup(s).")

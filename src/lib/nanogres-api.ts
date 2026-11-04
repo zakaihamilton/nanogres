@@ -2,7 +2,7 @@ import "server-only";
 
 import type { CurrentSession } from "@/lib/perminister-auth";
 
-type WorkspaceApiTarget = { organizationId: string; workspaceId: string };
+type OrganizationApiTarget = { organizationId: string };
 type ApiConfig = { url: string; token: string };
 
 function parseApiConfig(rawUrl?: string, rawToken?: string): ApiConfig | null {
@@ -30,24 +30,13 @@ function parseApiConfig(rawUrl?: string, rawToken?: string): ApiConfig | null {
   }
 }
 
-function getApiConfig(target: WorkspaceApiTarget): ApiConfig | null {
-  const configuredOrganization = process.env.PERMINISTER_ORGANIZATION_ID?.trim().toLowerCase();
-  const configuredWorkspace = process.env.NANOGRES_WORKSPACE_ID?.trim().toLowerCase();
-  if (
-    !configuredOrganization ||
-    !configuredWorkspace ||
-    target.organizationId.trim().toLowerCase() !== configuredOrganization ||
-    target.workspaceId.trim().toLowerCase() !== configuredWorkspace
-  ) {
-    return null;
-  }
-
+function getApiConfig(): ApiConfig | null {
   return parseApiConfig(process.env.NANOGRES_API_URL, process.env.NANOGRES_API_TOKEN);
 }
 
 function apiNotConfigured(): Response {
   return Response.json(
-    { error: "The workspace service is not configured for the selected workspace." },
+    { error: "The Nanogres VPS API is not configured." },
     { status: 503, headers: { "Cache-Control": "no-store" } },
   );
 }
@@ -55,29 +44,29 @@ function apiNotConfigured(): Response {
 export async function callNanogresApi(
   path: string,
   session: CurrentSession,
-  target: WorkspaceApiTarget,
+  target: OrganizationApiTarget,
   init: RequestInit = {},
 ): Promise<Response> {
-  const config = getApiConfig(target);
+  const config = getApiConfig();
   if (!config) return apiNotConfigured();
   const longRunningPost =
     init.method === "POST" &&
     (path.startsWith("/v1/backups") || /\/restore-uploads\/[a-f0-9]{32}\/complete$/.test(path));
   const timeout = path === "/v1/events/stream" ? 295_000 : longRunningPost ? 255_000 : 60_000;
   try {
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${config.token}`);
+    headers.set("X-Nanogres-Actor", session.account.subjectId);
+    headers.set("X-Nanogres-Organization", target.organizationId);
     return await fetch(`${config.url}${path}`, {
       ...init,
-      headers: {
-        ...(init.headers ?? {}),
-        Authorization: `Bearer ${config.token}`,
-        "X-Nanogres-Actor": session.account.subjectId,
-      },
+      headers,
       cache: "no-store",
       signal: AbortSignal.timeout(timeout),
     });
   } catch {
     return Response.json(
-      { error: "The Nanogres workspace service could not be reached." },
+      { error: "The Nanogres VPS API could not be reached." },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }
@@ -102,7 +91,7 @@ export async function relayApiResponse(upstream: Response): Promise<Response> {
   }
   if (upstream.status >= 500) {
     return Response.json(
-      { error: "The Nanogres workspace service failed to complete the request." },
+      { error: "The Nanogres VPS API failed to complete the request." },
       { status: upstream.status, headers },
     );
   }

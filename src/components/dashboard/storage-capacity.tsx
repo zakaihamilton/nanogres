@@ -15,6 +15,7 @@ export type DatabaseQuotaChange = { mode: "auto" } | { mode: "custom"; maxBytes:
 
 export type DatabaseStorage = {
   name: string;
+  connectionName?: string;
   sizeBytes: number;
   growthHeadroomBytes?: number;
   recommendedMaxBytes?: number;
@@ -176,7 +177,7 @@ export function StorageCapacity({
           <span className={styles.diskFill} style={{ width: `${diskUsedPercent}%` }} />
         </div>
         <div className={styles.databaseTotal}>
-          <span>All databases, including postgres</span>
+          <span>Your organization's databases</span>
           <strong>{formatBytes(totalDatabaseUsageBytes)} database files on disk</strong>
         </div>
       </div>

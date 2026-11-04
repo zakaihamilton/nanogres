@@ -26,6 +26,10 @@ export type Backup = {
 
 export type Role = {
   name: string;
+  loginName: string;
+  database: string | null;
+  connectionDatabase: string | null;
+  databases: string[];
   superuser: boolean;
   canCreateDatabase: boolean;
   canCreateRole: boolean;
@@ -428,7 +432,7 @@ export function DeleteDatabaseDialog({
             autoComplete="off"
             disabled={busy}
             id="delete-database-confirmation"
-            maxLength={63}
+            maxLength={37}
             onChange={(event) => setConfirmationName(event.target.value)}
             placeholder="Type the database name"
             ref={nameInputRef}

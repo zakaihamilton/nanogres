@@ -45,7 +45,7 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
 
   // Search & connect modal
   const [searchQuery, setSearchQuery] = useState("");
-  const [connectRole, setConnectRole] = useState<string | null>(null);
+  const [connectRole, setConnectRole] = useState<Role | null>(null);
 
   const filteredRoles = useMemo(() => {
     if (!rawRoles) return [];
@@ -127,10 +127,10 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
                   <input
                     autoComplete="off"
                     id="role-name"
-                    maxLength={63}
+                    maxLength={37}
                     minLength={2}
                     onChange={(event) => setName(event.target.value)}
-                    pattern="[a-z][a-z0-9_]{1,62}"
+                    pattern="[a-z][a-z0-9_]{1,36}"
                     placeholder="app_service"
                     required
                     value={name}
@@ -248,8 +248,10 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
                         <td>
                           <button
                             className={styles.rowAction}
-                            onClick={() => setConnectRole(role.name)}
+                            disabled={!role.connectionDatabase}
+                            onClick={() => setConnectRole(role)}
                             type="button"
+                            title={!role.connectionDatabase ? "Role has no database access" : undefined}
                           >
                             Connect snippet
                           </button>
@@ -271,10 +273,12 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
       )}
 
       <ConnectionModal
-        database={userDatabases[0]?.name || "postgres"}
-        isOpen={Boolean(connectRole)}
+        database={
+          connectRole?.connectionDatabase ?? ""
+        }
+        isOpen={Boolean(connectRole?.connectionDatabase)}
         onClose={() => setConnectRole(null)}
-        user={connectRole || "postgres"}
+        user={connectRole?.loginName ?? "your_role"}
       />
     </div>
   );

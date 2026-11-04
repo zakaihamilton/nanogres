@@ -39,11 +39,22 @@ const DEFAULT_TABS: TabState[] = [
 
 export function SqlEditorScreen() {
   const searchParams = useSearchParams();
-  const initialDb = searchParams.get("db") || "postgres";
+  const initialDb = searchParams.get("db") || "";
   const initialQuery = searchParams.get("q");
 
   const { databases, loading: dbsLoading } = useDatabases();
   const [selectedDb, setSelectedDb] = useState(initialDb);
+
+  useEffect(() => {
+    if (dbsLoading) return;
+    if (!selectedDb) {
+      if (!initialDb && databases.length > 0) setSelectedDb(databases[0].name);
+      return;
+    }
+    if (!databases.some((database) => database.name === selectedDb)) {
+      setSelectedDb("");
+    }
+  }, [databases, dbsLoading, initialDb, selectedDb]);
 
   // Tabs state with localStorage
   const [tabs, setTabs] = useState<TabState[]>(() => {
@@ -116,6 +127,7 @@ export function SqlEditorScreen() {
 
   const executeSql = useCallback(
     async (overrideSql?: string) => {
+      if (!selectedDb) return;
       let sqlToRun = (overrideSql ?? currentTab?.query ?? "").trim();
       if (!sqlToRun) return;
 
@@ -209,7 +221,7 @@ export function SqlEditorScreen() {
       <div className={styles.headerBar}>
         <div className={styles.titleArea}>
           <h1>SQL Editor</h1>
-          <p>Execute queries, inspect results, and analyze plans across your cluster.</p>
+          <p>Execute queries, inspect results, and analyze plans on an organization database.</p>
         </div>
         <div className={styles.controlsBar}>
           <label
@@ -229,9 +241,17 @@ export function SqlEditorScreen() {
               onChange={(e) => setSelectedDb(e.target.value)}
               value={selectedDb}
             >
+              {selectedDb && !databases.some((database) => database.name === selectedDb) ? (
+                <option value="">No accessible database</option>
+              ) : null}
+              {!selectedDb ? (
+                <option value="">
+                  {initialDb ? "Requested database unavailable" : "Select an organization database"}
+                </option>
+              ) : null}
               {databases.map((db) => (
                 <option key={db.name} value={db.name}>
-                  {db.name} {db.systemDatabase ? "(system)" : ""}
+                  {db.name}
                 </option>
               ))}
             </select>
@@ -334,13 +354,13 @@ export function SqlEditorScreen() {
         </div>
 
         <div className={styles.actionButtons}>
-          <Button onClick={() => handleExplain(false)} variant="secondary">
+          <Button disabled={!selectedDb} onClick={() => handleExplain(false)} variant="secondary">
             Explain
           </Button>
-          <Button onClick={() => handleExplain(true)} variant="secondary">
+          <Button disabled={!selectedDb} onClick={() => handleExplain(true)} variant="secondary">
             Explain Analyze
           </Button>
-          <Button disabled={executing} onClick={() => void executeSql()} variant="primary">
+          <Button disabled={executing || !selectedDb} onClick={() => void executeSql()} variant="primary">
             {executing ? "Executing..." : "Run Query ⌘↵"}
           </Button>
         </div>

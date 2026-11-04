@@ -39,7 +39,7 @@ def upload() -> None:
     (STATE_DIR / "offsite-backup.request").unlink(missing_ok=True)
     started = datetime.now(timezone.utc).isoformat()
     backups = [
-        path for path in BACKUP_DIR.iterdir()
+        path for path in BACKUP_DIR.rglob("*.dump")
         if PATTERN.fullmatch(path.name) and path.is_file() and not path.is_symlink()
     ] if BACKUP_DIR.exists() else []
     base = {

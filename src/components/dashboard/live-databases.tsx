@@ -161,10 +161,10 @@ export function LiveDatabasesScreen({ page = "list" }: { page?: "list" | "new" }
                 <input
                   autoComplete="off"
                   id="database-name"
-                  maxLength={63}
+                  maxLength={37}
                   minLength={2}
                   onChange={(event) => setName(event.target.value)}
-                  pattern="[a-z][a-z0-9_]{1,62}"
+                  pattern="[a-z][a-z0-9_]{1,36}"
                   placeholder="my_project"
                   required
                   value={name}
@@ -262,8 +262,8 @@ export function LiveDatabasesScreen({ page = "list" }: { page?: "list" | "new" }
       ) : null}
 
       <ConnectionModal
-        database={connectDb || "postgres"}
-        isOpen={Boolean(connectDb)}
+        database={databases.find((database) => database.name === connectDb)?.connectionName ?? ""}
+        isOpen={databases.some((database) => database.name === connectDb)}
         onClose={() => setConnectDb(null)}
       />
     </div>

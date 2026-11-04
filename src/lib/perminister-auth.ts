@@ -484,35 +484,12 @@ export async function getNanogresWorkspaceContext(
     selectedWorkspace = accessibleWorkspaces[0];
   }
 
-  // If still no workspace, pick default organization and default workspace id
+  // A selected workspace must always come from a Perminister grant.
   if (!selectedWorkspace) {
-    const defaultOrg =
-      (cookieOrgId && orgs.find((o) => o.organizationId.toLowerCase() === cookieOrgId)) ||
-      (process.env.PERMINISTER_ORGANIZATION_ID &&
-        orgs.find(
-          (o) =>
-            o.organizationId.toLowerCase() ===
-            process.env.PERMINISTER_ORGANIZATION_ID?.trim().toLowerCase(),
-        )) ||
-      orgs[0];
-
-    const defaultWsId = process.env.NANOGRES_WORKSPACE_ID?.trim().toLowerCase() || "default";
-
-    selectedWorkspace = {
-      id: defaultWsId,
-      name:
-        customNames[defaultWsId] ||
-        customNames[defaultWsId.toLowerCase()] ||
-        formatWorkspaceName(defaultWsId),
-      organizationId: defaultOrg.organizationId,
-      organizationName: defaultOrg.organizationName,
-      role:
-        defaultOrg.organizationRole === "owner" ||
-        defaultOrg.organizationRole === "admin" ||
-        defaultOrg.platformAdmin === true
-          ? "admin"
-          : "viewer",
-    };
+    return Response.json(
+      { error: "Your Perminister account has no access to a Nanogres workspace." },
+      { status: 403, headers: { "Cache-Control": "no-store" } },
+    );
   }
 
   return {

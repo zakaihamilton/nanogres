@@ -220,8 +220,10 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
         <div className={liveStyles.actionGroup}>
           <button
             className={liveStyles.actionSecondaryButton}
+            disabled={!db}
             onClick={() => setConnectModalOpen(true)}
             type="button"
+            title={!db ? "Database is unavailable" : undefined}
           >
             <Icon name="terminal" size={14} />
             Connect
@@ -279,7 +281,7 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
             </div>
             <div className={liveStyles.metric}>
               <span>Owner</span>
-              <strong>{db?.owner || "postgres"}</strong>
+              <strong>{db?.owner || "—"}</strong>
               <small>Default authorization role</small>
             </div>
           </div>
@@ -634,8 +636,8 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
       ) : null}
 
       <ConnectionModal
-        database={databaseName}
-        isOpen={connectModalOpen}
+        database={db?.connectionName ?? ""}
+        isOpen={connectModalOpen && Boolean(db)}
         onClose={() => setConnectModalOpen(false)}
       />
     </div>

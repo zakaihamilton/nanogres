@@ -155,7 +155,7 @@ export function LiveBackupsScreen({
   const restoreBackup = backups.find((item) => item.filename === backupFilename);
   const [restoreNameInput, setRestoreName] = useState<string | null>(null);
   const restoreName =
-    restoreNameInput ?? (restoreBackup ? restoreBackup.database.slice(0, 54) + "_restore" : "");
+    restoreNameInput ?? (restoreBackup ? restoreBackup.database.slice(0, 29) + "_restore" : "");
   const [restoring, setRestoring] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<{
     message: string;
@@ -647,9 +647,9 @@ export function LiveBackupsScreen({
                   <input
                     autoComplete="off"
                     id="restore-existing-name"
-                    maxLength={63}
+                    maxLength={37}
                     minLength={1}
-                    pattern="[a-z][a-z0-9_]{0,62}"
+                    pattern="[a-z][a-z0-9_]{0,36}"
                     required
                     value={restoreName}
                     onChange={(event) => setRestoreName(event.target.value)}
@@ -694,7 +694,7 @@ export function LiveBackupsScreen({
                         .toLowerCase()
                         .replace(/[^a-z0-9_]/g, "_")
                         .replace(/^[^a-z]+/, "")
-                        .slice(0, 54);
+                        .slice(0, 29);
                       setRestoreFileName((base || "restored_db") + "_restore");
                     }
                   }}
@@ -711,10 +711,10 @@ export function LiveBackupsScreen({
                 <input
                   autoComplete="off"
                   id="restore-file-database"
-                  maxLength={63}
+                  maxLength={37}
                   minLength={1}
                   onChange={(event) => setRestoreFileName(event.target.value)}
-                  pattern="[a-z][a-z0-9_]{0,62}"
+                  pattern="[a-z][a-z0-9_]{0,36}"
                   placeholder="restored_project"
                   required
                   value={restoreFileName}
