@@ -116,9 +116,8 @@
   margin: 0;
 }
 
-.cardSlug {
+.cardSecondaryName {
   font-size: 12px;
-  font-family: var(--font-mono, monospace);
   color: var(--ink-muted);
 }
 
@@ -354,6 +353,19 @@
 .formHint {
   font-size: 11px;
   color: var(--ink-muted);
+}
+
+.advancedSettings {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.advancedSummary {
+  color: var(--ink-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 12px;
 }
 
 .modalActions {

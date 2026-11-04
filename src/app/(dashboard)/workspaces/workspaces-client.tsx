@@ -138,7 +138,7 @@ export function WorkspacesClient({
       <PageHeader
         eyebrow="MULTI-WORKSPACE CONTROL"
         title="Postgres Workspaces"
-        description="Switch between isolated PostgreSQL workspace clusters or initialize a new workspace for your Perminister organization."
+        description="Workspace entries control access through Perminister. PostgreSQL databases are scoped to the organization, so these entries use the same organization databases."
         action={
           <Button onClick={() => setModalOpen(true)} variant="primary">
             <Icon name="plus" size={14} />
@@ -182,8 +182,10 @@ export function WorkspacesClient({
               <div>
                 <div className={styles.cardTop}>
                   <div className={styles.cardHeading}>
-                    <h2 className={styles.cardName}>{ws.name}</h2>
-                    <span className={styles.cardSlug}>{ws.id}</span>
+                    <h2 className={styles.cardName}>{ws.organizationName}</h2>
+                    {ws.name !== ws.organizationName ? (
+                      <span className={styles.cardSecondaryName}>{ws.name}</span>
+                    ) : null}
                   </div>
                   <div className={styles.badges}>
                     {isActive ? (
@@ -197,8 +199,7 @@ export function WorkspacesClient({
                 </div>
 
                 <div className={styles.cardMeta}>
-                  <span>Organization: {ws.organizationName}</span>
-                  <span>Cluster scope: PostgreSQL workspace</span>
+                  <span>PostgreSQL databases scoped to this organization</span>
                 </div>
               </div>
 
@@ -261,7 +262,7 @@ export function WorkspacesClient({
               </button>
             </div>
             <p className={styles.modalDesc}>
-              Update the friendly display name for workspace <code>{renameTarget.id}</code> in{" "}
+              Update the friendly display name for PostgreSQL access in{" "}
               <strong>{renameTarget.organizationName}</strong>.
             </p>
             <form className={styles.modalForm} onSubmit={handleRenameWorkspace}>
@@ -280,25 +281,28 @@ export function WorkspacesClient({
                 />
               </div>
 
-              <div className={styles.formField}>
-                <label className={styles.formLabel} htmlFor="ws-rename-slug">
-                  Workspace Slug (ID)
-                </label>
-                <input
-                  className={styles.formInput}
-                  id="ws-rename-slug"
-                  onChange={(e) => setRenameSlug(e.target.value.toLowerCase())}
-                  pattern="[a-z0-9-_]{2,64}"
-                  placeholder="e.g. production-cluster"
-                  required
-                  type="text"
-                  value={renameSlug}
-                />
-                <span className={styles.formHint}>
-                  Identifier registered with Perminister. Changing the slug registers the new scope
-                  and updates active session cookies.
-                </span>
-              </div>
+              <details className={styles.advancedSettings}>
+                <summary className={styles.advancedSummary}>Advanced: change permission ID</summary>
+                <div className={styles.formField}>
+                  <label className={styles.formLabel} htmlFor="ws-rename-slug">
+                    Permission ID
+                  </label>
+                  <input
+                    className={styles.formInput}
+                    id="ws-rename-slug"
+                    onChange={(e) => setRenameSlug(e.target.value.toLowerCase())}
+                    pattern="[a-z0-9-_]{2,64}"
+                    placeholder="e.g. production-cluster"
+                    required
+                    type="text"
+                    value={renameSlug}
+                  />
+                  <span className={styles.formHint}>
+                    Changing this registers a new Perminister access scope and attempts to revoke
+                    the previous one.
+                  </span>
+                </div>
+              </details>
 
               <div className={styles.modalActions}>
                 <button
@@ -332,8 +336,9 @@ export function WorkspacesClient({
               </button>
             </div>
             <p className={styles.modalDesc}>
-              Initialize a new database workspace in <strong>{currentOrganizationName}</strong>.
-              Perminister will grant you workspace admin privileges.
+              Register an additional Perminister access scope for{" "}
+              <strong>{currentOrganizationName}</strong>. It will not create a separate PostgreSQL
+              cluster.
             </p>
             <form className={styles.modalForm} onSubmit={handleRegisterWorkspace}>
               <div className={styles.formField}>

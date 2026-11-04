@@ -338,21 +338,6 @@ export type NanogresWorkspaceContext = {
   role: NanogresRole;
 };
 
-export function formatWorkspaceName(id: string): string {
-  if (!id) return "Default Workspace";
-  return id
-    .split(/[-_]+/)
-    .map((word) => {
-      const lower = word.toLowerCase();
-      if (lower === "vps") return "VPS";
-      if (lower === "api") return "API";
-      if (lower === "db") return "DB";
-      if (lower === "sql") return "SQL";
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    })
-    .join(" ");
-}
-
 export function getAccessibleWorkspaces(
   session: CurrentSession,
   filterOrganizationId?: string,
@@ -394,7 +379,9 @@ export function getAccessibleWorkspaces(
                   ? "manager"
                   : "viewer";
             const displayName =
-              customNames?.[wsId] || customNames?.[wsId.toLowerCase()] || formatWorkspaceName(wsId);
+              customNames?.[wsId] ||
+              customNames?.[wsId.toLowerCase()] ||
+              org.organizationName;
             choices.push({
               id: wsId,
               name: displayName,

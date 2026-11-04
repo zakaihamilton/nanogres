@@ -151,8 +151,14 @@ export function WorkspaceSwitcher({
           <Icon name="server" size={16} />
         </span>
         <span className={styles.textGroup}>
-          <strong className={styles.workspaceName}>{currentWorkspaceName}</strong>
-          <small className={styles.organizationName}>{currentOrganizationName}</small>
+          <strong className={styles.workspaceName}>
+            {currentOrganizationName || currentWorkspaceName}
+          </strong>
+          <small className={styles.organizationName}>
+            {currentWorkspaceName && currentWorkspaceName !== currentOrganizationName
+              ? currentWorkspaceName
+              : "PostgreSQL access"}
+          </small>
         </span>
         <svg
           aria-hidden="true"
@@ -192,17 +198,9 @@ export function WorkspaceSwitcher({
                 type="button"
               >
                 <div className={styles.optionText}>
-                  <div className={styles.optionName}>{ws.name}</div>
+                  <div className={styles.optionName}>{ws.organizationName}</div>
                   <div className={styles.optionMeta}>
-                    <span className={styles.optionSlug}>{ws.id}</span>
-                    {ws.organizationName ? (
-                      <>
-                        <span aria-hidden="true" className={styles.metaDot}>
-                          ·
-                        </span>
-                        <span className={styles.optionOrg}>{ws.organizationName}</span>
-                      </>
-                    ) : null}
+                    {ws.name !== ws.organizationName ? ws.name : "PostgreSQL access"}
                   </div>
                 </div>
                 <div className={styles.optionBadges}>

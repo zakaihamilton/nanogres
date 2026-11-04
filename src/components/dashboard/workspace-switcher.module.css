@@ -194,30 +194,6 @@
   text-overflow: ellipsis;
 }
 
-.optionSlug {
-  font-family: var(--font-mono, monospace);
-  font-size: 10.5px;
-  background: var(--surface-muted);
-  padding: 1px 4px;
-  border-radius: 4px;
-  border: 1px solid var(--line);
-}
-
-.optionSelected .optionSlug {
-  background: var(--surface);
-  border-color: var(--green-pale);
-}
-
-.metaDot {
-  opacity: 0.6;
-}
-
-.optionOrg {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .optionBadges {
   display: flex;
   align-items: center;
