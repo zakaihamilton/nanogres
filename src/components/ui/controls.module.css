@@ -1,0 +1,51 @@
+.dialog {
+  width: min(480px, calc(100% - 32px));
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-soft);
+}
+
+.dialog::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+.dialog h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+
+.dialog p {
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.actions button {
+  padding: 10px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.actions .confirm {
+  border-color: var(--green);
+  background: var(--green);
+  color: var(--surface);
+}
+
+.actions button:focus-visible {
+  outline: 3px solid var(--green);
+  outline-offset: 3px;
+}

@@ -30,6 +30,10 @@ install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-backup.service" /etc/syste
 install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-backup.timer" /etc/systemd/system/nanogres-backup.timer
 install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-offsite-backup.service" /etc/systemd/system/nanogres-offsite-backup.service
 install -o root -g root -m 0755 "$SOURCE_DIR/nanogres-offsite-backup.py" /opt/nanogres-api/nanogres-offsite-backup.py
+install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-backup-alert.service" /etc/systemd/system/nanogres-backup-alert.service
+install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-backup-alert.timer" /etc/systemd/system/nanogres-backup-alert.timer
+install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-backup-event@.service" /etc/systemd/system/nanogres-backup-event@.service
+install -o root -g root -m 0755 "$SOURCE_DIR/nanogres-backup-alert.py" /opt/nanogres-api/nanogres-backup-alert.py
 install -o root -g root -m 0755 "$SOURCE_DIR/nanogres-quota.py" /usr/local/sbin/nanogres-quota
 install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-quota.service" /etc/systemd/system/nanogres-quota.service
 install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-quota.timer" /etc/systemd/system/nanogres-quota.timer
@@ -52,6 +56,7 @@ systemctl enable --now nanogres-backup.timer
 systemctl enable --now nanogres-quota.timer
 systemctl enable --now nanogres-quota.path
 systemctl enable --now nanogres-offsite-backup.path
+systemctl enable --now nanogres-backup-alert.timer
 systemctl enable --now nanogres-api.service
 
 echo "Nanogres API is installed and bound to 127.0.0.1:8765."

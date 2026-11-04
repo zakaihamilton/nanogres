@@ -3,6 +3,7 @@ Description=Copy retained Nanogres backups to DigitalOcean Spaces
 ConditionPathExists=/etc/nanogres/backup.env
 After=network-online.target
 Wants=network-online.target
+OnFailure=nanogres-backup-alert.service
 
 [Service]
 Type=oneshot

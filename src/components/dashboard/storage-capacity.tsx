@@ -1,5 +1,7 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
+
 import { useState, type FormEvent } from "react";
 import styles from "./storage-capacity.module.css";
 
@@ -217,21 +219,26 @@ export function StorageCapacity({
                       {formatBytes(recommendedMaxBytes)}
                     </span>
                     {onSaveQuota ? (
-                      <button
-                        aria-expanded={isEditing}
-                        aria-controls={isEditing ? `quota-editor-${database.name}` : undefined}
-                        className={styles.quotaButton}
-                        disabled={!database.hardLimitEnforced || Boolean(savingQuotaName)}
-                        onClick={() => startEditing(database)}
-                        title={
-                          database.hardLimitEnforced
-                            ? "Adjust this database's maximum size"
-                            : "A verified hard quota is required before it can be changed"
-                        }
-                        type="button"
-                      >
-                        {isEditing ? "Editing limit" : "Edit limit"}
-                      </button>
+                      <div className={styles.quotaAction}>
+                        <button
+                          aria-describedby={
+                            database.hardLimitEnforced ? undefined : `quota-help-${database.name}`
+                          }
+                          aria-expanded={isEditing}
+                          aria-controls={isEditing ? `quota-editor-${database.name}` : undefined}
+                          className={styles.quotaButton}
+                          disabled={!database.hardLimitEnforced || Boolean(savingQuotaName)}
+                          onClick={() => startEditing(database)}
+                          type="button"
+                        >
+                          {isEditing ? "Editing limit" : "Edit limit"}
+                        </button>
+                        {!database.hardLimitEnforced ? (
+                          <small className={styles.quotaHint} id={`quota-help-${database.name}`}>
+                            A verified hard quota is required before this limit can be changed.
+                          </small>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                 </div>
@@ -278,18 +285,18 @@ export function StorageCapacity({
                     <div className={styles.quotaFields}>
                       <div>
                         <label htmlFor={`quota-mode-${database.name}`}>Sizing mode</label>
-                        <select
+                        <Select
                           disabled={isSaving}
                           id={`quota-mode-${database.name}`}
-                          onChange={(event) => {
-                            setQuotaMode(event.target.value as "auto" | "custom");
+                          onChange={(value) => {
+                            setQuotaMode(value as "auto" | "custom");
                             setQuotaError(null);
                           }}
                           value={quotaMode}
                         >
                           <option value="auto">Auto allocation</option>
                           <option value="custom">Custom maximum</option>
-                        </select>
+                        </Select>
                       </div>
                       {quotaMode === "custom" ? (
                         <div>

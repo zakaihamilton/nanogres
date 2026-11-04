@@ -1,0 +1,10 @@
+[Unit]
+Description=Check Nanogres off-site backup freshness hourly
+
+[Timer]
+OnBootSec=5m
+OnUnitActiveSec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -28,6 +28,13 @@
   line-height: 1.13;
 }
 
+.headingAction {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
 .headingDescription {
   margin: 9px 0 0;
   color: var(--ink-soft);
@@ -46,7 +53,7 @@
   border: 1px solid var(--green-strong);
   border-radius: 9px;
   background: var(--green);
-  color: #fff;
+  color: var(--on-green);
   cursor: pointer;
   font-size: 12px;
   font-weight: 680;
@@ -78,6 +85,24 @@
   line-height: 1.55;
 }
 
+.previewAction {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 6px;
+}
+
+.previewActionHint {
+  display: block;
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.deleteAction + .previewActionHint {
+  margin-top: 4px;
+}
+
 .createForm {
   display: grid;
   gap: 7px;
@@ -98,8 +123,8 @@
 
 .createForm input,
 .previewField input,
-.previewField select,
-.previewInlineForm select {
+.previewField [data-select-trigger],
+.previewInlineForm [data-select-trigger] {
   width: 100%;
   min-width: 0;
   min-height: 38px;
@@ -113,8 +138,8 @@
 
 .createForm input:focus-visible,
 .previewField input:focus-visible,
-.previewField select:focus-visible,
-.previewInlineForm select:focus-visible {
+.previewField [data-select-trigger]:focus-visible,
+.previewInlineForm [data-select-trigger]:focus-visible {
   outline: 2px solid var(--green);
   outline-offset: 2px;
 }
@@ -886,10 +911,11 @@
   opacity: 0.75;
 }
 
-.previewFormActions button:not(:disabled) {
+.previewFormActions button:not(:disabled),
+.backupPreviewActions button:not(:disabled) {
   border-color: var(--green-strong);
   background: var(--green);
-  color: #fff;
+  color: var(--on-green);
   cursor: pointer;
   opacity: 1;
 }
@@ -900,7 +926,11 @@
   padding: 17px;
 }
 
-.previewInlineForm select {
+.previewInlineForm [data-select-root] {
+  width: min(320px, 100%);
+}
+
+.previewInlineForm [data-select-trigger] {
   max-width: 320px;
 }
 
@@ -926,6 +956,12 @@
   display: flex;
   justify-content: flex-end;
   gap: 7px;
+}
+
+.previewDownloadAction {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
 }
 
 .backupPreviewActions button {
@@ -1011,6 +1047,10 @@
     gap: 13px;
   }
 
+  .headingAction {
+    justify-items: start;
+  }
+
   .pageHeading h1 {
     font-size: 26px;
   }
@@ -1029,8 +1069,9 @@
     grid-column: auto;
   }
 
-  .previewInlineForm select {
+  .previewInlineForm [data-select-root] {
     max-width: none;
+    width: 100%;
   }
 
   .backupPreviewActions {

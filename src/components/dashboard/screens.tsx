@@ -1,6 +1,7 @@
 import type { FormEvent, ReactNode } from "react";
 import { Icon } from "./icons";
 import { PanelFrame } from "./panel-frame";
+import { Select } from "@/components/ui/select";
 import { StorageCapacity, type DatabaseStorage, type StorageDisk } from "./storage-capacity";
 import styles from "./screens.module.css";
 import {
@@ -18,6 +19,8 @@ type ScreenMode = "live" | "preview";
 
 type ScreenProps = {
   mode: ScreenMode;
+  previewPage?: "list" | "new" | "restore" | "restore-existing";
+  previewBackup?: string;
   onPreviewNavigate?: (screen: string) => void;
   onPreviewDelete?: (database: DatabaseRow) => void;
   onPreviewCreateDatabase?: (name: string) => void;
@@ -128,16 +131,22 @@ function ScreenHeading({
         <p className={styles.headingDescription}>{description}</p>
       </div>
       {action ? (
-        <button
-          className={styles.primaryButton}
-          disabled={!onAction}
-          onClick={onAction}
-          title={onAction ? undefined : "Available when the VPS API is connected"}
-          type="button"
-        >
-          <Icon name="plus" size={16} />
-          {action}
-        </button>
+        <div className={styles.headingAction}>
+          <button
+            className={styles.primaryButton}
+            disabled={!onAction}
+            onClick={onAction}
+            type="button"
+          >
+            <Icon name="plus" size={16} />
+            {action}
+          </button>
+          {!onAction ? (
+            <small className={styles.previewActionHint}>
+              Available when the VPS API is connected
+            </small>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
@@ -299,15 +308,24 @@ function DatabaseTable({
           {!management ? <td className={styles.mutedCell}>{row.updated}</td> : null}
           <td className={management ? styles.actionCell : undefined}>
             {management ? (
-              <button
-                className={styles.deleteAction}
-                disabled={!onDelete}
-                onClick={() => onDelete?.(row)}
-                title={onDelete ? undefined : "Preview only"}
-                type="button"
-              >
-                Delete
-              </button>
+              row.systemDatabase ? (
+                <span>Protected</span>
+              ) : (
+                <div className={styles.previewAction}>
+                  <button
+                    aria-label={`Delete ${row.name}`}
+                    className={styles.deleteAction}
+                    disabled={!onDelete}
+                    onClick={() => onDelete?.(row)}
+                    type="button"
+                  >
+                    Delete
+                  </button>
+                  {!onDelete ? (
+                    <small className={styles.previewActionHint}>Preview only</small>
+                  ) : null}
+                </div>
+              )
             ) : (
               <StaticRowAction
                 label={`Open ${row.name}`}
@@ -416,18 +434,18 @@ function RoleCreatePreviewForm({ onSubmit }: { onSubmit?: (name: string) => void
       </div>
       <div className={styles.previewField}>
         <label htmlFor="preview-role-database">Database</label>
-        <select defaultValue="app_main" id="preview-role-database">
+        <Select defaultValue="app_main" id="preview-role-database" name="database">
           <option value="app_main">app_main</option>
           <option value="event_store">event_store</option>
           <option value="sandbox">sandbox</option>
-        </select>
+        </Select>
       </div>
       <div className={styles.previewField}>
         <label htmlFor="preview-role-access">Access level</label>
-        <select defaultValue="readwrite" id="preview-role-access">
+        <Select defaultValue="readwrite" id="preview-role-access" name="access">
           <option value="readwrite">Read and write</option>
           <option value="readonly">Read only</option>
-        </select>
+        </Select>
       </div>
       <div className={styles.previewField}>
         <label htmlFor="preview-role-password">Initial password</label>
@@ -510,10 +528,7 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
           title="Databases"
         >
           {preview ? (
-            <DatabaseTable
-              rows={demoDatabases}
-              onOpen={() => onPreviewNavigate?.("database-detail")}
-            />
+            <DatabaseTable rows={demoDatabases} onOpen={() => onPreviewNavigate?.("databases")} />
           ) : (
             <EmptyState
               description="Connect the VPS API to see database size, owners, and connection counts."
@@ -609,6 +624,8 @@ export function GettingStartedScreen() {
 export function DatabasesScreen({
   mode,
   onPreviewDelete,
+  onPreviewNavigate,
+  previewPage = "list",
   onPreviewCreateDatabase,
   previewNotice,
 }: ScreenProps) {
@@ -626,102 +643,56 @@ export function DatabasesScreen({
           {previewNotice}
         </div>
       ) : null}
-      <Panel
-        detail="Names use lowercase letters, numbers, and underscores."
-        title="Create a database"
-      >
-        <DatabaseCreatePreviewForm onSubmit={onPreviewCreateDatabase} />
-      </Panel>
-      <Panel
-        detail={`${demoDatabases.length} database${demoDatabases.length === 1 ? "" : "s"}`}
-        title="All databases"
-      >
-        <DatabaseTable rows={demoDatabases} variant="management" onDelete={onPreviewDelete} />
-      </Panel>
-      <Panel detail="Current VPS disk usage and per-database growth room" title="Storage capacity">
-        <StorageCapacity databases={demoDatabases} disk={demoDisk} growthPercent={25} />
-      </Panel>
-      <div className={styles.footerHint}>
-        <Icon name="shield" size={15} />
-        <span>Database operations will require an active Perminister grant.</span>
-      </div>
+      {previewPage === "new" ? (
+        <>
+          <button type="button" onClick={() => onPreviewNavigate?.("databases")}>
+            ← Back to databases
+          </button>
+          <Panel
+            detail="Names use lowercase letters, numbers, and underscores."
+            title="Create a database"
+          >
+            <DatabaseCreatePreviewForm onSubmit={onPreviewCreateDatabase} />
+          </Panel>
+        </>
+      ) : (
+        <>
+          <button
+            className={styles.primaryButton}
+            type="button"
+            onClick={() => onPreviewNavigate?.("database-new")}
+          >
+            Create database
+          </button>
+          <Panel
+            detail={`${demoDatabases.length} database${demoDatabases.length === 1 ? "" : "s"}`}
+            title="All databases"
+          >
+            <DatabaseTable rows={demoDatabases} variant="management" onDelete={onPreviewDelete} />
+          </Panel>
+          <Panel
+            detail="Current VPS disk usage and per-database growth room"
+            title="Storage capacity"
+          >
+            <StorageCapacity databases={demoDatabases} disk={demoDisk} growthPercent={25} />
+          </Panel>
+          <div className={styles.footerHint}>
+            <Icon name="shield" size={15} />
+            <span>Database operations will require an active Perminister grant.</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-export function DatabaseDetailScreen({ mode, onPreviewNavigate }: ScreenProps) {
-  const preview = mode === "preview";
-  if (!preview) return <LiveDatabasesScreen />;
-  return (
-    <div className={styles.screen}>
-      <div className={styles.detailCrumb}>
-        <button
-          className={styles.detailCrumbLink}
-          onClick={() => onPreviewNavigate?.("databases")}
-          type="button"
-        >
-          Databases
-        </button>
-        <span aria-hidden="true">/</span>
-        <strong>{preview ? "app_main" : "Database details"}</strong>
-      </div>
-      <ScreenHeading
-        description="Configuration and usage for this database."
-        eyebrow="DATABASE DETAILS"
-        title={preview ? "app_main" : "Database detail"}
-      />
-      {!preview ? <ApiNotice /> : null}
-      <div className={styles.detailGrid}>
-        <Panel detail="Database configuration" title="Overview">
-          <dl className={styles.detailsList}>
-            <div>
-              <dt>Owner role</dt>
-              <dd>{preview ? "app_service" : "—"}</dd>
-            </div>
-            <div>
-              <dt>Encoding</dt>
-              <dd>{preview ? "UTF8" : "—"}</dd>
-            </div>
-            <div>
-              <dt>Created</dt>
-              <dd>{preview ? "Oct 18, 2026" : "—"}</dd>
-            </div>
-            <div>
-              <dt>Last backup</dt>
-              <dd>{preview ? "Today at 09:15" : "—"}</dd>
-            </div>
-          </dl>
-        </Panel>
-        <Panel detail="Current activity" title="Usage">
-          <div className={styles.usageNumber}>
-            {preview ? "8" : "—"}
-            <span> / 100 connections</span>
-          </div>
-          <div className={styles.progressTrack}>
-            <span style={{ width: preview ? "23%" : "0%" }} />
-          </div>
-          <p className={styles.usageCaption}>
-            {preview
-              ? "23% of the connection limit is in use."
-              : "Usage will appear when connected."}
-          </p>
-        </Panel>
-      </div>
-      <Panel detail="Only credentials created for this database" title="Database roles">
-        {preview ? (
-          <RoleTable variant="database" />
-        ) : (
-          <EmptyState
-            description="Role and password controls will be available after connecting the API."
-            title="No role data yet"
-          />
-        )}
-      </Panel>
-    </div>
-  );
-}
-
-export function AccessScreen({ mode, onPreviewCreateRole, previewNotice }: ScreenProps) {
+export function AccessScreen({
+  mode,
+  onPreviewCreateRole,
+  onPreviewNavigate,
+  previewPage = "list",
+  previewNotice,
+}: ScreenProps) {
   const preview = mode === "preview";
   if (!preview) return <LiveAccessScreen />;
   return (
@@ -745,20 +716,42 @@ export function AccessScreen({ mode, onPreviewCreateRole, previewNotice }: Scree
           for your applications.
         </p>
       </div>
-      <Panel
-        title="Create a database role"
-        detail="Passwords are never shown again after creation."
-      >
-        <RoleCreatePreviewForm onSubmit={onPreviewCreateRole} />
-      </Panel>
-      <Panel title="Login roles" detail="2 Postgres login roles">
-        <RoleTable variant="access" />
-      </Panel>
+      {previewPage === "new" ? (
+        <>
+          <button type="button" onClick={() => onPreviewNavigate?.("access")}>
+            ← Back to login roles
+          </button>
+          <Panel
+            title="Create a database role"
+            detail="Passwords are never shown again after creation."
+          >
+            <RoleCreatePreviewForm onSubmit={onPreviewCreateRole} />
+          </Panel>
+        </>
+      ) : (
+        <>
+          <button
+            className={styles.primaryButton}
+            type="button"
+            onClick={() => onPreviewNavigate?.("access-new")}
+          >
+            Create role
+          </button>
+          <Panel title="Login roles" detail="2 Postgres login roles">
+            <RoleTable variant="access" />
+          </Panel>
+        </>
+      )}
     </div>
   );
 }
 
-export function BackupsScreen({ mode }: ScreenProps) {
+export function BackupsScreen({
+  mode,
+  onPreviewNavigate,
+  previewPage = "list",
+  previewBackup = "app_main",
+}: ScreenProps) {
   const preview = mode === "preview";
   if (!preview) return <LiveBackupsScreen />;
   return (
@@ -768,89 +761,144 @@ export function BackupsScreen({ mode }: ScreenProps) {
         eyebrow="RECOVERY"
         title="Backups"
       />
-      <div className={styles.backupSummary}>
-        <div>
-          <span className={styles.summaryIcon}>
-            <Icon name="backup" size={18} />
-          </span>
-          <span>
-            <small>Schedule</small>
-            <strong>Daily near 02:00 UTC</strong>
-          </span>
-        </div>
-        <div>
-          <span className={styles.summaryIcon}>
-            <Icon name="clock" size={18} />
-          </span>
-          <span>
-            <small>Retention</small>
-            <strong>14 days locally</strong>
-          </span>
-        </div>
-        <div>
-          <span className={styles.summaryIcon}>
-            <Icon name="database" size={18} />
-          </span>
-          <span>
-            <small>Destination</small>
-            <strong>VPS + DigitalOcean Spaces</strong>
-          </span>
-        </div>
-      </div>
-      <div className={styles.previewNotice} role="status">
-        The latest off-site copy was verified today. Older Space copies remain available after local
-        14-day retention.
-      </div>
-      <Panel
-        title="Create a backup now"
-        detail="Create a PostgreSQL dump and save a copy to your device."
-      >
-        <div className={styles.previewInlineForm}>
-          <label className={styles.srOnly} htmlFor="preview-backup-database">
-            Database
-          </label>
-          <select defaultValue="app_main" id="preview-backup-database">
-            <option value="app_main">app_main</option>
-            <option value="event_store">event_store</option>
-            <option value="sandbox">sandbox</option>
-          </select>
-          <button disabled type="button" title="Preview only. No backup file will be created.">
-            Create &amp; download .dump
-          </button>
-        </div>
-      </Panel>
-      <Panel
-        detail="Upload a trusted custom-format dump and restore it into a fresh database."
-        title="Restore from a file"
-      >
-        <div className={styles.restorePreviewForm}>
-          <div className={styles.previewField}>
-            <strong>PostgreSQL dump file</strong>
-            <small>.dump or .backup · creates a separate database</small>
-            <input
-              aria-label="Choose a PostgreSQL dump file"
-              accept=".dump,.backup"
-              disabled
-              type="file"
+      {previewPage === "list" ? (
+        <>
+          <div>
+            <button
+              className={styles.primaryButton}
+              type="button"
+              onClick={() => onPreviewNavigate?.("backups-new")}
+            >
+              Create backup
+            </button>{" "}
+            <button type="button" onClick={() => onPreviewNavigate?.("backups-restore")}>
+              Restore from file
+            </button>
+          </div>
+          <div className={styles.backupSummary}>
+            <div>
+              <span className={styles.summaryIcon}>
+                <Icon name="backup" size={18} />
+              </span>
+              <span>
+                <small>Schedule</small>
+                <strong>Daily near 02:00 UTC</strong>
+              </span>
+            </div>
+            <div>
+              <span className={styles.summaryIcon}>
+                <Icon name="clock" size={18} />
+              </span>
+              <span>
+                <small>Retention</small>
+                <strong>14 days locally</strong>
+              </span>
+            </div>
+            <div>
+              <span className={styles.summaryIcon}>
+                <Icon name="database" size={18} />
+              </span>
+              <span>
+                <small>Destination</small>
+                <strong>VPS + DigitalOcean Spaces</strong>
+              </span>
+            </div>
+          </div>
+          <div className={styles.previewNotice} role="status">
+            The latest off-site copy was verified today. Older Space copies remain available after
+            local 14-day retention.
+          </div>
+          <Panel detail="3 retained files" title="Backup history">
+            <BackupTable
+              onRestore={(database) => onPreviewNavigate?.(`backups-restore-existing:${database}`)}
             />
-          </div>
-          <div className={styles.previewField}>
-            <label htmlFor="preview-restore-database">New database name</label>
-            <input id="preview-restore-database" placeholder="restored_project" disabled />
-          </div>
-          <button
-            className={styles.primaryButton}
-            disabled
-            type="button"
-            title="Preview only. No data will be restored."
-          >
-            Restore from file
+          </Panel>
+        </>
+      ) : previewPage === "new" ? (
+        <>
+          <button type="button" onClick={() => onPreviewNavigate?.("backups")}>
+            ← Back to backups
           </button>
-        </div>
-      </Panel>
-      <Panel detail="3 retained files" title="Backup history">
-        <BackupTable />
-      </Panel>
+          <Panel
+            title="Create a backup now"
+            detail="Create a PostgreSQL dump and save a copy to your device."
+          >
+            <div className={styles.previewInlineForm}>
+              <label className={styles.srOnly} htmlFor="preview-backup-database">
+                Database
+              </label>
+              <Select defaultValue="app_main" id="preview-backup-database" name="database">
+                <option value="app_main">app_main</option>
+                <option value="event_store">event_store</option>
+                <option value="sandbox">sandbox</option>
+              </Select>
+              <div className={styles.previewAction}>
+                <button disabled type="button">
+                  Create &amp; download .dump
+                </button>
+                <small className={styles.previewActionHint}>
+                  Preview only · no backup file will be created.
+                </small>
+              </div>
+            </div>
+          </Panel>
+        </>
+      ) : previewPage === "restore-existing" ? (
+        <>
+          <button type="button" onClick={() => onPreviewNavigate?.("backups")}>
+            ← Back to backups
+          </button>
+          <Panel title="Restore a backup" detail="Restore this recovery point into a new database.">
+            <p>
+              Backup: <strong>{previewBackup} backup</strong>
+            </p>
+            <div className={styles.previewField}>
+              <label htmlFor="preview-existing-name">New database name</label>
+              <input id="preview-existing-name" defaultValue={`${previewBackup}_restore`} />
+              <small>Existing databases are never replaced.</small>
+            </div>
+            <button className={styles.primaryButton} disabled type="button">
+              Restore
+            </button>
+            <p>Preview only. No database will be restored.</p>
+          </Panel>
+        </>
+      ) : (
+        <>
+          <button type="button" onClick={() => onPreviewNavigate?.("backups")}>
+            ← Back to backups
+          </button>
+          <Panel
+            detail="Upload a trusted custom-format dump and restore it into a fresh database."
+            title="Restore from a file"
+          >
+            <div className={styles.restorePreviewForm}>
+              <div className={styles.previewField}>
+                <strong>PostgreSQL dump file</strong>
+                <small>.dump or .backup · creates a separate database</small>
+                <input
+                  aria-label="Choose a PostgreSQL dump file"
+                  accept=".dump,.backup"
+                  disabled
+                  type="file"
+                />
+              </div>
+              <div className={styles.previewField}>
+                <label htmlFor="preview-restore-database">New database name</label>
+                <input id="preview-restore-database" placeholder="restored_project" disabled />
+              </div>
+              <div className={styles.previewAction}>
+                <button className={styles.primaryButton} disabled type="button">
+                  Restore from file
+                </button>
+                <small className={styles.previewActionHint}>
+                  Preview only · no data will be restored.
+                </small>
+              </div>
+            </div>
+          </Panel>
+        </>
+      )}
       <div className={styles.footerHint}>
         <Icon name="shield" size={15} />
         <span>
@@ -914,7 +962,7 @@ function RoleTable({ variant }: { variant: "database" | "access" }) {
   );
 }
 
-function BackupTable() {
+function BackupTable({ onRestore }: { onRestore: (database: string) => void }) {
   const backups = [
     {
       database: "app_main",
@@ -949,13 +997,22 @@ function BackupTable() {
           </td>
           <td className={styles.mutedCell}>{backup.time}</td>
           <td>{backup.size}</td>
-          <td className={styles.backupPreviewActions}>
-            <button disabled type="button" title="Preview only. No file will be saved.">
-              Download file
-            </button>
-            <button disabled type="button" title="Preview only. No database will be restored.">
-              Restore as new
-            </button>
+          <td>
+            <div className={styles.backupPreviewActions}>
+              <div className={styles.previewDownloadAction}>
+                <button disabled type="button">
+                  Download file
+                </button>
+                <small className={styles.previewActionHint}>Preview only</small>
+              </div>
+              <button
+                aria-label={`Restore as new: ${backup.database} backup from ${backup.time}`}
+                type="button"
+                onClick={() => onRestore(backup.database)}
+              >
+                Restore as new
+              </button>
+            </div>
           </td>
         </tr>
       ))}

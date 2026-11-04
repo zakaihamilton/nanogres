@@ -67,7 +67,7 @@ behavior.
 
 ## Develop locally
 
-Requirements: Node.js 24.22 or newer in the 24.x line, and pnpm 12.16 or newer.
+Requirements: Node.js 24.22 or newer in the 24.x line, pnpm 12.16 or newer, and Python 3 for the VPS API tests.
 
 ```sh
 pnpm install
@@ -77,6 +77,8 @@ pnpm dev
 Create an ignored `.env.local` file for local configuration. Add the server-only variable names
 below with values from your own Perminister app client and VPS. Do not commit that file. Never add
 secrets to source code or variables prefixed with `NEXT_PUBLIC_`.
+
+The public welcome page is at `/`; authenticated users land at `/overview`.
 
 Open [`http://localhost:3000/ui-preview`](http://localhost:3000/ui-preview) to browse the screens
 without authentication. It is enabled only in development, uses clearly labeled synthetic data,
@@ -129,9 +131,10 @@ targets remain advisory. See [`vps-api/README.md`](vps-api/README.md) for detail
 
 ## Repository checks
 
-RepNix provides repository guardrails. Run the checks before proposing a change:
+RepNix provides repository guardrails. The test command runs authorization mapping and isolated VPS API recovery and HTTP tests; it does not require a running Postgres instance. Run the checks before proposing a change:
 
 ```sh
+pnpm test
 pnpm health:audit
 pnpm health
 pnpm typecheck
@@ -146,3 +149,23 @@ pnpm build
 - `src/components/dashboard/` — dashboard shell, synthetic preview screens, and live VPS screens.
 - `src/lib/` — Perminister authorization and the server-side VPS API client.
 - `vps-api/` — Python API, systemd services, Nginx configuration, and VPS installation notes.
+
+## Operational review
+
+Nanogres marks an off-site copy stale when it has not been successfully verified for 36 hours, and
+shows a warning after a newer failed upload. An optional VPS webhook alert service sends a notice
+when this state changes and a recovery notice after a fresh verified copy. Configure its HTTPS
+endpoint and payload format in the root-owned `/etc/nanogres/backup.env`; keep the alert endpoint
+and bearer token out of Vercel and source control. The dashboard continues to show the same status,
+and the VPS API remains private.
+
+Verify restores regularly against a separate non-production Postgres instance; an uploaded or
+off-site copy is not proof that a backup can be restored. Check that the daily systemd backup timer
+ran, inspect the backup and off-site service journals, review available disk, and verify the newest
+archive with `pg_restore --list` before performing a restore drill. The VPS installation notes list
+the exact service commands. Restore a trusted dump into a disposable database, confirm a known
+table or row, then remove that test database.
+
+The activity file is a local operational record, not a tamper-resistant audit trail: it resides on
+the VPS, and unreadable or malformed activity currently appears as an empty list. Protect and
+monitor the state directory and retain independent logs when audit guarantees are required.

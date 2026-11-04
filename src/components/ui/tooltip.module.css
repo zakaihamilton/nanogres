@@ -1,0 +1,25 @@
+.tooltip {
+  position: relative;
+  display: inline-flex;
+}
+
+.label {
+  position: absolute;
+  z-index: 10;
+  right: 0;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  max-width: 220px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 12px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tooltip:hover .label,
+.tooltip:focus-within .label {
+  opacity: 1;
+}

@@ -1,8 +1,11 @@
 "use client";
 
+import Image from "next/image";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { Tooltip } from "@/components/ui/tooltip";
 import { ThemeControl } from "@/components/theme/theme-control";
 import { Icon, type IconName } from "./icons";
 import styles from "./dashboard-shell.module.css";
@@ -19,7 +22,7 @@ type NavigationItem = {
 };
 
 const navigation: NavigationItem[] = [
-  { label: "Overview", href: "/", icon: "overview" },
+  { label: "Overview", href: "/overview", icon: "overview" },
   { label: "Databases", href: "/databases", icon: "database" },
   { label: "Access & roles", href: "/access", icon: "access" },
   { label: "Backups", href: "/backups", icon: "backup" },
@@ -37,7 +40,9 @@ function initials(name: string): string {
 
 function isActive(pathname: string, item: NavigationItem, activePath?: string): boolean {
   const path = activePath ?? pathname;
-  return item.href === "/" ? path === "/" : path === item.href || path.startsWith(`${item.href}/`);
+  return item.href === "/overview"
+    ? path === "/overview"
+    : path === item.href || path.startsWith(`${item.href}/`);
 }
 
 export function DashboardShell({
@@ -57,25 +62,24 @@ export function DashboardShell({
 
   return (
     <div className={styles.frame}>
+      <a className={styles.skipLink} href="#main-content">
+        Skip to main content
+      </a>
       <aside aria-label="Main navigation" className={styles.sidebar}>
         <Link
           aria-label="Nanogres overview"
           className={styles.brand}
-          href="/"
+          href="/overview"
           onClick={
             previewMode
               ? (event) => {
                   event.preventDefault();
-                  onPreviewNavigate?.("/");
+                  onPreviewNavigate?.("/overview");
                 }
               : undefined
           }
         >
-          <span aria-hidden="true" className={styles.brandMark}>
-            <span />
-            <span />
-            <span />
-          </span>
+          <Image alt="" className={styles.brandMark} src="/icon.svg" width={32} height={32} />
           <span className={styles.brandName}>nanogres</span>
         </Link>
 
@@ -85,7 +89,7 @@ export function DashboardShell({
           </span>
           <span className={styles.workspaceText}>
             <strong>Postgres workspace</strong>
-            <small>CloudFanatic VPS · private</small>
+            <small>Private Postgres server</small>
           </span>
         </div>
 
@@ -137,17 +141,14 @@ export function DashboardShell({
           </span>
           {!previewMode ? (
             <form action="/api/auth/logout" method="post">
-              <button
-                aria-label="Sign out"
-                className={styles.signOut}
-                title="Sign out"
-                type="submit"
-              >
-                ↗
-              </button>
+              <Tooltip label="Sign out">
+                <button aria-label="Sign out" className={styles.signOut} type="submit">
+                  ↗
+                </button>
+              </Tooltip>
             </form>
           ) : (
-            <span aria-label="Preview only" className={styles.previewUserMark} title="Preview only">
+            <span aria-label="Preview only" className={styles.previewUserMark} role="img">
               <Icon name="sparkle" size={16} />
             </span>
           )}
@@ -170,7 +171,9 @@ export function DashboardShell({
             {!previewMode ? <ThemeControl /> : null}
           </div>
         </header>
-        <main className={styles.mainContent}>{children}</main>
+        <main className={styles.mainContent} id="main-content" tabIndex={-1}>
+          {children}
+        </main>
         <footer className={styles.footer}>
           <span>Nanogres</span>
           <span>Postgres control plane</span>

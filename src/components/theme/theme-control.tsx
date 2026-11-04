@@ -1,5 +1,7 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
+
 import { useSyncExternalStore } from "react";
 import styles from "./theme-control.module.css";
 import { THEME_COOKIE, type Theme } from "@/lib/theme";
@@ -37,10 +39,10 @@ export function ThemeControl() {
   return (
     <label className={styles.control}>
       <span className={styles.label}>Theme</span>
-      <select
+      <Select
         aria-label="Color theme"
         className={styles.select}
-        onChange={(event) => updateTheme(event.target.value as Theme)}
+        onChange={(value) => updateTheme(value as Theme)}
         value={theme}
       >
         {Object.entries(labels).map(([value, label]) => (
@@ -48,7 +50,7 @@ export function ThemeControl() {
             {label}
           </option>
         ))}
-      </select>
+      </Select>
     </label>
   );
 }

@@ -7,6 +7,28 @@
   overflow-x: clip;
 }
 
+.skipLink {
+  position: fixed;
+  z-index: 10;
+  top: 10px;
+  left: 10px;
+  padding: 10px 13px;
+  transform: translateY(calc(-100% - 14px));
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.skipLink:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
 .sidebar {
   position: sticky;
   top: 0;

@@ -1,0 +1,20 @@
+[Unit]
+Description=Alert on stale or failed Nanogres off-site backup verification
+ConditionPathExists=/etc/nanogres/backup.env
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=postgres
+Group=postgres
+EnvironmentFile=-/etc/nanogres/backup.env
+Environment=NANOGRES_STATE_DIR=/var/lib/nanogres
+ExecStart=/usr/bin/python3 /opt/nanogres-api/nanogres-backup-alert.py
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/nanogres
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

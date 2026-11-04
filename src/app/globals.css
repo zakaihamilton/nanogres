@@ -7,15 +7,16 @@
   --surface-green: light-dark(#edf6f1, #1c332a);
   --ink: light-dark(#182622, #e6eee9);
   --ink-soft: light-dark(#54635d, #b1beb7);
-  --ink-muted: light-dark(#85928c, #7f9087);
+  --ink-muted: light-dark(#626f69, #a3b1a9);
   --line: light-dark(#e1e8e3, #293830);
   --line-strong: light-dark(#cfd9d2, #3a4d42);
   --green: light-dark(#16735d, #74c7a5);
   --green-strong: light-dark(#105541, #a1e2c1);
+  --on-green: light-dark(#ffffff, #101714);
   --green-pale: light-dark(#dff1e8, #203b30);
   --blue: light-dark(#476e9c, #9dbce3);
   --blue-pale: light-dark(#eaf1fa, #233246);
-  --amber: light-dark(#a56a20, #e6b568);
+  --amber: light-dark(#875416, #e6b568);
   --amber-pale: light-dark(#fff2db, #3a2e1c);
   --red: light-dark(#a84e4c, #e1978e);
   --red-pale: light-dark(#fae9e7, #3b2524);
@@ -43,6 +44,7 @@ html {
 body {
   min-height: 100vh;
   margin: 0;
+  overflow-x: clip;
   background: var(--canvas);
   color: var(--ink);
   font-family:
@@ -76,4 +78,15 @@ a {
 ::selection {
   background: var(--green-pale);
   color: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+  }
 }

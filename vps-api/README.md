@@ -62,8 +62,16 @@ See `install-vps.md` for the offline maintenance procedure needed on the current
 The timer creates custom-format `pg_dump` files daily near 02:00 UTC and retains 14 days locally.
 Each daily backup batch and each manual backup queues a copy to the private DigitalOcean Spaces
 bucket `nanogres-backups`. The uploader verifies that all retained local dump files exist remotely
-with matching sizes. It never deletes remote objects, so off-site copies remain after local retention
-expires. The dashboard reports the last successful upload and the retained files verified.
+with matching sizes. The dashboard considers a successful copy fresh for 36 hours and shows a
+warning after a newer failed attempt or when the latest success is older. Its status response
+includes freshness (`not-configured`, `pending`, `fresh`, `stale`, or `error`) and age in seconds
+without exposing credentials. An optional alert service checks freshness hourly, sends one alert
+when copies become stale or an upload fails, reports local scheduled-backup job failures, and sends
+recovery notices after a successful verification or backup run. The webhook is disabled unless
+`NANOGRES_ALERT_WEBHOOK_URL` is configured; it accepts
+HTTPS endpoints, an optional bearer token, and `generic`, `slack`, or `discord` JSON payload formats.
+The endpoint and token stay in `/etc/nanogres/backup.env` and are never written to the journal. The
+uploader never deletes remote objects, so off-site copies remain after local retention expires.
 
 Install `rclone` and `quota` with `apt-get install rclone quota` if the VPS installer has not done
 so. Configure `/etc/nanogres/backup.env` as root with owner `root:postgres` and mode `0640` using a
@@ -79,6 +87,10 @@ RCLONE_CONFIG_SPACES_REGION=sfo3
 RCLONE_CONFIG_SPACES_ENDPOINT=sfo3.digitaloceanspaces.com
 RCLONE_CONFIG_SPACES_ACL=private
 NANOGRES_S3_REMOTE=spaces:nanogres-backups/nanogres
+# Optional: an HTTPS webhook URL; choose generic, slack, or discord payload shape.
+NANOGRES_ALERT_WEBHOOK_URL=https://your-monitor.example/ingest
+NANOGRES_ALERT_WEBHOOK_FORMAT=generic
+NANOGRES_ALERT_WEBHOOK_BEARER_TOKEN=...
 ```
 
 No remote lifecycle or deletion rule is configured. This bucket is Cold Storage with a 30-day
@@ -97,3 +109,18 @@ database superuser, so restore only files you trust.
 ## Install
 
 Follow `install-vps.md`. The installer does not enable the Nginx proxy or open firewall ports.
+
+## Recovery checks
+
+Use these commands on the VPS to review the scheduled job and its logs:
+
+```sh
+systemctl list-timers --all 'nanogres-*'
+systemctl status nanogres-backup.timer nanogres-offsite-backup.path
+journalctl -u nanogres-backup.service -u nanogres-offsite-backup.service --since '2 days ago'
+```
+
+`pg_restore --list /var/backups/nanogres/<backup-file>.dump` checks that a local archive can be
+read without executing its SQL. This does not replace a restore drill: periodically restore a
+trusted archive into a disposable non-production database, verify known data, and remove the test
+database. Keep the dashboard's off-site freshness warning and host disk space in your monitoring.

@@ -18,7 +18,11 @@
   text-transform: uppercase;
 }
 
-.screenControl select {
+.screenControl [data-select-root] {
+  width: 152px;
+}
+
+.screenControl [data-select-trigger] {
   min-width: 152px;
   min-height: 38px;
   padding: 0 30px 0 11px;
@@ -31,7 +35,7 @@
   font-weight: 650;
 }
 
-.screenControl select:focus-visible {
+.screenControl [data-select-trigger]:focus-visible {
   outline: 2px solid var(--green);
   outline-offset: 2px;
 }
@@ -73,9 +77,13 @@
     flex: 1 1 140px;
   }
 
-  .screenControl select {
+  .screenControl [data-select-root] {
     min-width: 0;
     width: 100%;
+  }
+
+  .screenControl [data-select-trigger] {
+    min-width: 0;
   }
 
   .previewAction {

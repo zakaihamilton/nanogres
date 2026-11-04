@@ -15,7 +15,8 @@
 
 .select {
   min-height: 34px;
-  padding: 0 28px 0 10px;
+  min-width: 90px;
+  padding: 0 9px 0 10px;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: var(--surface);

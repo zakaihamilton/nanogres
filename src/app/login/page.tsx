@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { ThemeControl } from "@/components/theme/theme-control";
 import { getPerministerRecoveryUrl, isPerministerConfigured } from "@/lib/perminister-auth";
 import { passwordLoginAction } from "./actions";
@@ -66,11 +67,7 @@ export default async function LoginPage({
       <div className={styles.layout}>
         <section aria-labelledby="welcome-title" className={styles.intro}>
           <div className={styles.brand}>
-            <span aria-hidden="true" className={styles.brandMark}>
-              <span />
-              <span />
-              <span />
-            </span>
+            <Image alt="" className={styles.brandMark} src="/icon.svg" width={32} height={32} />
             <span>nanogres</span>
           </div>
 

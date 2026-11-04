@@ -3,6 +3,8 @@ Description=Create daily Nanogres Postgres backups
 After=postgresql.service
 Wants=postgresql.service
 OnSuccess=nanogres-offsite-backup.service
+OnSuccess=nanogres-backup-event@local-backup-succeeded.service
+OnFailure=nanogres-backup-event@local-backup-failed.service
 
 [Service]
 Type=oneshot

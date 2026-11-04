@@ -1,38 +1,48 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PreviewToolbar } from "ui-preview-kit";
 import { DeleteDatabaseDialog } from "@/components/dashboard/live-screens";
 import {
   AccessScreen,
   ActivityScreen,
   BackupsScreen,
-  DatabaseDetailScreen,
   DatabasesScreen,
   GettingStartedScreen,
   OverviewScreen,
 } from "@/components/dashboard/screens";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { ThemeControl } from "@/components/theme/theme-control";
+import { Select } from "@/components/ui/select";
 import styles from "./page.module.css";
 
 const screens = [
   { value: "overview", label: "Overview" },
   { value: "getting-started", label: "Getting started" },
   { value: "databases", label: "Databases" },
+  { value: "database-new", label: "Create database" },
   { value: "delete-confirmation", label: "Delete confirmation" },
-  { value: "database-detail", label: "Database detail" },
   { value: "access", label: "Access & roles" },
+  { value: "access-new", label: "Create role" },
   { value: "backups", label: "Backups" },
+  { value: "backups-new", label: "Create backup" },
+  { value: "backups-restore", label: "Restore from file" },
+  { value: "backups-restore-existing", label: "Restore retained backup" },
   { value: "activity", label: "Activity" },
 ];
 
 function previewPath(screen: string): string {
-  if (screen === "databases" || screen === "database-detail" || screen === "delete-confirmation") {
+  if (screen === "databases" || screen === "database-new" || screen === "delete-confirmation") {
     return "/databases";
   }
-  if (screen === "access") return "/access";
-  if (screen === "backups") return "/backups";
+  if (screen === "access" || screen === "access-new") return "/access";
+  if (
+    screen === "backups" ||
+    screen === "backups-new" ||
+    screen === "backups-restore" ||
+    screen === "backups-restore-existing"
+  )
+    return "/backups";
   if (screen === "activity") return "/activity";
   return "/";
 }
@@ -69,6 +79,7 @@ function PreviewScreen({
   onCreateRole,
   previewNotice,
   deleteDatabase,
+  previewBackup,
 }: {
   screen: string;
   onNavigate: (screen: string) => void;
@@ -77,14 +88,17 @@ function PreviewScreen({
   onCreateRole: (name: string) => void;
   previewNotice: string | null;
   deleteDatabase: string;
+  previewBackup: string;
 }) {
   switch (screen) {
     case "getting-started":
       return <GettingStartedScreen />;
+    case "database-new":
     case "databases":
       return (
         <DatabasesScreen
           mode="preview"
+          previewPage={screen === "database-new" ? "new" : "list"}
           onPreviewNavigate={onNavigate}
           onPreviewDelete={(database) => onDelete(database.name)}
           onPreviewCreateDatabase={onCreateDatabase}
@@ -98,18 +112,37 @@ function PreviewScreen({
           onExit={() => onNavigate("databases")}
         />
       );
-    case "database-detail":
-      return <DatabaseDetailScreen mode="preview" onPreviewNavigate={onNavigate} />;
+    case "access-new":
     case "access":
       return (
         <AccessScreen
           mode="preview"
+          previewPage={screen === "access-new" ? "new" : "list"}
+          onPreviewNavigate={onNavigate}
           onPreviewCreateRole={onCreateRole}
           previewNotice={previewNotice}
         />
       );
+    case "backups-new":
+    case "backups-restore":
+    case "backups-restore-existing":
     case "backups":
-      return <BackupsScreen mode="preview" />;
+      return (
+        <BackupsScreen
+          mode="preview"
+          previewBackup={previewBackup}
+          onPreviewNavigate={onNavigate}
+          previewPage={
+            screen === "backups-new"
+              ? "new"
+              : screen === "backups-restore"
+                ? "restore"
+                : screen === "backups-restore-existing"
+                  ? "restore-existing"
+                  : "list"
+          }
+        />
+      );
     case "activity":
       return <ActivityScreen mode="preview" />;
     default:
@@ -203,10 +236,30 @@ export default function PreviewClient() {
   const [screen, setScreen] = useState("overview");
   const [previewNotice, setPreviewNotice] = useState<string | null>(null);
   const [deleteDatabase, setDeleteDatabase] = useState("event_store");
+  const [previewBackup, setPreviewBackup] = useState("app_main");
+  const restoreDeleteFocus = useRef(false);
+
+  useEffect(() => {
+    if (screen === "databases" && restoreDeleteFocus.current) {
+      restoreDeleteFocus.current = false;
+      document
+        .querySelector<HTMLButtonElement>(
+          `button[aria-label="Delete ${CSS.escape(deleteDatabase)}"]`,
+        )
+        ?.focus();
+    }
+  }, [screen, deleteDatabase]);
 
   function navigate(pathOrScreen: string) {
+    if (screen === "delete-confirmation" && pathOrScreen === "databases")
+      restoreDeleteFocus.current = true;
+    if (pathOrScreen.startsWith("backups-restore-existing:")) {
+      setPreviewBackup(pathOrScreen.split(":")[1] || "app_main");
+      pathOrScreen = "backups-restore-existing";
+    }
     const screenByPath: Record<string, string> = {
       "/": "overview",
+      "/overview": "overview",
       "/databases": "databases",
       "/access": "access",
       "/backups": "backups",
@@ -225,7 +278,7 @@ export default function PreviewClient() {
   }
 
   return (
-    <main className={styles.page}>
+    <div className={styles.page}>
       <PreviewToolbar
         note="Synthetic data only. Some actions simulate a result; others are disabled. Nothing reaches the VPS."
         subtitle="Nanogres screens · local preview · no sign-in required"
@@ -234,17 +287,13 @@ export default function PreviewClient() {
       >
         <label className={styles.screenControl}>
           <span>Screen</span>
-          <select
-            aria-label="Preview screen"
-            onChange={(event) => navigate(event.target.value)}
-            value={screen}
-          >
+          <Select aria-label="Preview screen" onChange={navigate} value={screen}>
             {screens.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </PreviewToolbar>
       <DashboardShell
@@ -255,6 +304,7 @@ export default function PreviewClient() {
       >
         <PreviewScreen
           deleteDatabase={deleteDatabase}
+          previewBackup={previewBackup}
           onCreateDatabase={createDatabase}
           onCreateRole={createRole}
           onDelete={(name) => {
@@ -266,6 +316,6 @@ export default function PreviewClient() {
           screen={screen}
         />
       </DashboardShell>
-    </main>
+    </div>
   );
 }

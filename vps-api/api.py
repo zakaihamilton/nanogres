@@ -45,6 +45,7 @@ QUOTA_STATUS_FILE = STATE_DIR / "database-quotas.json"
 QUOTA_POLICY_FILE = STATE_DIR / "database-quota-policy.json"
 OFFSITE_STATUS_FILE = STATE_DIR / "offsite-backup-status.json"
 OFFSITE_ENV_FILE = Path("/etc/nanogres/backup.env")
+OFFSITE_BACKUP_MAX_AGE = timedelta(hours=36)
 QUOTA_REQUEST_FILE = STATE_DIR / "quota-reconcile.request"
 OFFSITE_REQUEST_FILE = STATE_DIR / "offsite-backup.request"
 event_lock = threading.Lock()
@@ -302,17 +303,63 @@ def clear_database_quota_setting(database: str) -> None:
         write_quota_policy(policy)
 
 
-def offsite_backup_status() -> dict[str, object]:
-    saved = read_status_file(OFFSITE_STATUS_FILE)
-    configured = OFFSITE_ENV_FILE.is_file() and OFFSITE_ENV_FILE.stat().st_size > 0
+def parse_status_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def calculate_offsite_backup_status(
+    saved: dict[str, object],
+    configured: bool,
+    now: datetime | None = None,
+) -> dict[str, object]:
+    now = now or datetime.now(timezone.utc)
+    last_attempt = parse_status_timestamp(saved.get("lastAttemptAt"))
+    last_success = parse_status_timestamp(saved.get("lastSuccessAt"))
+    age_seconds = (
+        max(0, int((now - last_success).total_seconds())) if last_success is not None else None
+    )
+    last_error = saved.get("lastError")
+    last_error = last_error if isinstance(last_error, str) else None
+    attempt_failed = bool(last_error) and (
+        last_attempt is None or last_success is None or last_attempt >= last_success
+    )
+
+    if not configured:
+        freshness = "not-configured"
+        last_error = None
+    elif attempt_failed:
+        freshness = "error"
+    elif last_success is None:
+        freshness = "pending"
+    elif age_seconds is not None and age_seconds > OFFSITE_BACKUP_MAX_AGE.total_seconds():
+        freshness = "stale"
+    else:
+        freshness = "fresh"
+
     return {
         "configured": configured,
         "lastAttemptAt": saved.get("lastAttemptAt"),
         "lastSuccessAt": saved.get("lastSuccessAt"),
+        "lastSuccessAgeSeconds": age_seconds,
         "backupCount": int(saved.get("backupCount", 0) or 0),
         "storedBytes": int(saved.get("storedBytes", 0) or 0),
-        "lastError": saved.get("lastError") if configured else None,
+        "lastError": last_error if configured else None,
+        "freshness": freshness,
     }
+
+
+def offsite_backup_status() -> dict[str, object]:
+    saved = read_status_file(OFFSITE_STATUS_FILE)
+    configured = OFFSITE_ENV_FILE.is_file() and OFFSITE_ENV_FILE.stat().st_size > 0
+    return calculate_offsite_backup_status(saved, configured)
 
 
 def request_quota_reconcile(

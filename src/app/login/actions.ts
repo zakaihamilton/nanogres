@@ -30,5 +30,5 @@ export async function passwordLoginAction(formData: FormData): Promise<void> {
     expires: new Date(result.expiresAt),
   });
 
-  redirect("/");
+  redirect("/overview");
 }

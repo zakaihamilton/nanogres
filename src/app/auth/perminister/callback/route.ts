@@ -77,7 +77,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const maxAge = Math.floor((Date.parse(body.session.expiresAt) - Date.now()) / 1000);
   if (maxAge <= 0) return loginError(request, "callback");
 
-  const response = NextResponse.redirect(new URL("/", appOrigin));
+  const response = NextResponse.redirect(new URL("/overview", appOrigin));
   response.cookies.set(SESSION_COOKIE, body.sessionToken, {
     httpOnly: true,
     secure: appOrigin.startsWith("https:"),

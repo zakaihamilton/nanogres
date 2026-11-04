@@ -56,7 +56,7 @@
 .primary {
   border-color: var(--green);
   background: var(--green);
-  color: #fff;
+  color: var(--on-green);
 }
 
 .primaryButton:hover,
@@ -87,10 +87,10 @@
 .button:focus-visible,
 .primaryButton:focus-visible,
 .form input:focus-visible,
-.form select:focus-visible,
+.form [data-select-trigger]:focus-visible,
 .formGrid input:focus-visible,
-.formGrid select:focus-visible,
-.inlineForm select:focus-visible {
+.formGrid [data-select-trigger]:focus-visible,
+.inlineForm [data-select-trigger]:focus-visible {
   outline: 2px solid var(--green);
   outline-offset: 2px;
 }
@@ -218,7 +218,7 @@
   border: 1px solid var(--green);
   border-radius: 8px;
   background: var(--green);
-  color: #fff;
+  color: var(--on-green);
   font-size: 11px;
   font-weight: 680;
   text-decoration: none;
@@ -465,8 +465,8 @@
 
 .form input,
 .formGrid input,
-.formGrid select,
-.inlineForm select,
+.formGrid [data-select-trigger],
+.inlineForm [data-select-trigger],
 .restoreForm input {
   width: 100%;
   min-width: 0;
@@ -477,6 +477,11 @@
   background: var(--surface-raised);
   color: var(--ink);
   font-size: 12px;
+}
+
+.formGrid [data-select-root],
+.inlineForm [data-select-root] {
+  width: 100%;
 }
 
 .formGrid {
@@ -655,6 +660,12 @@
   border-color: var(--blue-pale);
   background: var(--blue-pale);
   color: var(--ink-soft);
+}
+
+.warning {
+  border-color: var(--amber-pale);
+  background: var(--amber-pale);
+  color: var(--amber);
 }
 
 .loading,

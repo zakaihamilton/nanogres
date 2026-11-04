@@ -160,6 +160,21 @@
   text-align: right;
 }
 
+.quotaAction {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.quotaHint {
+  max-width: 220px;
+  color: var(--ink-muted);
+  font-size: 9px;
+  line-height: 1.4;
+  text-align: right;
+}
+
 .quotaButton,
 .quotaSave {
   display: inline-flex;
@@ -191,7 +206,7 @@
 .quotaSave {
   border-color: var(--green);
   background: var(--green);
-  color: #fff;
+  color: var(--on-green);
 }
 
 .quotaButton:disabled,
@@ -227,7 +242,7 @@
 }
 
 .quotaFields input,
-.quotaFields select {
+.quotaFields [data-select-trigger] {
   width: 100%;
   min-width: 0;
   min-height: 36px;
@@ -238,6 +253,10 @@
   color: var(--ink);
   font: inherit;
   font-size: 11px;
+}
+
+.quotaFields [data-select-root] {
+  width: 100%;
 }
 
 .quotaEditor p {
@@ -315,6 +334,14 @@
   }
 
   .databaseHeadingActions > span {
+    text-align: left;
+  }
+
+  .quotaAction {
+    justify-items: start;
+  }
+
+  .quotaHint {
     text-align: left;
   }
 
