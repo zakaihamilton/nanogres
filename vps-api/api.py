@@ -56,6 +56,8 @@ OFFSITE_ENV_FILE = Path("/etc/nanogres/backup.env")
 OFFSITE_BACKUP_MAX_AGE = timedelta(hours=36)
 QUOTA_REQUEST_FILE = STATE_DIR / "quota-reconcile.request"
 OFFSITE_REQUEST_FILE = STATE_DIR / "offsite-backup.request"
+# Activity is polled repeatedly; cap each scan even when another organization is much busier.
+ACTIVITY_SCAN_MAX_BYTES = 1024 * 1024
 event_lock = threading.Lock()
 backup_lock = threading.Lock()
 quota_policy_lock = threading.Lock()
@@ -697,25 +699,47 @@ def list_activity(
     organization_id: object,
     limit: int = 50,
 ) -> list[dict[str, object]]:
-    if not EVENTS_FILE.exists():
+    if limit <= 0 or not EVENTS_FILE.exists():
         return []
     try:
         org_id = normalized_organization_id(organization_id)
-        events = [
-            json.loads(line)
-            for line in EVENTS_FILE.read_text(encoding="utf-8").splitlines()
-            if line
-        ]
-        return [
-            event
-            for event in reversed(events)
-            if isinstance(event, dict)
-            and (
-                str(event.get("organizationId", "")).lower() == org_id
-                or event.get("organizationPrefix") == organization_prefix(org_id)
-            )
-        ][:limit]
-    except (OSError, json.JSONDecodeError):
+        prefix = organization_prefix(org_id)
+        matches: list[dict[str, object]] = []
+
+        def append_if_scoped(line: bytes) -> None:
+            if not line:
+                return
+            try:
+                event = json.loads(line)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return
+            if (
+                isinstance(event, dict)
+                and (
+                    str(event.get("organizationId", "")).lower() == org_id
+                    or event.get("organizationPrefix") == prefix
+                )
+            ):
+                matches.append(event)
+
+        with EVENTS_FILE.open("rb") as handle:
+            position = handle.seek(0, os.SEEK_END)
+            scan_start = max(0, position - ACTIVITY_SCAN_MAX_BYTES)
+            carry = b""
+            while position > scan_start and len(matches) < limit:
+                chunk_size = min(64 * 1024, position - scan_start)
+                position -= chunk_size
+                handle.seek(position)
+                lines = (handle.read(chunk_size) + carry).split(b"\n")
+                carry = lines[0]
+                for line in reversed(lines[1:]):
+                    append_if_scoped(line)
+                    if len(matches) >= limit:
+                        break
+            if scan_start == 0 and carry and len(matches) < limit:
+                append_if_scoped(carry)
+        return matches
+    except OSError:
         return []
 
 
@@ -2528,8 +2552,10 @@ def migrate_legacy_organization(organization_id: object) -> dict[str, int]:
             if line
         ]
         migrated = [
-            {**event, "organizationId": org_id}
-            if isinstance(event, dict) and "organizationId" not in event
+            {**event, "organizationId": org_id, "organizationPrefix": prefix}
+            if isinstance(event, dict)
+            and not event.get("organizationId")
+            and not event.get("organizationPrefix")
             else event
             for event in events
         ]

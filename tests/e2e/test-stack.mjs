@@ -13,6 +13,7 @@ const clientSecret = "test-only-secret-not-used-outside-loopback";
 const sessionToken = "nanogres-e2e-session";
 const apiToken = "nanogres-e2e-api-token-not-for-production";
 const organizationId = "e2e-organization";
+const organizationPrefix = `n${createHash("sha256").update(organizationId).digest("hex").slice(0, 24)}_`;
 const productId = "nanogres";
 const workspaceId = "e2e-workspace";
 const chunkSizeBytes = 16;
@@ -31,7 +32,8 @@ function resetIdentityState() {
 function database(name, systemDatabase = false) {
   return {
     name,
-    owner: "postgres",
+    connectionName: systemDatabase ? name : `${organizationPrefix}${name}`,
+    owner: systemDatabase ? "postgres" : "Nanogres",
     sizeBytes: 1024,
     connections: 0,
     maxConnections: 100,
@@ -53,15 +55,11 @@ function resetApiState() {
     databases: [database("postgres", true), database("app_main")],
     roles: [
       {
-        name: "postgres",
-        superuser: true,
-        canCreateDatabase: true,
-        canCreateRole: true,
-        validUntil: null,
-        systemRole: true,
-      },
-      {
         name: "app_reader",
+        loginName: `${organizationPrefix}app_reader`,
+        database: "app_main",
+        connectionDatabase: `${organizationPrefix}app_main`,
+        databases: ["app_main"],
         superuser: false,
         canCreateDatabase: false,
         canCreateRole: false,
@@ -133,6 +131,13 @@ function identityPayload() {
         organizationName: "Nanogres E2E",
         productId,
         permissions: [],
+        resourceRoles: [
+          {
+            scope: { kind: "workspace", organizationId, productId, workspaceId },
+            role: "admin",
+            actions: ["nanogres:workspace:read", "nanogres:members:manage"],
+          },
+        ],
       },
     ],
   };
@@ -323,7 +328,7 @@ function record(action, detail) {
 }
 
 function ensureNewDatabase(name) {
-  if (!/^[a-z][a-z0-9_]{0,62}$/.test(name ?? "")) return "invalid";
+  if (!/^[a-z][a-z0-9_]{0,36}$/.test(name ?? "")) return "invalid";
   if (apiState.databases.some((item) => item.name === name)) return "exists";
   apiState.databases.push(database(name));
   return "created";
@@ -367,14 +372,17 @@ async function apiHandler(request, response) {
   if (request.method === "GET" && pathname === "/v1/overview") {
     sendJson(response, 200, {
       status: status(),
-      databases: apiState.databases,
+      databases: apiState.databases.filter((item) => !item.systemDatabase),
       backups: apiState.backups.slice(0, 8),
       activity: apiState.events.slice(0, 8),
     });
     return;
   }
   if (request.method === "GET" && pathname === "/v1/databases") {
-    sendJson(response, 200, { status: status(), databases: apiState.databases });
+    sendJson(response, 200, {
+      status: status(),
+      databases: apiState.databases.filter((item) => !item.systemDatabase),
+    });
     return;
   }
   if (request.method === "GET" && pathname === "/v1/roles") {
@@ -432,7 +440,7 @@ async function apiHandler(request, response) {
   if (request.method === "POST" && pathname === "/v1/roles") {
     const body = await readJson(request);
     if (
-      !/^[a-z][a-z0-9_]{1,62}$/.test(body.name ?? "") ||
+      !/^[a-z][a-z0-9_]{1,36}$/.test(body.name ?? "") ||
       !apiState.databases.some((item) => item.name === body.database)
     ) {
       return sendJson(response, 400, { error: "Role name or database is invalid." });
@@ -442,6 +450,10 @@ async function apiHandler(request, response) {
     }
     const role = {
       name: body.name,
+      loginName: `${organizationPrefix}${body.name}`,
+      database: body.database,
+      connectionDatabase: `${organizationPrefix}${body.database}`,
+      databases: [body.database],
       superuser: false,
       canCreateDatabase: false,
       canCreateRole: false,

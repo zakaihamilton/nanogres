@@ -271,7 +271,7 @@ test.describe("authenticated management journeys", () => {
     await expect(
       page
         .getByRole("alert")
-        .filter({ hasText: "The Nanogres workspace service failed to complete the request." }),
+        .filter({ hasText: "The Nanogres VPS API failed to complete the request." }),
     ).toBeVisible();
     await request.post(`${apiControl}/configure`, { data: { failReads: false } });
     await page.getByRole("button", { name: "Try again" }).click();
@@ -344,7 +344,7 @@ test.describe("authenticated management journeys", () => {
     await expect(
       page
         .getByRole("alert")
-        .filter({ hasText: "The Nanogres workspace service failed to complete the request." }),
+        .filter({ hasText: "The Nanogres VPS API failed to complete the request." }),
     ).toBeVisible();
     const state = await (await request.get(`${apiControl}/state`)).json();
     expect(state.uploadCount).toBe(0);
