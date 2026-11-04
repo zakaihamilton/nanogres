@@ -46,9 +46,23 @@ const demoDisk: StorageDisk = {
   usedBytes: 13 * gib,
   freeBytes: 27 * gib,
 };
-const demoGrowthHeadroom = (demoDisk.freeBytes * 0.25) / 3;
+const demoGrowthHeadroom = (Math.max(0, demoDisk.freeBytes - gib) * 0.25) / 3;
 
 const demoDatabases: DatabaseRow[] = [
+  {
+    name: "postgres",
+    owner: "postgres",
+    size: "16 MB",
+    sizeBytes: 16 * 1024 ** 2,
+    growthHeadroomBytes: 0,
+    recommendedMaxBytes: 16 * 1024 ** 2,
+    hardLimitEnforced: false,
+    systemDatabase: true,
+    connections: "2 / 100",
+    updated: "Now",
+    encoding: "UTF8",
+    state: "Healthy",
+  },
   {
     name: "app_main",
     owner: "app_service",

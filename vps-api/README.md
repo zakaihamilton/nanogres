@@ -8,6 +8,7 @@ connects through the local peer-auth socket.
 
 - `GET /healthz` and `GET /v1/overview`
 - `GET /v1/databases`, `POST /v1/databases`, `DELETE /v1/databases/{name}`
+- `POST /v1/databases/{name}/quota` with `{"mode":"auto"}` or `{"mode":"custom","maxBytes":1073741824}`
 - `GET /v1/roles`, `POST /v1/roles`
 - `GET /v1/backups`, `POST /v1/backups`
 - `GET /v1/backups/{filename}?offset={bytes}&length={bytes}` downloads one range up to 4 MiB
@@ -23,16 +24,33 @@ digits, and underscores. New roles receive only the selected database and table 
 
 ## Storage reporting and limits
 
-The API reports total, used, and free space for PostgreSQL's data filesystem. It estimates growth
-room as a percentage of free space shared evenly across user databases. The default is 25%; set
-`NANOGRES_DATABASE_GROWTH_PERCENT` in `/etc/nanogres/api.env` to a value from 1 to 50.
+The API's `sizeBytes` field uses PostgreSQL's `pg_database_size` for each returned database, and
+includes `postgres`. The dashboard sums these values for the all-database total. When a database has
+a verified ext4 project quota, `quotaUsedBytes` reports allocated blocks for its primary database
+directory and drives its quota meter; otherwise the meter uses `sizeBytes`. Data in additional
+tablespaces is included in `pg_database_size` but is outside the hard quota. Shared WAL, backups,
+and system files are separate from the all-database total.
+
+The default growth budget is 25% of free disk after a 1 GiB system reserve. Set
+`NANOGRES_DATABASE_GROWTH_PERCENT` in `/etc/nanogres/api.env` to a value from 1 to 50. Set
+`NANOGRES_DATABASE_QUOTA_RESERVE_BYTES` there to change the reserve. Per-database settings are
+stored in `/var/lib/nanogres/database-quota-policy.json` and are changed through the authenticated
+API; they are not written to the dashboard or Vercel environment.
 
 When ext4 project quotas are enabled and verified, the root reconciler assigns each user database's
 `base/<database-oid>` directory to its own project ID, marks the directory for project inheritance,
-and applies a block hard limit. The cap is the current project usage plus its share of the configured
-percentage of free volume, while reserving 1 GiB for the system. The quota timer refreshes every
-five minutes, and new databases are reconciled immediately before Nanogres reports their hard limit.
-Until the kernel and `repquota` confirm a database's quota, the dashboard labels its target advisory.
+and applies a block hard limit. Each database can remain on Auto or request a custom maximum. Custom
+requests draw from the shared growth budget first; automatic databases evenly share the remainder.
+When custom requests no longer fit after free space changes, their effective growth room is scaled
+to fit the budget and Auto databases receive no additional room until the budget recovers. Limits
+never go below the blocks already used. The quota timer refreshes every five minutes, and new
+databases and quota changes are reconciled immediately. Until the kernel and `repquota` confirm a
+database's quota, the dashboard labels its target advisory.
+
+The API rejects a custom maximum below current usage or above the remaining shared growth budget.
+Its database response includes the requested cap, effective cap, maximum currently available custom
+cap, quota mode, and whether a custom request was reduced to fit. Changes are recorded in the
+Nanogres activity log.
 
 Caps cover database files in PostgreSQL's primary tablespace. Shared WAL, system files, backups, and
 files in other tablespaces still use the common VPS disk. Keep free-space monitoring enabled.

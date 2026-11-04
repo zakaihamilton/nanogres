@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -27,6 +28,11 @@ STATE_DIR = Path(os.environ.get("NANOGRES_STATE_DIR", "/var/lib/nanogres"))
 EVENTS_FILE = STATE_DIR / "events.jsonl"
 BACKUP_RETENTION_DAYS = int(os.environ.get("NANOGRES_BACKUP_RETENTION_DAYS", "14"))
 DATABASE_GROWTH_PERCENT = int(os.environ.get("NANOGRES_DATABASE_GROWTH_PERCENT", "25"))
+DATABASE_QUOTA_RESERVE_BYTES = int(
+    os.environ.get("NANOGRES_DATABASE_QUOTA_RESERVE_BYTES", str(1024**3))
+)
+if DATABASE_QUOTA_RESERVE_BYTES < 0:
+    DATABASE_QUOTA_RESERVE_BYTES = 1024**3
 NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 BACKUP_PATTERN = re.compile(r"^([a-z][a-z0-9_]*)__([0-9]{8}T[0-9]{12}Z)\.dump$")
 UPLOAD_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
@@ -36,12 +42,14 @@ RESTORE_UPLOAD_TTL = timedelta(hours=24)
 RESTORE_UPLOAD_DIR = STATE_DIR / "restore-uploads"
 RESTORE_UPLOAD_DISK_RESERVE_BYTES = 512 * 1024 * 1024
 QUOTA_STATUS_FILE = STATE_DIR / "database-quotas.json"
+QUOTA_POLICY_FILE = STATE_DIR / "database-quota-policy.json"
 OFFSITE_STATUS_FILE = STATE_DIR / "offsite-backup-status.json"
 OFFSITE_ENV_FILE = Path("/etc/nanogres/backup.env")
 QUOTA_REQUEST_FILE = STATE_DIR / "quota-reconcile.request"
 OFFSITE_REQUEST_FILE = STATE_DIR / "offsite-backup.request"
 event_lock = threading.Lock()
 backup_lock = threading.Lock()
+quota_policy_lock = threading.Lock()
 
 
 class ApiError(Exception):
@@ -72,6 +80,12 @@ def quote_identifier(value: str) -> str:
 
 def quote_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
+
+
+def quota_growth_bytes(requested_max_bytes: int, used_bytes: int) -> int:
+    requested_kib = (requested_max_bytes + 1023) // 1024
+    used_kib = used_bytes // 1024
+    return max(0, requested_kib - used_kib) * 1024
 
 
 def run_sql(statement: str, database: str = "postgres") -> str:
@@ -133,34 +147,87 @@ def add_database_growth_targets(
         raise ApiError(503, "Database growth percentage must be between 1 and 50.")
 
     user_databases = [database for database in databases if not database.get("systemDatabase")]
-    growth_budget = free_bytes * DATABASE_GROWTH_PERCENT // 100
-    per_database_headroom = growth_budget // len(user_databases) if user_databases else 0
-
+    growth_budget = max(0, free_bytes - DATABASE_QUOTA_RESERVE_BYTES) * DATABASE_GROWTH_PERCENT // 100
+    policy = read_quota_policy()
     quota_state = read_status_file(QUOTA_STATUS_FILE)
+    active_user_names = {str(database["name"]) for database in user_databases}
+    policy = {name: value for name, value in policy.items() if name in active_user_names}
     quota_databases = quota_state.get("databases", {})
     if not isinstance(quota_databases, dict):
         quota_databases = {}
 
+    quota_by_name = {
+        str(quota.get("database")): quota
+        for quota in quota_databases.values()
+        if isinstance(quota, dict) and isinstance(quota.get("database"), str)
+    }
+    used_by_name: dict[str, int] = {}
+    for database in user_databases:
+        name = str(database["name"])
+        quota = quota_by_name.get(name)
+        enforced = (
+            quota_state.get("enabled") is True
+            and isinstance(quota, dict)
+            and quota.get("hardLimitEnforced") is True
+        )
+        used_by_name[name] = max(
+            0,
+            int(
+                quota.get("usedBytes", database.get("sizeBytes", 0))
+                if enforced and isinstance(quota, dict)
+                else database.get("sizeBytes", 0)
+            ),
+        )
+    custom_growth_by_name = {
+        name: quota_growth_bytes(requested_bytes, used_by_name.get(name, 0))
+        for name, requested_bytes in policy.items()
+    }
+    automatic_count = sum(1 for database in user_databases if str(database["name"]) not in policy)
+    automatic_headroom = max(0, growth_budget - sum(custom_growth_by_name.values()))
+    per_database_headroom = automatic_headroom // automatic_count if automatic_count else 0
+
     for database in databases:
         size_bytes = int(database.get("sizeBytes", 0))
-        headroom = 0 if database.get("systemDatabase") else per_database_headroom
+        name = str(database["name"])
+        system_database = bool(database.get("systemDatabase"))
+        requested_max_bytes = policy.get(name)
+        headroom = 0 if system_database else (
+            max(0, requested_max_bytes - used_by_name.get(name, size_bytes))
+            if requested_max_bytes is not None
+            else per_database_headroom
+        )
         database["growthHeadroomBytes"] = headroom
         database["recommendedMaxBytes"] = size_bytes + headroom
-        quota_id = str(database.pop("quotaId", ""))
-        quota = quota_databases.get(quota_id)
+        database.pop("quotaId", None)
+        quota = quota_by_name.get(name)
         enforced = (
-            not database.get("systemDatabase")
+            not system_database
             and quota_state.get("enabled") is True
             and isinstance(quota, dict)
             and quota.get("hardLimitEnforced") is True
         )
         database["hardLimitEnforced"] = enforced
+        database["quotaMode"] = "custom" if requested_max_bytes is not None else "auto"
+        database["requestedMaxBytes"] = requested_max_bytes
+        used_bytes = used_by_name.get(name, size_bytes)
+        database["quotaUsedBytes"] = used_bytes if enforced else size_bytes
+        other_custom_growth = sum(
+            headroom
+            for other_name, headroom in custom_growth_by_name.items()
+            if other_name != name
+        )
+        maximum_custom_growth = max(0, growth_budget - other_custom_growth) // 1024 * 1024
+        database["maximumCustomMaxBytes"] = (
+            used_bytes + maximum_custom_growth if not system_database else 0
+        )
+        database["quotaConstrained"] = bool(quota.get("quotaConstrained", False)) if isinstance(quota, dict) else False
         if enforced and isinstance(quota, dict):
             quota_used = max(0, int(quota.get("usedBytes", size_bytes)))
             hard_limit = max(quota_used, int(quota.get("hardLimitBytes", quota_used)))
             database["quotaUsedBytes"] = quota_used
             database["growthHeadroomBytes"] = max(0, hard_limit - quota_used)
             database["recommendedMaxBytes"] = hard_limit
+            database["quotaConstrained"] = bool(quota.get("quotaConstrained", False))
     return databases
 
 
@@ -170,6 +237,69 @@ def read_status_file(path: Path) -> dict[str, object]:
         return value if isinstance(value, dict) else {}
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+def read_quota_policy() -> dict[str, int]:
+    try:
+        data = json.loads(QUOTA_POLICY_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (OSError, json.JSONDecodeError) as error:
+        raise ApiError(503, "The database quota settings could not be read.") from error
+
+    if (
+        not isinstance(data, dict)
+        or type(data.get("version")) is not int
+        or data.get("version") != 1
+        or not isinstance(data.get("databases"), dict)
+    ):
+        raise ApiError(503, "The database quota settings have an unsupported format.")
+
+    policy: dict[str, int] = {}
+    for name, entry in data["databases"].items():
+        if (
+            not isinstance(name, str)
+            or not NAME_PATTERN.fullmatch(name)
+            or not isinstance(entry, dict)
+            or entry.get("mode") != "custom"
+            or type(entry.get("maxBytes")) is not int
+            or entry["maxBytes"] <= 0
+        ):
+            raise ApiError(503, "The database quota settings contain an invalid entry.")
+        policy[name] = entry["maxBytes"]
+    return policy
+
+
+def write_quota_policy(policy: dict[str, int]) -> None:
+    STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=".database-quota-policy.", dir=STATE_DIR)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(
+                {
+                    "version": 1,
+                    "databases": {
+                        name: {"mode": "custom", "maxBytes": max_bytes}
+                        for name, max_bytes in sorted(policy.items())
+                    },
+                },
+                handle,
+                separators=(",", ":"),
+            )
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, QUOTA_POLICY_FILE)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def clear_database_quota_setting(database: str) -> None:
+    policy = read_quota_policy()
+    if database in policy:
+        policy.pop(database)
+        write_quota_policy(policy)
 
 
 def offsite_backup_status() -> dict[str, object]:
@@ -185,7 +315,11 @@ def offsite_backup_status() -> dict[str, object]:
     }
 
 
-def request_quota_reconcile(database: str | None = None) -> None:
+def request_quota_reconcile(
+    database: str | None = None,
+    expected_mode: str | None = None,
+    expected_max_bytes: int | None = None,
+) -> None:
     previous = read_status_file(QUOTA_STATUS_FILE)
     try:
         QUOTA_REQUEST_FILE.touch(mode=0o600, exist_ok=True)
@@ -204,7 +338,15 @@ def request_quota_reconcile(database: str | None = None) -> None:
                 and isinstance(quotas.get(identifier), dict)
                 and quotas[identifier].get("hardLimitEnforced") is True
             ):
-                return
+                quota = quotas[identifier]
+                if (
+                    (expected_mode is None or quota.get("quotaMode") == expected_mode)
+                    and (
+                        expected_max_bytes is None
+                        or quota.get("requestedMaxBytes") == expected_max_bytes
+                    )
+                ):
+                    return
             time.sleep(0.25)
         raise ApiError(503, "The database storage limit could not be verified. Try again shortly.")
     except OSError:
@@ -305,6 +447,9 @@ def postgres_status() -> dict[str, object]:
         "disk": {"totalBytes": disk.total, "usedBytes": disk.used, "freeBytes": disk.free},
         "backupRetentionDays": BACKUP_RETENTION_DAYS,
         "databaseGrowthPercent": DATABASE_GROWTH_PERCENT,
+        "databaseQuotaReserveBytes": int(
+            quota_state.get("reserveBytes", DATABASE_QUOTA_RESERVE_BYTES)
+        ),
         "databaseQuotaEnforced": quota_state.get("enabled") is True,
         "databaseQuotaReason": quota_state.get("reason"),
         "databaseQuotaCheckedAt": quota_state.get("lastReconciledAt"),
@@ -395,19 +540,21 @@ def restore_backup(encoded_name: str, target: object, actor: str | None = None) 
         raise ApiError(404, "Backup not found.")
 
     with backup_lock:
-        if run_sql(
-            f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(target_name)})"
-        ) == "t":
-            raise ApiError(409, "A database with that name already exists. Restore never overwrites a database.")
+        with quota_policy_lock:
+            if run_sql(
+                f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(target_name)})"
+            ) == "t":
+                raise ApiError(409, "A database with that name already exists. Restore never overwrites a database.")
 
-        run_sql(
-            f"CREATE DATABASE {quote_identifier(target_name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
-        )
-        try:
-            request_quota_reconcile(target_name)
-        except ApiError:
-            run_sql(f"DROP DATABASE {quote_identifier(target_name)}")
-            raise
+            clear_database_quota_setting(target_name)
+            run_sql(
+                f"CREATE DATABASE {quote_identifier(target_name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
+            )
+            try:
+                request_quota_reconcile(target_name)
+            except ApiError:
+                run_sql(f"DROP DATABASE {quote_identifier(target_name)}")
+                raise
         command = [
             pg_client("pg_restore"),
             "--exit-on-error",
@@ -603,23 +750,25 @@ def restore_uploaded_dump(
             raise ApiError(400, "The uploaded backup is incomplete.")
 
     with backup_lock:
-        if run_sql(
-            f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(target_name)})"
-        ) == "t":
-            raise ApiError(
-                409,
-                "A database with that name already exists. Restore never overwrites a database.",
-            )
+        with quota_policy_lock:
+            if run_sql(
+                f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(target_name)})"
+            ) == "t":
+                raise ApiError(
+                    409,
+                    "A database with that name already exists. Restore never overwrites a database.",
+                )
 
-        run_sql(
-            f"CREATE DATABASE {quote_identifier(target_name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
-        )
-        try:
-            request_quota_reconcile(target_name)
-        except ApiError:
-            run_sql(f"DROP DATABASE {quote_identifier(target_name)}")
-            shutil.rmtree(upload_path, ignore_errors=True)
-            raise
+            clear_database_quota_setting(target_name)
+            run_sql(
+                f"CREATE DATABASE {quote_identifier(target_name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
+            )
+            try:
+                request_quota_reconcile(target_name)
+            except ApiError:
+                run_sql(f"DROP DATABASE {quote_identifier(target_name)}")
+                shutil.rmtree(upload_path, ignore_errors=True)
+                raise
         result = run_pg_restore_from_upload(
             [
                 pg_client("pg_restore"),
@@ -669,6 +818,108 @@ def valid_name(value: object, label: str) -> str:
     if not isinstance(value, str) or not NAME_PATTERN.fullmatch(value):
         raise ApiError(400, f"{label} must start with a lowercase letter and contain only lowercase letters, numbers, or underscores.")
     return value
+
+
+def update_database_quota(
+    name_value: object, body: dict[str, object], actor: str | None
+) -> dict[str, object]:
+    name = valid_name(name_value, "Database name")
+    if name in {"postgres", "template0", "template1"}:
+        raise ApiError(400, "Choose a user database to change its quota.")
+
+    mode = body.get("mode")
+    if mode != "auto" and mode != "custom":
+        raise ApiError(400, "Choose automatic or custom database sizing.")
+    requested_max_bytes: int | None = None
+    if mode == "custom":
+        value = body.get("maxBytes")
+        if type(value) is not int or value <= 0:
+            raise ApiError(400, "Enter a valid maximum database size in bytes.")
+        requested_max_bytes = value
+
+    with quota_policy_lock:
+        old_policy = read_quota_policy()
+        status = postgres_status()
+        quota_state = read_status_file(QUOTA_STATUS_FILE)
+        quota_databases = quota_state.get("databases", {})
+        if not isinstance(quota_databases, dict) or quota_state.get("enabled") is not True:
+            raise ApiError(503, "Per-database hard quotas are not currently available.")
+
+        rows = list_databases()
+        row = next((item for item in rows if item.get("name") == name), None)
+        if row is None:
+            raise ApiError(404, "Database not found.")
+        quota_id = str(row.get("quotaId", ""))
+        quota = quota_databases.get(quota_id)
+        if not isinstance(quota, dict) or quota.get("hardLimitEnforced") is not True:
+            raise ApiError(503, "A hard size limit could not be confirmed for this database.")
+
+        used_bytes = max(0, int(quota.get("usedBytes", row.get("sizeBytes", 0))))
+        minimum_max_bytes = max(used_bytes, int(row.get("sizeBytes", 0)))
+        growth_budget = (
+            max(0, int(status["disk"]["freeBytes"]) - DATABASE_QUOTA_RESERVE_BYTES)
+            * DATABASE_GROWTH_PERCENT
+            // 100
+        )
+        growth_budget_kib = growth_budget // 1024
+        row_by_name = {str(item.get("name")): item for item in rows}
+        other_custom_growth_kib = 0
+        for other_name, other_max_bytes in old_policy.items():
+            if other_name == name:
+                continue
+            other_row = row_by_name.get(other_name)
+            if other_row is None or other_row.get("systemDatabase"):
+                continue
+            other_quota = quota_databases.get(str(other_row.get("quotaId", "")))
+            other_used = (
+                max(0, int(other_quota.get("usedBytes", other_row.get("sizeBytes", 0))))
+                if isinstance(other_quota, dict)
+                else max(0, int(other_row.get("sizeBytes", 0)))
+            )
+            other_custom_growth_kib += quota_growth_bytes(other_max_bytes, other_used) // 1024
+
+        new_policy = dict(old_policy)
+        if mode == "auto":
+            new_policy.pop(name, None)
+        else:
+            assert requested_max_bytes is not None
+            if requested_max_bytes < minimum_max_bytes:
+                raise ApiError(400, "The custom maximum cannot be smaller than current database usage.")
+            maximum_available = used_bytes + max(0, growth_budget_kib - other_custom_growth_kib) * 1024
+            if requested_max_bytes > maximum_available:
+                raise ApiError(
+                    409,
+                    f"This database can currently have a custom maximum of up to {maximum_available} bytes. "
+                    "Reduce another custom limit or return a database to Auto to free growth room.",
+                )
+            new_policy[name] = requested_max_bytes
+
+        write_quota_policy(new_policy)
+        try:
+            request_quota_reconcile(
+                name,
+                expected_mode=str(mode),
+                expected_max_bytes=requested_max_bytes,
+            )
+        except ApiError:
+            write_quota_policy(old_policy)
+            try:
+                QUOTA_REQUEST_FILE.touch(mode=0o600, exist_ok=True)
+            except OSError:
+                pass
+            raise
+
+    description = (
+        f"Database {name} quota returned to Auto."
+        if mode == "auto"
+        else f"Database {name} custom maximum set to {requested_max_bytes} bytes."
+    )
+    record_event("database.quota.updated", description, actor)
+    refreshed_status = postgres_status()
+    databases = add_database_growth_targets(
+        list_databases(), int(refreshed_status["disk"]["freeBytes"])
+    )
+    return next(item for item in databases if item["name"] == name)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -775,25 +1026,33 @@ class Handler(BaseHTTPRequestHandler):
             actor = self._actor()
             if path == "/v1/databases":
                 name = valid_name(body.get("name"), "Database name")
-                exists = run_sql(
-                    f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(name)})"
-                )
-                if exists == "t":
-                    raise ApiError(409, "A database with that name already exists.")
-                run_sql(
-                    f"CREATE DATABASE {quote_identifier(name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
-                )
-                try:
-                    request_quota_reconcile(name)
-                except ApiError:
-                    run_sql(f"DROP DATABASE {quote_identifier(name)}")
-                    raise
+                with quota_policy_lock:
+                    exists = run_sql(
+                        f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(name)})"
+                    )
+                    if exists == "t":
+                        raise ApiError(409, "A database with that name already exists.")
+                    clear_database_quota_setting(name)
+                    run_sql(
+                        f"CREATE DATABASE {quote_identifier(name)} OWNER postgres ENCODING 'UTF8' TEMPLATE template0"
+                    )
+                    try:
+                        request_quota_reconcile(name)
+                    except ApiError:
+                        run_sql(f"DROP DATABASE {quote_identifier(name)}")
+                        raise
                 record_event("database.created", f"Database {name} created.", actor)
                 status = postgres_status()
                 databases = add_database_growth_targets(
                     list_databases(), int(status["disk"]["freeBytes"])
                 )
                 self._json(201, {"database": next(row for row in databases if row["name"] == name)})
+            elif path.startswith("/v1/databases/") and path.endswith("/quota"):
+                encoded_name = path.removeprefix("/v1/databases/").removesuffix("/quota")
+                if "/" in encoded_name:
+                    raise ApiError(404, "Route not found.")
+                database = update_database_quota(unquote(encoded_name), body, actor)
+                self._json(200, {"database": database})
             elif path == "/v1/roles":
                 self._create_role(body, actor)
             elif path == "/v1/backups":
@@ -867,18 +1126,20 @@ class Handler(BaseHTTPRequestHandler):
             name = valid_name(unquote(path.removeprefix(prefix)), "Database name")
             if name in {"postgres", "template0", "template1"}:
                 raise ApiError(400, "A default PostgreSQL database cannot be removed.")
-            exists = run_sql(
-                f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(name)})"
-            )
-            if exists != "t":
-                raise ApiError(404, "Database not found.")
-            count = run_sql(
-                f"SELECT count(*) FROM pg_stat_activity WHERE datname = {quote_literal(name)}"
-            )
-            if count != "0":
-                raise ApiError(409, "Close active connections before deleting this database.")
-            run_sql(f"DROP DATABASE {quote_identifier(name)}")
-            request_quota_reconcile()
+            with quota_policy_lock:
+                exists = run_sql(
+                    f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(name)})"
+                )
+                if exists != "t":
+                    raise ApiError(404, "Database not found.")
+                count = run_sql(
+                    f"SELECT count(*) FROM pg_stat_activity WHERE datname = {quote_literal(name)}"
+                )
+                if count != "0":
+                    raise ApiError(409, "Close active connections before deleting this database.")
+                run_sql(f"DROP DATABASE {quote_identifier(name)}")
+                clear_database_quota_setting(name)
+                request_quota_reconcile()
             record_event("database.deleted", f"Database {name} deleted.", self._actor())
             self._json(200, {"deleted": True, "name": name})
         except ApiError as error:

@@ -1,3 +1,6 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
 import styles from "./storage-capacity.module.css";
 
 export type StorageDisk = {
@@ -5,6 +8,8 @@ export type StorageDisk = {
   usedBytes: number;
   freeBytes: number;
 };
+
+export type DatabaseQuotaChange = { mode: "auto" } | { mode: "custom"; maxBytes: number };
 
 export type DatabaseStorage = {
   name: string;
@@ -14,7 +19,13 @@ export type DatabaseStorage = {
   quotaUsedBytes?: number;
   hardLimitEnforced?: boolean;
   systemDatabase: boolean;
+  quotaMode?: "auto" | "custom";
+  requestedMaxBytes?: number | null;
+  maximumCustomMaxBytes?: number;
+  quotaConstrained?: boolean;
 };
+
+const GIB = 1024 ** 3;
 
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -33,26 +44,109 @@ function percentage(value: number, max: number): number {
   return Math.min(100, Math.max(0, (value / max) * 100));
 }
 
+function getDatabaseQuotaUsageBytes(database: DatabaseStorage): number {
+  return database.hardLimitEnforced
+    ? (database.quotaUsedBytes ?? database.sizeBytes)
+    : database.sizeBytes;
+}
+
+function quotaInputValue(bytes: number): string {
+  return String(bytes / GIB);
+}
+
 export function StorageCapacity({
   disk,
   databases,
   growthPercent,
+  reserveBytes = GIB,
   enforcementReason,
+  onSaveQuota,
+  savingQuotaName,
 }: {
   disk: StorageDisk;
   databases: DatabaseStorage[];
   growthPercent: number;
+  reserveBytes?: number;
   enforcementReason?: string | null;
+  onSaveQuota?: (database: string, quota: DatabaseQuotaChange) => Promise<void>;
+  savingQuotaName?: string | null;
 }) {
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [quotaMode, setQuotaMode] = useState<"auto" | "custom">("auto");
+  const [quotaSizeGiB, setQuotaSizeGiB] = useState("");
+  const [quotaError, setQuotaError] = useState<string | null>(null);
   const diskUsedPercent = percentage(disk.usedBytes, disk.totalBytes);
   const userDatabases = databases.filter((database) => !database.systemDatabase);
   const safeGrowthPercent = Math.min(50, Math.max(1, growthPercent));
+  const totalDatabaseUsageBytes = databases.reduce(
+    (total, database) => total + database.sizeBytes,
+    0,
+  );
   const perDatabaseHeadroom = userDatabases.length
-    ? Math.floor((Math.max(0, disk.freeBytes) * safeGrowthPercent) / 100 / userDatabases.length)
+    ? Math.floor(
+        (Math.max(0, disk.freeBytes - reserveBytes) * safeGrowthPercent) /
+          100 /
+          userDatabases.length,
+      )
     : 0;
   const quotaEnforced =
     userDatabases.length > 0 &&
     userDatabases.every((database) => database.hardLimitEnforced === true);
+
+  function startEditing(database: DatabaseStorage) {
+    const currentMaximum =
+      database.requestedMaxBytes ??
+      database.recommendedMaxBytes ??
+      getDatabaseQuotaUsageBytes(database) + perDatabaseHeadroom;
+    const maximumAvailable = database.maximumCustomMaxBytes;
+    setEditingName(database.name);
+    setQuotaMode(database.quotaMode ?? "auto");
+    setQuotaSizeGiB(
+      quotaInputValue(
+        maximumAvailable === undefined
+          ? currentMaximum
+          : Math.min(currentMaximum, maximumAvailable),
+      ),
+    );
+    setQuotaError(null);
+  }
+
+  async function submitQuota(event: FormEvent<HTMLFormElement>, database: DatabaseStorage) {
+    event.preventDefault();
+    if (!onSaveQuota) return;
+
+    let request: DatabaseQuotaChange = { mode: "auto" };
+    if (quotaMode === "custom") {
+      const gib = Number(quotaSizeGiB);
+      const requestedBytes = Math.round(gib * GIB);
+      const currentUsage = getDatabaseQuotaUsageBytes(database);
+      const minimumMaxBytes = Math.max(currentUsage, database.sizeBytes);
+      const maximumBytes = database.maximumCustomMaxBytes ?? database.recommendedMaxBytes ?? 0;
+      if (!Number.isFinite(gib) || requestedBytes < minimumMaxBytes) {
+        setQuotaError(
+          `Choose a maximum at least as large as current database size (${formatBytes(minimumMaxBytes)}).`,
+        );
+        return;
+      }
+      if (requestedBytes > maximumBytes) {
+        setQuotaError(
+          `The current maximum available for this database is ${formatBytes(maximumBytes)}.`,
+        );
+        return;
+      }
+      request = { mode: "custom", maxBytes: requestedBytes };
+    }
+
+    setQuotaError(null);
+    try {
+      await onSaveQuota(database.name, request);
+      setEditingName(null);
+    } catch (cause) {
+      setQuotaError(
+        cause instanceof Error ? cause.message : "Could not update the database size limit.",
+      );
+    }
+  }
 
   return (
     <div className={styles.capacity}>
@@ -79,13 +173,19 @@ export function StorageCapacity({
         >
           <span className={styles.diskFill} style={{ width: `${diskUsedPercent}%` }} />
         </div>
+        <div className={styles.databaseTotal}>
+          <span>All databases, including postgres</span>
+          <strong>{formatBytes(totalDatabaseUsageBytes)} database files on disk</strong>
+        </div>
       </div>
 
       <div className={styles.policyHeader}>
         <div>
           <strong>Per-database growth room</strong>
           <span>
-            {safeGrowthPercent}% of current free disk, shared evenly across user databases
+            {safeGrowthPercent}% of free disk after the {formatBytes(reserveBytes)} system reserve
+            is available to database growth. Custom limits use this shared budget; Auto databases
+            share what remains.
           </span>
         </div>
         <span
@@ -98,21 +198,42 @@ export function StorageCapacity({
       {userDatabases.length ? (
         <ul aria-label="Database storage usage and growth room" className={styles.databaseList}>
           {userDatabases.map((database) => {
-            const quotaUsage = database.hardLimitEnforced
-              ? (database.quotaUsedBytes ?? database.sizeBytes)
-              : database.sizeBytes;
+            const quotaUsage = getDatabaseQuotaUsageBytes(database);
             const recommendedMaxBytes =
               database.recommendedMaxBytes ?? quotaUsage + perDatabaseHeadroom;
             const growthHeadroomBytes = Math.max(0, recommendedMaxBytes - quotaUsage);
             const fill = percentage(quotaUsage, recommendedMaxBytes);
+            const maximumCustomMaxBytes = database.maximumCustomMaxBytes ?? recommendedMaxBytes;
+            const isEditing = editingName === database.name;
+            const isSaving = savingQuotaName === database.name;
             return (
               <li className={styles.databaseItem} key={database.name}>
                 <div className={styles.databaseHeading}>
                   <code>{database.name}</code>
-                  <span>
-                    {formatBytes(quotaUsage)} {database.hardLimitEnforced ? "on disk" : "used"} ·
-                    cap {formatBytes(recommendedMaxBytes)}
-                  </span>
+                  <div className={styles.databaseHeadingActions}>
+                    <span>
+                      {formatBytes(quotaUsage)} {database.hardLimitEnforced ? "on disk" : "used"} ·{" "}
+                      {database.hardLimitEnforced ? "cap" : "target"}{" "}
+                      {formatBytes(recommendedMaxBytes)}
+                    </span>
+                    {onSaveQuota ? (
+                      <button
+                        aria-expanded={isEditing}
+                        aria-controls={isEditing ? `quota-editor-${database.name}` : undefined}
+                        className={styles.quotaButton}
+                        disabled={!database.hardLimitEnforced || Boolean(savingQuotaName)}
+                        onClick={() => startEditing(database)}
+                        title={
+                          database.hardLimitEnforced
+                            ? "Adjust this database's maximum size"
+                            : "A verified hard quota is required before it can be changed"
+                        }
+                        type="button"
+                      >
+                        {isEditing ? "Editing limit" : "Edit limit"}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
                 <div
                   aria-label={`${database.name}: ${formatBytes(quotaUsage)} used, ${formatBytes(growthHeadroomBytes)} ${database.hardLimitEnforced ? "remaining before hard limit" : "estimated growth room"}`}
@@ -126,11 +247,96 @@ export function StorageCapacity({
                 </div>
                 <div className={styles.databaseMeta}>
                   <span>
-                    {formatBytes(growthHeadroomBytes)}{" "}
-                    {database.hardLimitEnforced ? "left before limit" : "estimated growth room"}
+                    {growthHeadroomBytes
+                      ? `${formatBytes(growthHeadroomBytes)} ${database.hardLimitEnforced ? "left before cap" : "estimated growth room"}`
+                      : database.hardLimitEnforced
+                        ? "At cap"
+                        : "No estimated growth room"}
+                  </span>
+                  <span>
+                    {database.quotaMode === "custom"
+                      ? database.hardLimitEnforced
+                        ? "Custom cap"
+                        : "Custom request"
+                      : "Auto"}
+                    {database.quotaConstrained ? " · reduced to fit disk budget" : ""}
                   </span>
                   <span>{Math.round(fill)}% of target</span>
                 </div>
+                {database.quotaConstrained && database.requestedMaxBytes ? (
+                  <p className={styles.quotaWarning} role="note">
+                    Requested {formatBytes(database.requestedMaxBytes)}; the effective cap is{" "}
+                    {formatBytes(recommendedMaxBytes)} while the shared disk budget is tight.
+                  </p>
+                ) : null}
+                {isEditing ? (
+                  <form
+                    className={styles.quotaEditor}
+                    id={`quota-editor-${database.name}`}
+                    onSubmit={(event) => void submitQuota(event, database)}
+                  >
+                    <div className={styles.quotaFields}>
+                      <div>
+                        <label htmlFor={`quota-mode-${database.name}`}>Sizing mode</label>
+                        <select
+                          disabled={isSaving}
+                          id={`quota-mode-${database.name}`}
+                          onChange={(event) => {
+                            setQuotaMode(event.target.value as "auto" | "custom");
+                            setQuotaError(null);
+                          }}
+                          value={quotaMode}
+                        >
+                          <option value="auto">Auto allocation</option>
+                          <option value="custom">Custom maximum</option>
+                        </select>
+                      </div>
+                      {quotaMode === "custom" ? (
+                        <div>
+                          <label htmlFor={`quota-size-${database.name}`}>Maximum size (GiB)</label>
+                          <input
+                            autoComplete="off"
+                            disabled={isSaving}
+                            id={`quota-size-${database.name}`}
+                            max={quotaInputValue(maximumCustomMaxBytes)}
+                            min={quotaInputValue(Math.max(quotaUsage, database.sizeBytes))}
+                            onChange={(event) => {
+                              setQuotaSizeGiB(event.target.value);
+                              setQuotaError(null);
+                            }}
+                            required
+                            step="any"
+                            type="number"
+                            value={quotaSizeGiB}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                    <p>
+                      Current use: {formatBytes(quotaUsage)}. Custom maximum available now:{" "}
+                      {formatBytes(maximumCustomMaxBytes)}. Automatic databases share the growth
+                      room that remains; the enforced maximum can adjust as free disk changes.
+                    </p>
+                    {quotaError ? (
+                      <p className={styles.quotaError} role="alert">
+                        {quotaError}
+                      </p>
+                    ) : null}
+                    <div className={styles.quotaActions}>
+                      <button
+                        className={styles.quotaButton}
+                        disabled={isSaving}
+                        onClick={() => setEditingName(null)}
+                        type="button"
+                      >
+                        Cancel
+                      </button>
+                      <button className={styles.quotaSave} disabled={isSaving} type="submit">
+                        {isSaving ? "Saving…" : "Save limit"}
+                      </button>
+                    </div>
+                  </form>
+                ) : null}
               </li>
             );
           })}
@@ -149,8 +355,9 @@ export function StorageCapacity({
       ) : null}
       {quotaEnforced ? (
         <p className={styles.advisoryNote} role="note">
-          Hard caps apply to files in the primary PostgreSQL tablespace. Shared WAL, backups, and
-          server files still use the same VPS disk, so keep an eye on free space.
+          Database totals use allocated blocks in each database directory. Hard caps apply to the
+          primary PostgreSQL tablespace; shared WAL, backups, and server files also use VPS disk
+          space, so the database total is lower than total disk usage.
         </p>
       ) : null}
     </div>

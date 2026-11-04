@@ -13,8 +13,8 @@ server and a guarded place to handle routine database work.
 
 - **See the state of your server.** Review database sizes, owners, connection counts, server health,
   and recent changes.
-- **Track storage pressure.** See free space on the Postgres data volume and estimated growth room
-  for each user database.
+- **Manage database storage.** See the space used by all databases, set an individual maximum for
+  a user database or leave it on Auto, and monitor remaining room alongside overall VPS disk usage.
 - **Keep project access organized.** Create database-scoped read-only and read-write roles, with
   workspace permissions checked on the server for each action.
 - **Make and move backups.** Schedule daily backups, download a custom-format dump, or restore a
@@ -115,15 +115,17 @@ only files from sources you trust.
 
 ## Storage sizing
 
-Nanogres calculates a dynamic growth-room estimate from the free space on the Postgres data volume.
-By default, 25% of current free space is shared evenly across user databases; the VPS API setting
-`NANOGRES_DATABASE_GROWTH_PERCENT` changes that percentage. The dashboard shows actual data-volume
-free space and the estimate for each database.
+Nanogres reserves 1 GiB for the system and makes 25% of the remaining free volume available for
+database growth. Custom database maxima use that shared budget first; databases left on Auto share
+what remains. The VPS API setting `NANOGRES_DATABASE_GROWTH_PERCENT` changes the percentage. The
+dashboard shows the combined size of all databases (including `postgres`), per-database usage and
+effective limits, and overall volume free space. The combined total uses PostgreSQL's per-database
+size report; the per-database quota meter uses allocated blocks when hard quotas are verified.
 
-The estimate is advisory until filesystem quotas are configured on the VPS. PostgreSQL does not
-provide a native per-database hard size limit, so the dashboard identifies whether a quota is
-actually enforced instead of presenting the estimate as a guarantee. See [`vps-api/README.md`](vps-api/README.md)
-for storage-reporting details.
+Custom maxima are stored by the VPS API and enforced with ext4 project quotas. If available space
+shrinks below custom requests, Nanogres reduces the effective caps to preserve the shared growth
+budget and reports the constraint in the dashboard. Without verified filesystem quotas, sizing
+targets remain advisory. See [`vps-api/README.md`](vps-api/README.md) for details.
 
 ## Repository checks
 

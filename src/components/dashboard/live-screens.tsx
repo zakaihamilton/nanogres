@@ -7,6 +7,7 @@ import { PanelFrame } from "./panel-frame";
 import {
   formatBytes,
   StorageCapacity,
+  type DatabaseQuotaChange,
   type DatabaseStorage,
   type StorageDisk,
 } from "./storage-capacity";
@@ -64,6 +65,7 @@ type ServerStatus = {
   disk: StorageDisk;
   backupRetentionDays: number;
   databaseGrowthPercent?: number;
+  databaseQuotaReserveBytes?: number;
   databaseQuotaEnforced?: boolean;
   databaseQuotaReason?: string | null;
   databaseQuotaCheckedAt?: string | null;
@@ -353,7 +355,7 @@ function DatabaseTable({
               <td>
                 <span className={styles.databaseName}>{database.name}</span>
                 {database.systemDatabase ? (
-                  <small className={styles.systemTag}>default</small>
+                  <small className={styles.systemTag}>system</small>
                 ) : null}
               </td>
               <td>{database.owner}</td>
@@ -623,7 +625,7 @@ export function LiveOverviewScreen() {
           <Metric
             label="Database storage"
             value={formatBytes(totalSize)}
-            detail="Across visible databases"
+            detail="Across all databases, including postgres"
           />
           <Metric
             label="Free disk"
@@ -689,6 +691,7 @@ export function LiveOverviewScreen() {
               disk={status.disk}
               enforcementReason={status.databaseQuotaReason}
               growthPercent={status.databaseGrowthPercent ?? 25}
+              reserveBytes={status.databaseQuotaReserveBytes}
             />
           </Panel>
           <Panel title="Recent activity" detail="Database and access changes on this VPS">
@@ -796,6 +799,7 @@ export function LiveDatabasesScreen() {
   const { databases, error, loading, refresh, status } = useDatabases();
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [quotaSavingName, setQuotaSavingName] = useState<string | null>(null);
   const [busyName, setBusyName] = useState<string | null>(null);
   const deletingDatabase = useRef(false);
   const [deleteTarget, setDeleteTarget] = useState<Database | null>(null);
@@ -820,6 +824,27 @@ export function LiveDatabasesScreen() {
       setActionError(cause instanceof Error ? cause.message : "Could not create database.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveDatabaseQuota(database: string, quota: DatabaseQuotaChange) {
+    setQuotaSavingName(database);
+    setActionError(null);
+    setMessage(null);
+    try {
+      await apiRequest(`/api/nanogres/databases/${encodeURIComponent(database)}/quota`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(quota),
+      });
+      setMessage(
+        quota.mode === "auto"
+          ? `Database “${database}” returned to Auto sizing.`
+          : `Custom maximum set for “${database}” at ${formatBytes(quota.maxBytes)}.`,
+      );
+      await refresh();
+    } finally {
+      setQuotaSavingName(null);
     }
   }
 
@@ -895,6 +920,9 @@ export function LiveDatabasesScreen() {
             databases={databases}
             disk={status.disk}
             growthPercent={status.databaseGrowthPercent ?? 25}
+            reserveBytes={status.databaseQuotaReserveBytes}
+            onSaveQuota={saveDatabaseQuota}
+            savingQuotaName={quotaSavingName}
           />
         </Panel>
       ) : null}

@@ -51,6 +51,27 @@
   font-size: 14px;
 }
 
+.databaseTotal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.databaseTotal span {
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.databaseTotal strong {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 650;
+  text-align: right;
+}
+
 .track {
   display: block;
   width: 100%;
@@ -125,12 +146,130 @@
   text-align: right;
 }
 
+.databaseHeadingActions {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.databaseHeadingActions > span {
+  color: var(--ink-muted);
+  font-size: 10px;
+  text-align: right;
+}
+
+.quotaButton,
+.quotaSave {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.quotaButton:focus-visible,
+.quotaSave:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.quotaButton:hover:not(:disabled) {
+  background: var(--surface-muted);
+}
+
+.quotaSave {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+
+.quotaButton:disabled,
+.quotaSave:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.quotaEditor {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-raised);
+}
+
+.quotaFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.quotaFields > div {
+  display: grid;
+  gap: 5px;
+}
+
+.quotaFields label {
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.quotaFields input,
+.quotaFields select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+}
+
+.quotaEditor p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.quotaEditor .quotaError,
+.quotaWarning {
+  color: var(--red);
+}
+
+.quotaActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
 .databaseMeta {
   justify-content: flex-start;
 }
 
 .databaseMeta span:last-child {
   margin-left: auto;
+}
+
+.quotaWarning {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.5;
 }
 
 .empty {
@@ -169,8 +308,40 @@
     text-align: left;
   }
 
+  .databaseHeadingActions {
+    width: 100%;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .databaseHeadingActions > span {
+    text-align: left;
+  }
+
   .policyHeader {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .databaseTotal {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .databaseTotal strong {
+    text-align: left;
+  }
+
+  .quotaFields {
+    grid-template-columns: 1fr;
+  }
+
+  .quotaActions {
+    flex-direction: column-reverse;
+  }
+
+  .quotaActions button {
+    width: 100%;
   }
 }

@@ -18,7 +18,8 @@ from pathlib import Path
 STATE_DIR = Path("/var/lib/nanogres")
 STATUS_FILE = STATE_DIR / "database-quotas.json"
 MANAGED_FILE = STATE_DIR / "quota-managed.json"
-RESERVE_BYTES = int(os.environ.get("NANOGRES_DATABASE_QUOTA_RESERVE_BYTES", str(1024**3)))
+POLICY_FILE = STATE_DIR / "database-quota-policy.json"
+DEFAULT_RESERVE_BYTES = 1024**3
 API_ENV_FILE = Path("/etc/nanogres/api.env")
 PG_ENV = {"PATH": "/usr/bin:/usr/sbin:/bin:/sbin", "LC_ALL": "C", "PGCONNECT_TIMEOUT": "5"}
 
@@ -53,7 +54,11 @@ def run(command: list[str], timeout: int = 60) -> subprocess.CompletedProcess[st
     return result
 
 
-def write_json(path: Path, value: dict[str, object], mode: int) -> None:
+def write_json(
+    path: Path,
+    value: dict[str, object],
+    mode: int,
+) -> None:
     STATE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=STATE_DIR)
     try:
@@ -88,6 +93,53 @@ def read_managed() -> dict[str, str]:
         return data if isinstance(data, dict) else {}
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+def read_quota_policy() -> dict[str, int]:
+    try:
+        data = json.loads(POLICY_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (OSError, json.JSONDecodeError) as error:
+        raise QuotaError("The database quota settings could not be read.") from error
+
+    entries = (
+        data.get("databases")
+        if isinstance(data, dict)
+        and type(data.get("version")) is int
+        and data.get("version") == 1
+        else None
+    )
+    if not isinstance(entries, dict):
+        raise QuotaError("The database quota settings have an unsupported format.")
+
+    policy: dict[str, int] = {}
+    for name, entry in entries.items():
+        if (
+            not isinstance(name, str)
+            or not re.fullmatch(r"[a-z][a-z0-9_]{0,62}", name)
+            or not isinstance(entry, dict)
+            or entry.get("mode") != "custom"
+            or type(entry.get("maxBytes")) is not int
+            or entry["maxBytes"] <= 0
+        ):
+            raise QuotaError("The database quota settings contain an invalid entry.")
+        policy[name] = entry["maxBytes"]
+    return policy
+
+
+def reserve_bytes() -> int:
+    try:
+        for line in API_ENV_FILE.read_text(encoding="utf-8").splitlines():
+            key, separator, value = line.partition("=")
+            if separator and key.strip() == "NANOGRES_DATABASE_QUOTA_RESERVE_BYTES":
+                configured = int(value.strip().strip("\"'"))
+                if configured < 0:
+                    raise ValueError("reserve cannot be negative")
+                return configured
+    except (OSError, ValueError):
+        pass
+    return DEFAULT_RESERVE_BYTES
 
 
 def data_directory() -> Path:
@@ -195,6 +247,7 @@ def reconcile() -> None:
     # A successful project quota report is the runtime proof that kernel accounting is active.
     records = project_quota_records()
     databases = database_rows()
+    policy = read_quota_policy()
     managed = read_managed()
     active_ids = {str(int(row["id"])) for row in databases}
     for old_id in set(managed) - active_ids:
@@ -225,29 +278,88 @@ def reconcile() -> None:
         eligible.append((row, project_id, directory))
 
     disk = shutil.disk_usage(path)
-    growth_budget = max(0, disk.free - RESERVE_BYTES) * growth // 100
-    per_database_growth = growth_budget // len(eligible) if eligible else 0
+    reserve = reserve_bytes()
+    growth_budget_kib = max(0, disk.free - reserve) // 1024 * growth // 100
 
     # Refresh project usage after assigning existing files to their database project IDs.
     records = project_quota_records()
+    used_kib_by_id = {
+        project_id: records.get(str(project_id), {}).get("usedKib", 0)
+        for _row, project_id, _directory in eligible
+    }
+    custom_growth_kib: dict[int, int] = {}
+    automatic_databases: list[tuple[dict[str, object], int, Path]] = []
+    for row, project_id, directory in eligible:
+        requested_bytes = policy.get(str(row["name"]))
+        if requested_bytes is None:
+            automatic_databases.append((row, project_id, directory))
+            continue
+        requested_kib = (requested_bytes + 1023) // 1024
+        custom_growth_kib[project_id] = max(
+            0, requested_kib - used_kib_by_id[project_id]
+        )
+
+    requested_custom_growth_kib = sum(custom_growth_kib.values())
+    allocated_growth_kib: dict[int, int] = {}
+    if requested_custom_growth_kib <= growth_budget_kib:
+        allocated_growth_kib.update(custom_growth_kib)
+        remaining_growth_kib = growth_budget_kib - requested_custom_growth_kib
+    else:
+        remaining_growth_kib = 0
+        allocated_total = 0
+        for project_id, requested_kib in custom_growth_kib.items():
+            allocated = requested_kib * growth_budget_kib // requested_custom_growth_kib
+            allocated_growth_kib[project_id] = allocated
+            allocated_total += allocated
+        remainder = growth_budget_kib - allocated_total
+        for project_id in custom_growth_kib:
+            if remainder == 0:
+                break
+            if allocated_growth_kib[project_id] < custom_growth_kib[project_id]:
+                allocated_growth_kib[project_id] += 1
+                remainder -= 1
+
+    automatic_growth_kib = (
+        remaining_growth_kib // len(automatic_databases) if automatic_databases else 0
+    )
+    for _row, project_id, _directory in automatic_databases:
+        allocated_growth_kib[project_id] = automatic_growth_kib
+
     for row, project_id, _directory in eligible:
         key = str(project_id)
-        used_bytes = records.get(key, {}).get("usedKib", 0) * 1024
-        requested_kib = max(1, (used_bytes + per_database_growth + 1023) // 1024)
+        requested_kib = max(1, used_kib_by_id[project_id] + allocated_growth_kib[project_id])
         run(["/usr/sbin/setquota", "-P", key, "0", str(requested_kib), "0", "0", "/"])
 
     records = project_quota_records()
+    total_allocated_growth_kib = 0
     for row, project_id, _directory in eligible:
         key = str(project_id)
         record = records.get(key, {})
         used_bytes = record.get("usedKib", 0) * 1024
         hard_bytes = record.get("hardKib", 0) * 1024
-        requested_kib = max(1, (used_bytes + per_database_growth + 1023) // 1024)
+        requested_kib = max(1, used_kib_by_id[project_id] + allocated_growth_kib[project_id])
+        requested_max_bytes = policy.get(str(row["name"]))
+        other_custom_growth_kib = sum(
+            headroom
+            for other_project_id, headroom in custom_growth_kib.items()
+            if other_project_id != project_id
+        )
+        maximum_custom_bytes = (
+            record.get("usedKib", 0)
+            + max(0, growth_budget_kib - other_custom_growth_kib)
+        ) * 1024
+        allocated_headroom_bytes = max(0, hard_bytes - used_bytes)
+        total_allocated_growth_kib += allocated_growth_kib[project_id]
         database_status[key] = {
             "database": str(row["name"]),
             "usedBytes": used_bytes,
             "hardLimitBytes": hard_bytes,
             "hardLimitEnforced": hard_bytes == requested_kib * 1024,
+            "quotaMode": "custom" if requested_max_bytes is not None else "auto",
+            "requestedMaxBytes": requested_max_bytes,
+            "maximumCustomMaxBytes": maximum_custom_bytes,
+            "allocatedGrowthBytes": allocated_headroom_bytes,
+            "quotaConstrained": requested_max_bytes is not None and hard_bytes < requested_max_bytes,
         }
 
     write_json(MANAGED_FILE, managed, 0o600)
@@ -264,7 +376,9 @@ def reconcile() -> None:
             "reason": None if enabled else "One or more database project quotas could not be verified.",
             "lastReconciledAt": datetime.now(timezone.utc).isoformat(),
             "growthPercent": growth,
-            "reserveBytes": RESERVE_BYTES,
+            "reserveBytes": reserve,
+            "growthBudgetBytes": growth_budget_kib * 1024,
+            "allocatedGrowthBytes": total_allocated_growth_kib * 1024,
             "databases": database_status,
         },
         0o644,
