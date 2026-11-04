@@ -89,7 +89,7 @@ export async function apiRequest<T extends ApiPayload>(
     throw new Error(message);
   }
   if (typeof payload !== "object" || payload === null)
-    throw new Error("The VPS API returned an invalid response.");
+    throw new Error("The workspace service returned an invalid response.");
   return payload as T;
 }
 
@@ -254,13 +254,19 @@ export function Empty({ children }: { children: ReactNode }) {
 export function DatabaseTable({
   databases,
   onRequestDelete,
+  onConnect,
   busyName,
+  emptyMessage,
 }: {
   databases: Database[];
   onRequestDelete?: (database: Database) => void;
+  onConnect?: (databaseName: string) => void;
   busyName?: string | null;
+  emptyMessage?: ReactNode;
 }) {
-  if (!databases.length) return <Empty>No user databases yet. Create one to get started.</Empty>;
+  if (!databases.length) {
+    return <Empty>{emptyMessage || "No user databases yet. Create one to get started."}</Empty>;
+  }
   return (
     <div aria-label="Databases" className={styles.tableWrap} role="region" tabIndex={0}>
       <table>
@@ -271,18 +277,22 @@ export function DatabaseTable({
             <th scope="col">Size</th>
             <th scope="col">Connections</th>
             <th scope="col">Encoding</th>
-            {onRequestDelete ? (
-              <th scope="col">
-                <span className={styles.srOnly}>Actions</span>
-              </th>
-            ) : null}
+            <th scope="col">
+              <span className={styles.srOnly}>Actions</span>
+            </th>
           </tr>
         </thead>
         <tbody>
           {databases.map((database) => (
             <tr key={database.name}>
               <td>
-                <span className={styles.databaseName}>{database.name}</span>
+                <Link
+                  className={styles.databaseName}
+                  href={`/databases/${encodeURIComponent(database.name)}`}
+                  title="Open database workspace"
+                >
+                  {database.name}
+                </Link>
                 {database.systemDatabase ? (
                   <small className={styles.systemTag}>system</small>
                 ) : null}
@@ -293,22 +303,39 @@ export function DatabaseTable({
                 {database.connections} / {database.maxConnections}
               </td>
               <td>{database.encoding}</td>
-              {onRequestDelete ? (
-                <td className={styles.actionCell}>
-                  {database.systemDatabase ? (
-                    <span className={styles.muted}>Protected</span>
-                  ) : (
-                    <Button
-                      ariaLabel={`Delete ${database.name}`}
-                      disabled={busyName === database.name}
-                      onClick={() => onRequestDelete(database)}
-                      variant="danger"
+              <td className={styles.actionCell}>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  {onConnect ? (
+                    <button
+                      className={styles.rowAction}
+                      onClick={() => onConnect(database.name)}
+                      type="button"
                     >
-                      {busyName === database.name ? "Deleting…" : "Delete"}
-                    </Button>
-                  )}
-                </td>
-              ) : null}
+                      Connect
+                    </button>
+                  ) : null}
+                  <Link
+                    className={styles.rowAction}
+                    href={`/databases/${encodeURIComponent(database.name)}`}
+                  >
+                    Manage
+                  </Link>
+                  {onRequestDelete ? (
+                    database.systemDatabase ? (
+                      <span className={styles.muted}>Protected</span>
+                    ) : (
+                      <Button
+                        ariaLabel={`Delete ${database.name}`}
+                        disabled={busyName === database.name}
+                        onClick={() => onRequestDelete(database)}
+                        variant="danger"
+                      >
+                        {busyName === database.name ? "Deleting…" : "Delete"}
+                      </Button>
+                    )
+                  ) : null}
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>

@@ -1,0 +1,417 @@
+.pageContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.orgSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.orgDetails {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.orgIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--surface-green);
+  color: var(--green);
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--green-pale);
+  flex-shrink: 0;
+}
+
+.orgText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.orgTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.orgMeta {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.orgBadge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--green-strong);
+  border: 1px solid var(--line-strong);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  transition:
+    border-color 0.18s ease,
+    transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.18s ease;
+}
+
+.card:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 5%);
+}
+
+.cardActive {
+  border-color: var(--green);
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, var(--green-pale), transparent), var(--surface);
+}
+
+.cardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.cardHeading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cardName {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+
+.cardSlug {
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  color: var(--ink-muted);
+}
+
+.badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.roleBadge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--surface-muted);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  text-transform: capitalize;
+}
+
+.activeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--surface-green);
+  color: var(--green-strong);
+  border: 1px solid var(--green);
+}
+
+.activeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.cardMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+.cardBottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.renameButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.renameButton:hover {
+  background: var(--surface-muted);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.cardBottomActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 7px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.switchButton {
+  background: var(--surface-muted);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+}
+
+.switchButton:hover {
+  background: var(--surface-green);
+  border-color: var(--green);
+  color: var(--green-strong);
+  transform: translateY(-1px);
+}
+
+.switchButton:active {
+  transform: translateY(0);
+}
+
+.currentButton {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--green);
+  cursor: default;
+  font-weight: 600;
+}
+
+/* Modal Dialog */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgb(0 0 0 / 45%);
+  backdrop-filter: blur(3px);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.modalCard {
+  width: 100%;
+  max-width: 480px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  box-shadow: 0 16px 36px rgb(0 0 0 / 15%);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modalTitle {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+
+.closeButton {
+  background: transparent;
+  border: 0;
+  color: var(--ink-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 16px;
+  border-radius: 6px;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.closeButton:hover {
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.modalDesc {
+  font-size: 13px;
+  color: var(--ink-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.formLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.formInput {
+  padding: 9px 12px;
+  border-radius: 7px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  font-size: 13px;
+  font-family: inherit;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.formInput:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--green-pale);
+}
+
+.formHint {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.modalActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.cancelButton {
+  padding: 8px 14px;
+  border-radius: 7px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.cancelButton:hover {
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.submitButton {
+  padding: 8px 16px;
+  border-radius: 7px;
+  background: var(--green);
+  border: 1px solid var(--green-strong);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.submitButton:hover:not(:disabled) {
+  background: var(--green-strong);
+  transform: translateY(-1px);
+}
+
+.submitButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.errorBanner {
+  font-size: 12.5px;
+  color: #d9383a;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgb(217 56 58 / 10%);
+  border: 1px solid rgb(217 56 58 / 25%);
+}

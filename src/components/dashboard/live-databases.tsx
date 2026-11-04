@@ -1,8 +1,10 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { formatBytes, StorageCapacity, type DatabaseQuotaChange } from "./storage-capacity";
+import { ConnectionModal } from "@/components/ui/connection-modal";
+import { Icon } from "./icons";
 import {
   type Database,
   apiRequest,
@@ -29,6 +31,22 @@ export function LiveDatabasesScreen({ page = "list" }: { page?: "list" | "new" }
   const [deleteTarget, setDeleteTarget] = useState<Database | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  // Search & filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSystem, setShowSystem] = useState(false);
+  const [connectDb, setConnectDb] = useState<string | null>(null);
+
+  const filteredDatabases = useMemo(() => {
+    return databases.filter((db) => {
+      if (!showSystem && db.systemDatabase) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        return db.name.toLowerCase().includes(q) || db.owner.toLowerCase().includes(q);
+      }
+      return true;
+    });
+  }, [databases, showSystem, searchQuery]);
 
   async function createDatabase(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -107,16 +125,32 @@ export function LiveDatabasesScreen({ page = "list" }: { page?: "list" | "new" }
   return (
     <div className={styles.screen}>
       <PageHeader
-        description="Create databases and review size, owners, and active connections."
+        action={
+          page === "list" ? (
+            <div className={styles.actionGroup}>
+              <Link className={styles.actionSecondaryButton} href="/sql">
+                <Icon name="sql" size={14} />
+                SQL Editor
+              </Link>
+              <Link className={styles.primaryButton} href="/databases/new">
+                Create database
+              </Link>
+            </div>
+          ) : undefined
+        }
+        description="Create databases and review sizes, schemas, live queries, and quotas."
         eyebrow="DATA"
         title={page === "new" ? "Create a database" : "Databases"}
       />
       <ErrorNotice error={error} onRetry={() => void refresh()} />
       <ErrorNotice error={deleteTarget ? null : actionError} />
       {message ? <Notice tone="info">{message}</Notice> : null}
+
       {page === "new" ? (
         <>
-          <Link href="/databases">← Back to databases</Link>
+          <Link className={styles.backLink} href="/databases">
+            ← Back to databases
+          </Link>
           <Panel
             title="Create a database"
             detail="Names use lowercase letters, numbers, and underscores."
@@ -144,9 +178,6 @@ export function LiveDatabasesScreen({ page = "list" }: { page?: "list" | "new" }
         </>
       ) : (
         <>
-          <Link className={styles.primaryButton} href="/databases/new">
-            Create database
-          </Link>
           {status ? (
             <Panel
               title="Storage capacity"
@@ -162,12 +193,35 @@ export function LiveDatabasesScreen({ page = "list" }: { page?: "list" | "new" }
               />
             </Panel>
           ) : null}
+
+          <div className={styles.tableToolbar}>
+            <div className={styles.searchInputWrap}>
+              <Icon name="search" size={14} />
+              <input
+                aria-label="Filter databases"
+                className={styles.searchInput}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search databases..."
+                value={searchQuery}
+              />
+            </div>
+            <label className={styles.filterToggle}>
+              <input
+                checked={showSystem}
+                className={styles.filterCheckbox}
+                onChange={(e) => setShowSystem(e.target.checked)}
+                type="checkbox"
+              />
+              Show system databases
+            </label>
+          </div>
+
           <Panel
             title="All databases"
             detail={
               loading
                 ? "Refreshing inventory…"
-                : `${databases.length} database${databases.length === 1 ? "" : "s"}`
+                : `${filteredDatabases.length} database${filteredDatabases.length === 1 ? "" : "s"}`
             }
           >
             {loading && !databases.length ? (
@@ -179,17 +233,24 @@ export function LiveDatabasesScreen({ page = "list" }: { page?: "list" | "new" }
             ) : (
               <DatabaseTable
                 busyName={busyName}
-                databases={databases}
+                databases={filteredDatabases}
+                emptyMessage={
+                  searchQuery.trim()
+                    ? `No databases match your search “${searchQuery}”.`
+                    : undefined
+                }
+                onConnect={(dbName) => setConnectDb(dbName)}
                 onRequestDelete={requestDatabaseDeletion}
               />
             )}
           </Panel>
           <Notice tone="info">
-            Postgres remains private on the VPS. Database access is granted through the Access &amp;
-            roles page.
+            Click any database name to open its deep workspace (Schema &amp; Tables, Live Queries,
+            Quotas, and Backups).
           </Notice>
         </>
       )}
+
       {deleteTarget ? (
         <DeleteDatabaseDialog
           busy={busyName === deleteTarget.name}
@@ -199,6 +260,12 @@ export function LiveDatabasesScreen({ page = "list" }: { page?: "list" | "new" }
           onConfirm={() => void confirmDatabaseDeletion(deleteTarget)}
         />
       ) : null}
+
+      <ConnectionModal
+        database={connectDb || "postgres"}
+        isOpen={Boolean(connectDb)}
+        onClose={() => setConnectDb(null)}
+      />
     </div>
   );
 }

@@ -1,0 +1,146 @@
+.editorContainer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  font-size: 13px;
+}
+
+.editorToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--line);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.toolbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shortcutHint {
+  color: var(--ink-muted);
+  font-size: 11px;
+}
+
+.toolButton {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: all 0.15s ease;
+}
+
+.toolButton:hover {
+  background: var(--surface-raised);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.editorArea {
+  position: relative;
+  display: flex;
+  min-height: 180px;
+  max-height: 520px;
+  overflow: auto;
+  background: var(--surface);
+}
+
+.lineNumbers {
+  flex-shrink: 0;
+  padding: 12px 8px 12px 12px;
+  text-align: right;
+  color: var(--ink-muted);
+  user-select: none;
+  border-right: 1px solid var(--line);
+  background: var(--surface-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  min-width: 36px;
+}
+
+.textareaWrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.highlightLayer {
+  position: absolute;
+  inset: 0;
+  padding: 12px 14px;
+  margin: 0;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+  pointer-events: none;
+  font-family: inherit;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.textarea {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 180px;
+  padding: 12px 14px;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+  font-family: inherit;
+  font-size: 13px;
+  resize: none;
+  outline: none;
+  tab-size: 2;
+}
+
+/* Syntax colors */
+.kw {
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.str {
+  color: var(--green);
+}
+
+.num {
+  color: var(--amber);
+}
+
+.comment {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.func {
+  color: var(--ink);
+  font-weight: 600;
+}

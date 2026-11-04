@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { OverviewScreen } from "@/components/dashboard/screens";
+import { LiveOverviewScreen } from "@/components/dashboard/live-screens";
 
-export const metadata: Metadata = { title: "Overview" };
+export const metadata: Metadata = { title: "Overview · Nanogres" };
 
 export default function OverviewPage() {
-  return <OverviewScreen mode="live" />;
+  return <LiveOverviewScreen />;
 }

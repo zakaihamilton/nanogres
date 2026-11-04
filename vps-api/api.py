@@ -3,10 +3,13 @@
 
 from __future__ import annotations
 
+import csv
 import hmac
+import io
 import json
 import os
 import re
+import selectors
 import shutil
 import subprocess
 import sys
@@ -471,6 +474,450 @@ def record_event(action: str, detail: str, actor: str | None = None) -> None:
         with EVENTS_FILE.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, separators=(",", ":")) + "\n")
         os.chmod(EVENTS_FILE, 0o600)
+
+
+def inspect_user_query(sql: str) -> list[str]:
+    """Return unquoted SQL words and reject scripts with more than one statement."""
+    words: list[str] = []
+    index = 0
+    statement_ended = False
+    length = len(sql)
+
+    while index < length:
+        char = sql[index]
+
+        if char.isspace():
+            index += 1
+            continue
+        if sql.startswith("--", index):
+            newline = sql.find("\n", index + 2)
+            index = length if newline < 0 else newline + 1
+            continue
+        if sql.startswith("/*", index):
+            depth = 1
+            index += 2
+            while index < length and depth:
+                if sql.startswith("/*", index):
+                    depth += 1
+                    index += 2
+                elif sql.startswith("*/", index):
+                    depth -= 1
+                    index += 2
+                else:
+                    index += 1
+            if depth:
+                raise ApiError(400, "Query contains an unterminated comment.")
+            continue
+        if char == ";":
+            statement_ended = True
+            index += 1
+            continue
+        if statement_ended:
+            raise ApiError(400, "Run one SQL statement at a time.")
+
+        if char == "'":
+            escape_string = index > 0 and sql[index - 1] in "Ee" and (
+                index < 2 or not re.match(r"[A-Za-z0-9_$]", sql[index - 2])
+            )
+            index += 1
+            while index < length:
+                if escape_string and sql[index] == "\\":
+                    index += 2
+                    continue
+                if sql[index] == "'":
+                    if index + 1 < length and sql[index + 1] == "'":
+                        index += 2
+                    else:
+                        index += 1
+                        break
+                else:
+                    index += 1
+            else:
+                raise ApiError(400, "Query contains an unterminated string.")
+            continue
+
+        if char == '"':
+            index += 1
+            while index < length:
+                if sql[index] == '"':
+                    if index + 1 < length and sql[index + 1] == '"':
+                        index += 2
+                    else:
+                        index += 1
+                        break
+                else:
+                    index += 1
+            else:
+                raise ApiError(400, "Query contains an unterminated identifier.")
+            continue
+
+        if char == "$":
+            delimiter = re.match(r"\$[A-Za-z_][A-Za-z_0-9]*\$|\$\$", sql[index:])
+            if delimiter:
+                marker = delimiter.group(0)
+                end = sql.find(marker, index + len(marker))
+                if end < 0:
+                    raise ApiError(400, "Query contains an unterminated dollar-quoted string.")
+                index = end + len(marker)
+                continue
+
+        word = re.match(r"[A-Za-z_][A-Za-z_0-9]*", sql[index:])
+        if word:
+            words.append(word.group(0).upper())
+            index += len(word.group(0))
+            continue
+
+        index += 1
+
+    if not words:
+        raise ApiError(400, "Query cannot be empty.")
+    return words
+
+
+def complete_csv_prefix(output: str) -> str:
+    """Keep only complete CSV records when output was cut at the byte limit."""
+    in_quotes = False
+    last_record_end = 0
+    index = 0
+    while index < len(output):
+        char = output[index]
+        if char == '"':
+            if in_quotes and index + 1 < len(output) and output[index + 1] == '"':
+                index += 2
+                continue
+            in_quotes = not in_quotes
+        elif char == "\n" and not in_quotes:
+            last_record_end = index + 1
+        index += 1
+    return output[:last_record_end]
+
+
+def run_user_query(
+    sql: str,
+    database: str = "postgres",
+    read_only: bool = False,
+    timeout_seconds: int = 15,
+    max_rows: int = 100,
+) -> dict[str, object]:
+    if not NAME_PATTERN.fullmatch(database) and database not in {"postgres", "template0", "template1"}:
+        raise ApiError(400, "Invalid database name.")
+    if not sql or not sql.strip():
+        raise ApiError(400, "Query cannot be empty.")
+
+    words = inspect_user_query(sql)
+    if words[0] == "COPY":
+        raise ApiError(400, "COPY commands are not supported in the SQL editor.")
+
+    timeout_seconds = min(60, max(1, int(timeout_seconds)))
+    max_rows = min(1000, max(1, int(max_rows)))
+    timeout_ms = timeout_seconds * 1000
+
+    if read_only:
+        if words[0] not in {"SELECT", "WITH", "VALUES", "SHOW", "EXPLAIN"}:
+            raise ApiError(400, "Read-only mode accepts SELECT, WITH, VALUES, SHOW, or EXPLAIN queries.")
+        if any(word in {"INSERT", "UPDATE", "DELETE", "MERGE", "CALL", "DO", "COPY"} for word in words):
+            raise ApiError(400, "Read-only mode cannot execute data-changing statements.")
+        full_sql = f"BEGIN READ ONLY;\n{sql}"
+    else:
+        full_sql = sql
+
+    max_output_bytes = 4 * 1024 * 1024
+    command = [
+        pg_client("psql"),
+        "--no-psqlrc",
+        "--quiet",
+        "--csv",
+        "--set=ON_ERROR_STOP=1",
+        f"--set=FETCH_COUNT={max_rows + 1}",
+        "--dbname",
+        database,
+        "--command",
+        full_sql,
+    ]
+    env = pg_client_env("10")
+    env["PGOPTIONS"] = f"-c statement_timeout={timeout_ms}"
+    start_time = time.perf_counter()
+    try:
+        with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as stderr_file:
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=stderr_file,
+                env=env,
+                bufsize=0,
+            )
+            assert process.stdout is not None
+            output_bytes = bytearray()
+            output_truncated = False
+            deadline = time.monotonic() + timeout_seconds + 5
+
+            with selectors.DefaultSelector() as selector:
+                selector.register(process.stdout, selectors.EVENT_READ)
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        process.kill()
+                        process.wait()
+                        raise ApiError(504, f"Query exceeded execution timeout ({timeout_seconds}s).")
+
+                    ready = selector.select(timeout=min(remaining, 1.0))
+                    if not ready:
+                        if process.poll() is not None:
+                            continue
+                        continue
+
+                    chunk = os.read(process.stdout.fileno(), min(65536, max_output_bytes + 1 - len(output_bytes)))
+                    if not chunk:
+                        break
+                    output_bytes.extend(chunk)
+                    if len(output_bytes) > max_output_bytes:
+                        output_truncated = True
+                        process.kill()
+                        break
+
+            process.wait()
+            stderr_file.seek(0)
+            stderr = stderr_file.read().strip()
+    except ApiError:
+        raise
+    except OSError as error:
+        raise ApiError(503, "Nanogres could not start PostgreSQL query execution.") from error
+
+    duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+
+    if process.returncode != 0 and not output_truncated:
+        clean_err = re.sub(r"^psql:[^:]+:[0-9]+:\s*", "", stderr)
+        raise ApiError(400, clean_err if clean_err else "Query execution failed.")
+
+    output = bytes(output_bytes[:max_output_bytes]).decode("utf-8", errors="replace")
+    if output_truncated:
+        output = complete_csv_prefix(output)
+
+    if not output.strip():
+        return {
+            "columns": [],
+            "rows": [],
+            "rowCount": 0,
+            "durationMs": duration_ms,
+            "commandTag": "SUCCESS",
+            "truncated": output_truncated,
+        }
+
+    try:
+        reader = csv.reader(io.StringIO(output))
+        columns = next(reader, [])
+        data_rows: list[list[str]] = []
+        row_truncated = False
+        for row in reader:
+            if len(data_rows) >= max_rows:
+                row_truncated = True
+                break
+            data_rows.append(row)
+        return {
+            "columns": columns,
+            "rows": data_rows,
+            "rowCount": len(data_rows),
+            "durationMs": duration_ms,
+            "truncated": output_truncated or row_truncated,
+        }
+    except csv.Error as error:
+        raise ApiError(413, "Query output contains a CSV field that is too large.") from error
+
+
+def get_database_schema(database: str) -> dict[str, object]:
+    if not NAME_PATTERN.fullmatch(database) and database != "postgres":
+        raise ApiError(400, "Invalid database name.")
+    schema_sql = """
+    SELECT json_build_object(
+      'schemas', (
+        SELECT COALESCE(json_agg(row_to_json(s)), '[]'::json)
+        FROM (
+          SELECT n.nspname AS name,
+                 (
+                   SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.name), '[]'::json)
+                   FROM (
+                     SELECT c.relname AS name,
+                            c.relkind AS kind,
+                            c.reltuples::bigint AS "estimatedRows",
+                            pg_total_relation_size(c.oid) AS "totalSizeBytes",
+                            pg_relation_size(c.oid) AS "tableSizeBytes",
+                            pg_indexes_size(c.oid) AS "indexSizeBytes",
+                            (
+                              SELECT COALESCE(json_agg(row_to_json(col) ORDER BY col."ordinalPosition"), '[]'::json)
+                              FROM (
+                                SELECT a.attname AS name,
+                                       pg_catalog.format_type(a.atttypid, a.atttypmod) AS "type",
+                                       NOT a.attnotnull AS nullable,
+                                       pg_get_expr(ad.adbin, ad.adrelid) AS "defaultValue",
+                                       a.attnum AS "ordinalPosition",
+                                       EXISTS (
+                                         SELECT 1 FROM pg_constraint con
+                                         WHERE con.conrelid = c.oid AND con.contype = 'p' AND a.attnum = ANY(con.conkey)
+                                       ) AS "isPrimaryKey",
+                                       EXISTS (
+                                         SELECT 1 FROM pg_constraint con
+                                         WHERE con.conrelid = c.oid AND con.contype = 'f' AND a.attnum = ANY(con.conkey)
+                                       ) AS "isForeignKey"
+                                FROM pg_attribute a
+                                LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
+                                WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+                              ) col
+                            ) AS columns,
+                            (
+                              SELECT COALESCE(json_agg(row_to_json(idx) ORDER BY idx.name), '[]'::json)
+                              FROM (
+                                SELECT i.relname AS name,
+                                       pg_get_indexdef(i.oid) AS definition,
+                                       pg_relation_size(i.oid) AS "sizeBytes",
+                                       ix.indisunique AS "isUnique",
+                                       ix.indisprimary AS "isPrimary"
+                                FROM pg_index ix
+                                JOIN pg_class i ON i.oid = ix.indexrelid
+                                WHERE ix.indrelid = c.oid
+                              ) idx
+                            ) AS indexes
+                     FROM pg_class c
+                     WHERE c.relnamespace = n.oid AND c.relkind IN ('r', 'v', 'm', 'p')
+                   ) t
+                 ) AS tables
+          FROM pg_namespace n
+          WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+          ORDER BY n.nspname
+        ) s
+      )
+    )::text
+    """
+    data = json_query(schema_sql, database=database)
+    return data if isinstance(data, dict) else {"schemas": []}
+
+
+def execute_ddl(database: str, payload: dict[str, object], actor: str | None = None) -> dict[str, object]:
+    if not NAME_PATTERN.fullmatch(database) and database != "postgres":
+        raise ApiError(400, "Invalid database name.")
+    op = str(payload.get("operation", ""))
+    if op == "create_table":
+        table_name = valid_name(payload.get("name"), "Table name")
+        columns_data = payload.get("columns")
+        if not isinstance(columns_data, list) or not columns_data:
+            raise ApiError(400, "Columns list cannot be empty.")
+        col_defs = []
+        pk_cols = []
+        for col in columns_data:
+            if not isinstance(col, dict):
+                continue
+            col_name = valid_name(col.get("name"), "Column name")
+            col_type = str(col.get("type", "text")).strip().upper()
+            if not re.fullmatch(r"^[A-Z0-9_ ()]+$", col_type):
+                raise ApiError(400, "Invalid column type.")
+            nullable = bool(col.get("nullable", True))
+            definition = f"{quote_identifier(col_name)} {col_type}"
+            if not nullable:
+                definition += " NOT NULL"
+            if col.get("primaryKey"):
+                pk_cols.append(quote_identifier(col_name))
+            col_defs.append(definition)
+        if pk_cols:
+            col_defs.append(f"PRIMARY KEY ({', '.join(pk_cols)})")
+        sql = f"CREATE TABLE {quote_identifier(table_name)} (\n  " + ",\n  ".join(col_defs) + "\n);"
+        run_sql(sql, database=database)
+        record_event("table.created", f"Table {table_name} created in {database}.", actor)
+        return {"created": True, "table": table_name}
+
+    elif op == "add_column":
+        table_name = valid_name(payload.get("table"), "Table name")
+        col_name = valid_name(payload.get("column"), "Column name")
+        col_type = str(payload.get("type", "text")).strip().upper()
+        if not re.fullmatch(r"^[A-Z0-9_ ()]+$", col_type):
+            raise ApiError(400, "Invalid column type.")
+        nullable = bool(payload.get("nullable", True))
+        sql = f"ALTER TABLE {quote_identifier(table_name)} ADD COLUMN {quote_identifier(col_name)} {col_type}"
+        if not nullable:
+            sql += " NOT NULL"
+        run_sql(sql, database=database)
+        record_event("column.added", f"Column {col_name} added to {table_name} in {database}.", actor)
+        return {"added": True, "column": col_name}
+
+    elif op == "create_index":
+        table_name = valid_name(payload.get("table"), "Table name")
+        idx_name = valid_name(payload.get("name"), "Index name")
+        cols = payload.get("columns")
+        if not isinstance(cols, list) or not cols:
+            raise ApiError(400, "Index columns cannot be empty.")
+        quoted_cols = [quote_identifier(valid_name(c, "Column")) for c in cols]
+        unique = "UNIQUE " if payload.get("unique") else ""
+        idx_type = str(payload.get("type", "btree")).lower()
+        if idx_type not in {"btree", "hash", "gin", "gist"}:
+            idx_type = "btree"
+        sql = f"CREATE {unique}INDEX {quote_identifier(idx_name)} ON {quote_identifier(table_name)} USING {idx_type} ({', '.join(quoted_cols)});"
+        run_sql(sql, database=database)
+        record_event("index.created", f"Index {idx_name} created on {table_name} in {database}.", actor)
+        return {"created": True, "index": idx_name}
+
+    elif op == "maintenance":
+        action = str(payload.get("action", "")).lower()
+        if action not in {"vacuum", "vacuum_full", "analyze", "reindex"}:
+            raise ApiError(400, "Invalid maintenance action.")
+        table = payload.get("table")
+        if table:
+            table_name = valid_name(table, "Table name")
+            if action == "vacuum":
+                sql = f"VACUUM {quote_identifier(table_name)}"
+            elif action == "vacuum_full":
+                sql = f"VACUUM FULL {quote_identifier(table_name)}"
+            elif action == "analyze":
+                sql = f"ANALYZE {quote_identifier(table_name)}"
+            else:
+                sql = f"REINDEX TABLE {quote_identifier(table_name)}"
+        else:
+            if action == "vacuum":
+                sql = "VACUUM"
+            elif action == "vacuum_full":
+                sql = "VACUUM FULL"
+            elif action == "analyze":
+                sql = "ANALYZE"
+            else:
+                sql = f"REINDEX DATABASE {quote_identifier(database)}"
+        run_sql(sql, database=database)
+        record_event(f"database.{action}", f"{action.upper()} executed in {database}.", actor)
+        return {"success": True, "action": action}
+
+    raise ApiError(400, f"Unsupported operation: {op}")
+
+
+def get_active_queries(database: str | None = None) -> list[dict[str, object]]:
+    where_clause = "WHERE a.pid <> pg_backend_pid() AND a.state IS NOT NULL"
+    if database and NAME_PATTERN.fullmatch(database):
+        where_clause += f" AND a.datname = {quote_literal(database)}"
+    sql = f"""
+    SELECT COALESCE(json_agg(row_to_json(q) ORDER BY q."durationSeconds" DESC), '[]'::json)::text
+    FROM (
+      SELECT a.pid,
+             a.usename AS "userName",
+             a.datname AS "database",
+             COALESCE(a.client_addr::text, 'local') AS "clientAddress",
+             COALESCE(a.application_name, '') AS "applicationName",
+             a.state,
+             a.query_start AS "queryStart",
+             COALESCE(ROUND(EXTRACT(EPOCH FROM (clock_timestamp() - a.query_start))::numeric, 2), 0) AS "durationSeconds",
+             a.query,
+             a.wait_event_type AS "waitEventType",
+             a.wait_event AS "waitEvent"
+      FROM pg_stat_activity a
+      {where_clause}
+    ) q
+    """
+    rows = json_query(sql)
+    return rows if isinstance(rows, list) else []
+
+
+def terminate_query(pid: int, signal: str = "cancel", actor: str | None = None) -> dict[str, object]:
+    if not isinstance(pid, int) or pid <= 0:
+        raise ApiError(400, "Invalid process ID.")
+    func = "pg_cancel_backend" if signal == "cancel" else "pg_terminate_backend"
+    res = run_sql(f"SELECT {func}({pid})")
+    success = res == "t"
+    record_event(f"query.{signal}", f"{signal.capitalize()} sent to backend pid {pid}.", actor)
+    return {"success": success, "pid": pid, "action": signal}
 
 
 def postgres_status() -> dict[str, object]:
@@ -1004,15 +1451,15 @@ class Handler(BaseHTTPRequestHandler):
         actor = self.headers.get("X-Nanogres-Actor", "")
         return actor if ACTOR_PATTERN.fullmatch(actor) else None
 
-    def _body(self) -> dict[str, object]:
+    def _body(self, max_length: int = 8192) -> dict[str, object]:
         if self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
             raise ApiError(415, "Content-Type must be application/json.")
         try:
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError as error:
             raise ApiError(400, "Invalid request body.") from error
-        if length <= 0 or length > 8192:
-            raise ApiError(413, "Request body must be between 1 and 8192 bytes.")
+        if length <= 0 or length > max_length:
+            raise ApiError(413, f"Request body must be between 1 and {max_length} bytes.")
         try:
             value = json.loads(self.rfile.read(length))
         except (json.JSONDecodeError, UnicodeDecodeError) as error:
@@ -1054,6 +1501,41 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {"backups": list_backups()})
             elif path == "/v1/activity":
                 self._json(200, {"events": list_activity()})
+            elif path == "/v1/activity/queries":
+                self._json(200, {"queries": get_active_queries()})
+            elif path.startswith("/v1/databases/") and path.endswith("/schema"):
+                encoded_name = path.removeprefix("/v1/databases/").removesuffix("/schema")
+                if "/" in encoded_name:
+                    raise ApiError(404, "Route not found.")
+                self._json(200, get_database_schema(unquote(encoded_name)))
+            elif path.startswith("/v1/databases/") and path.endswith("/queries"):
+                encoded_name = path.removeprefix("/v1/databases/").removesuffix("/queries")
+                if "/" in encoded_name:
+                    raise ApiError(404, "Route not found.")
+                self._json(200, {"queries": get_active_queries(unquote(encoded_name))})
+            elif path == "/v1/events/stream":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache, no-transform")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("X-Accel-Buffering", "no")
+                self.end_headers()
+                while True:
+                    try:
+                        status = postgres_status()
+                        payload = {
+                            "type": "telemetry",
+                            "status": status,
+                            "activity": list_activity(6),
+                            "timestamp": time.time(),
+                        }
+                        self.wfile.write(
+                            f"event: telemetry\ndata: {json.dumps(payload)}\n\n".encode("utf-8")
+                        )
+                        self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError):
+                        return
+                    time.sleep(5)
             elif path.startswith("/v1/backups/"):
                 query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
                 self._download_backup(path.removeprefix("/v1/backups/"), query)
@@ -1069,8 +1551,25 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             path = urlsplit(self.path).path
-            body = self._body()
             actor = self._actor()
+            if path == "/v1/query":
+                body = self._body(max_length=65536)
+                db = str(body.get("database", "postgres"))
+                sql = str(body.get("sql", ""))
+                read_only = body.get("readOnly", False)
+                if not isinstance(read_only, bool):
+                    raise ApiError(400, "readOnly must be a boolean.")
+                try:
+                    timeout = int(body.get("timeoutSeconds", 15))
+                    max_rows = int(body.get("maxRows", 100))
+                except (TypeError, ValueError) as error:
+                    raise ApiError(400, "timeoutSeconds and maxRows must be integers.") from error
+                result = run_user_query(sql, database=db, read_only=read_only, timeout_seconds=timeout, max_rows=max_rows)
+                record_event("query.executed", f"Query executed on {db}.", actor)
+                self._json(200, result)
+                return
+
+            body = self._body()
             if path == "/v1/databases":
                 name = valid_name(body.get("name"), "Database name")
                 with quota_policy_lock:
@@ -1117,6 +1616,19 @@ class Handler(BaseHTTPRequestHandler):
                 upload_id = path.removeprefix("/v1/restore-uploads/").removesuffix("/complete")
                 restored = restore_uploaded_dump(upload_id, body.get("database"), actor)
                 self._json(201, restored)
+            elif path.startswith("/v1/databases/") and path.endswith("/ddl"):
+                encoded_name = path.removeprefix("/v1/databases/").removesuffix("/ddl")
+                if "/" in encoded_name:
+                    raise ApiError(404, "Route not found.")
+                res = execute_ddl(unquote(encoded_name), body, actor)
+                self._json(200, res)
+            elif path.startswith("/v1/activity/queries/") and path.endswith("/terminate"):
+                pid_str = path.removeprefix("/v1/activity/queries/").removesuffix("/terminate")
+                if not pid_str.isdigit():
+                    raise ApiError(400, "Invalid process ID.")
+                signal = str(body.get("action", "cancel"))
+                res = terminate_query(int(pid_str), signal=signal, actor=actor)
+                self._json(200, res)
             else:
                 self._json(404, {"error": "Route not found."})
         except ApiError as error:

@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useMemo, type FormEvent } from "react";
 import Link from "next/link";
 import { Select } from "@/components/ui/select";
+import { ConnectionModal } from "@/components/ui/connection-modal";
+import { nanogresToast } from "@/components/ui/toast";
+import { Icon } from "./icons";
 import {
   type Role,
   apiRequest,
@@ -29,7 +32,8 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
   } = useDatabases();
   const userDatabases = databases.filter((item) => !item.systemDatabase);
   const rolesQuery = useApiData<{ roles: Role[] }>("/api/nanogres/roles");
-  const roles = rolesQuery.data?.roles ?? [];
+  const rawRoles = rolesQuery.data?.roles;
+
   const [name, setName] = useState("");
   const [database, setDatabase] = useState("");
   const selectedDatabase = database || userDatabases[0]?.name || "";
@@ -38,6 +42,17 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  // Search & connect modal
+  const [searchQuery, setSearchQuery] = useState("");
+  const [connectRole, setConnectRole] = useState<string | null>(null);
+
+  const filteredRoles = useMemo(() => {
+    if (!rawRoles) return [];
+    if (!searchQuery.trim()) return rawRoles;
+    const q = searchQuery.toLowerCase().trim();
+    return rawRoles.filter((r) => r.name.toLowerCase().includes(q));
+  }, [rawRoles, searchQuery]);
 
   async function createRole(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,12 +67,14 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
       });
       setName("");
       setPassword("");
-      setMessage(
-        `Role “${name}” created for ${selectedDatabase}. Store the password safely; Nanogres will not show it again.`,
-      );
+      const successMsg = `Role “${name}” created for ${selectedDatabase}. Store the password safely; Nanogres will not show it again.`;
+      setMessage(successMsg);
+      nanogresToast.success(`Role “${name}” created successfully`);
       await rolesQuery.refresh();
     } catch (cause) {
-      setActionError(cause instanceof Error ? cause.message : "Could not create role.");
+      const err = cause instanceof Error ? cause.message : "Could not create role.";
+      setActionError(err);
+      nanogresToast.error(err);
     } finally {
       setSaving(false);
     }
@@ -66,6 +83,13 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
   return (
     <div className={styles.screen}>
       <PageHeader
+        action={
+          page === "list" ? (
+            <Link className={styles.primaryButton} href="/access/new">
+              Create role
+            </Link>
+          ) : undefined
+        }
         description="Create least-privilege Postgres login roles for individual databases."
         eyebrow="SECURITY"
         title={page === "new" ? "Create a database role" : "Access & roles"}
@@ -85,7 +109,9 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
       </Notice>
       {page === "new" ? (
         <>
-          <Link href="/access">← Back to login roles</Link>
+          <Link className={styles.backLink} href="/access">
+            ← Back to login roles
+          </Link>
           <Panel
             title="Create a database role"
             detail="Passwords are sent over HTTPS, stored by Postgres as SCRAM hashes, and never displayed again."
@@ -99,49 +125,53 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
                 <div className={styles.field}>
                   <label htmlFor="role-name">Role name</label>
                   <input
+                    autoComplete="off"
                     id="role-name"
                     maxLength={63}
                     minLength={2}
                     onChange={(event) => setName(event.target.value)}
                     pattern="[a-z][a-z0-9_]{1,62}"
-                    placeholder="my_app_user"
+                    placeholder="app_service"
                     required
                     value={name}
                   />
+                  <small>Lowercase letters, numbers, and underscores.</small>
                 </div>
                 <div className={styles.field}>
                   <label htmlFor="role-database">Database</label>
-                  <Select
-                    id="role-database"
-                    onChange={setDatabase}
-                    required
-                    value={selectedDatabase}
-                  >
+                  <Select id="role-database" onChange={setDatabase} value={selectedDatabase}>
                     {userDatabases.map((item) => (
                       <option key={item.name} value={item.name}>
                         {item.name}
                       </option>
                     ))}
                   </Select>
+                  <small>The role can connect only to this database.</small>
                 </div>
                 <div className={styles.field}>
                   <label htmlFor="role-access">Access level</label>
                   <Select
                     id="role-access"
-                    onChange={(value) => setAccess(value as "readwrite" | "readonly")}
+                    onChange={(val) => setAccess(val as "readwrite" | "readonly")}
                     value={access}
                   >
                     <option value="readwrite">Read and write</option>
-                    <option value="readonly">Read only</option>
+                    <option value="readonly">Read-only</option>
                   </Select>
+                  <small>
+                    {access === "readwrite"
+                      ? "Can query, insert, update, and delete in this database's public schema."
+                      : "Can query existing tables in this database's public schema."}
+                  </small>
                 </div>
                 <div className={styles.field}>
-                  <label htmlFor="role-password">Initial password</label>
+                  <label htmlFor="role-password">Password</label>
                   <input
                     autoComplete="new-password"
                     id="role-password"
                     minLength={16}
                     onChange={(event) => setPassword(event.target.value)}
+                    placeholder="At least 16 characters"
                     required
                     type="password"
                     value={password}
@@ -163,18 +193,28 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
         </>
       ) : (
         <>
-          <Link className={styles.primaryButton} href="/access/new">
-            Create role
-          </Link>
+          <div className={styles.tableToolbar}>
+            <div className={styles.searchInputWrap}>
+              <Icon name="search" size={14} />
+              <input
+                aria-label="Search roles"
+                className={styles.searchInput}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search login roles..."
+                value={searchQuery}
+              />
+            </div>
+          </div>
+
           <Panel
             title="Login roles"
-            detail={`${roles.length} Postgres login role${roles.length === 1 ? "" : "s"}`}
+            detail={`${filteredRoles.length} Postgres login role${filteredRoles.length === 1 ? "" : "s"}`}
           >
             {rolesQuery.loading && !rolesQuery.data ? (
               <Loading />
             ) : rolesQuery.error && !rolesQuery.data ? (
               <Empty>Nanogres could not load database roles. Use Try again above to retry.</Empty>
-            ) : roles.length ? (
+            ) : filteredRoles.length ? (
               <div aria-label="Login roles" className={styles.tableWrap} role="region" tabIndex={0}>
                 <table>
                   <thead>
@@ -182,10 +222,11 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
                       <th scope="col">Role</th>
                       <th scope="col">Privileges</th>
                       <th scope="col">Expires</th>
+                      <th scope="col">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {roles.map((role) => (
+                    {filteredRoles.map((role) => (
                       <tr key={role.name}>
                         <td>
                           <span className={styles.databaseName}>{role.name}</span>
@@ -204,17 +245,37 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
                                 .join(" · ") || "Database grants"}
                         </td>
                         <td>{role.validUntil ? formatDate(role.validUntil) : "Never"}</td>
+                        <td>
+                          <button
+                            className={styles.rowAction}
+                            onClick={() => setConnectRole(role.name)}
+                            type="button"
+                          >
+                            Connect snippet
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <Empty>No login roles found.</Empty>
+              <Empty>
+                {searchQuery.trim()
+                  ? `No login roles match your search “${searchQuery}”.`
+                  : "No login roles found."}
+              </Empty>
             )}
           </Panel>
         </>
       )}
+
+      <ConnectionModal
+        database={userDatabases[0]?.name || "postgres"}
+        isOpen={Boolean(connectRole)}
+        onClose={() => setConnectRole(null)}
+        user={connectRole || "postgres"}
+      />
     </div>
   );
 }

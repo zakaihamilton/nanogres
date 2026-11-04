@@ -3,6 +3,8 @@ import {
   getAppOrigin,
   getCurrentPerministerSession,
   getNanogresWorkspaceContext,
+  ORGANIZATION_COOKIE,
+  WORKSPACE_COOKIE,
 } from "@/lib/perminister-auth";
 
 export const runtime = "nodejs";
@@ -15,9 +17,20 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   const session = await getCurrentPerministerSession();
   if (!session) return NextResponse.json({ error: "Sign in to continue." }, { status: 401 });
-  const context = getNanogresWorkspaceContext(session);
+
+  let body: { organizationId?: string; workspaceId?: string } = {};
+  try {
+    body = (await request.json()) as { organizationId?: string; workspaceId?: string };
+  } catch {
+    // empty body is fine
+  }
+
+  const context = await getNanogresWorkspaceContext(session);
   if (context instanceof Response) return context;
-  const { config, organizationId, workspaceId } = context;
+
+  const organizationId = body.organizationId || context.organizationId;
+  const workspaceId = body.workspaceId || context.workspaceId;
+  const { config } = context;
 
   try {
     const response = await fetch(`${config.baseUrl}/api/auth/consumer/workspaces`, {
@@ -33,7 +46,25 @@ export async function POST(request: NextRequest): Promise<Response> {
       signal: AbortSignal.timeout(6_000),
     });
     if (response.ok) {
-      return NextResponse.json({ granted: true }, { headers: { "Cache-Control": "no-store" } });
+      const result = NextResponse.json(
+        { granted: true, workspaceId, organizationId },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+      result.cookies.set(WORKSPACE_COOKIE, workspaceId, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+      });
+      result.cookies.set(ORGANIZATION_COOKIE, organizationId, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+      });
+      return result;
     }
     if (response.status === 401 || response.status === 403) {
       return NextResponse.json(

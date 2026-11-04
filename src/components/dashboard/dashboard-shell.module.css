@@ -32,6 +32,7 @@
 .sidebar {
   position: sticky;
   top: 0;
+  z-index: 50;
   display: flex;
   height: 100vh;
   flex-direction: column;
@@ -153,7 +154,9 @@
   font-size: 13px;
   font-weight: 540;
   text-decoration: none;
+  cursor: pointer;
   transition:
+    transform 0.12s cubic-bezier(0.16, 1, 0.3, 1),
     background-color 140ms ease,
     color 140ms ease;
 }
@@ -161,6 +164,11 @@
 .navItem:hover {
   background: var(--surface-muted);
   color: var(--ink);
+  transform: translateX(2px);
+}
+
+.navItem:active {
+  transform: scale(0.98);
 }
 
 .navItem[aria-disabled="true"] {
@@ -274,11 +282,20 @@
 
 .signOut {
   cursor: pointer;
+  transition:
+    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .signOut:hover {
   background: var(--surface-muted);
   color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.signOut:active {
+  transform: translateY(0) scale(0.92);
 }
 
 .signOut:focus-visible {
@@ -326,6 +343,30 @@
   font-weight: 730;
 }
 
+.crumbLink {
+  color: var(--ink-muted);
+  text-decoration: none;
+  font-size: 10px;
+  font-weight: 730;
+  letter-spacing: 0.09em;
+  transition:
+    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+    color 0.15s ease;
+}
+
+.crumbLink:hover {
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.crumbLink:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.crumbSep {
+  color: var(--line-strong);
+}
+
 .previewTag {
   margin-left: 5px;
   padding: 4px 7px;
@@ -338,7 +379,46 @@
 }
 
 .topbarActions {
-  gap: 22px;
+  gap: 16px;
+}
+
+.searchTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 10px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.searchTrigger:hover {
+  background: var(--surface-raised);
+  border-color: var(--line-strong);
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.searchTrigger:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.cmdKey {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--ink-muted);
 }
 
 .apiStatus {

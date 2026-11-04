@@ -33,15 +33,16 @@ async function handle(request: NextRequest, context: RouteParams): Promise<Respo
 
   let body: BodyInit | undefined;
   if (request.method === "POST") {
+    const maxPostSize = segments[0] === "query" ? 65536 : 8192;
     const length = Number(request.headers.get("content-length") ?? 0);
-    if (length > 8192)
+    if (length > maxPostSize)
       return Response.json({ error: "Request body is too large." }, { status: 413 });
     const contentType = request.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
     if (contentType !== "application/json") {
       return Response.json({ error: "Content-Type must be application/json." }, { status: 415 });
     }
     body = await request.text();
-    if (new TextEncoder().encode(body).byteLength > 8192) {
+    if (new TextEncoder().encode(body).byteLength > maxPostSize) {
       return Response.json({ error: "Request body is too large." }, { status: 413 });
     }
     try {
@@ -96,7 +97,7 @@ async function handle(request: NextRequest, context: RouteParams): Promise<Respo
       : request.method === "POST"
         ? "application/json"
         : undefined;
-  const upstream = await callNanogresApi(upstreamPath, auth.session, {
+  const upstream = await callNanogresApi(upstreamPath, auth.session, auth.workspace, {
     method: request.method,
     ...(body === undefined
       ? {}

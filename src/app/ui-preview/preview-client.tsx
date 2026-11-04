@@ -280,7 +280,7 @@ export default function PreviewClient() {
   return (
     <div className={styles.page}>
       <PreviewToolbar
-        note="Synthetic data only. Some actions simulate a result; others are disabled. Nothing reaches the VPS."
+        note="Synthetic data only. Some actions simulate a result; others are disabled. Nothing reaches the system."
         subtitle="Nanogres screens · local preview · no sign-in required"
         theme={toolbarTheme}
         utilities={<ThemeControl />}
@@ -299,8 +299,33 @@ export default function PreviewClient() {
       <DashboardShell
         account={{ name: "Avery Morgan", email: "avery@example.test" }}
         activePath={previewPath(screen)}
+        currentOrganization={{ id: "org-main", name: "Acme Production Org" }}
+        currentWorkspace={{ id: "production-cluster", name: "Production Cluster" }}
         onPreviewNavigate={navigate}
         previewMode
+        workspaces={[
+          {
+            id: "production-cluster",
+            name: "Production Cluster",
+            organizationId: "org-main",
+            organizationName: "Acme Production Org",
+            role: "admin",
+          },
+          {
+            id: "staging-cluster",
+            name: "Staging Cluster",
+            organizationId: "org-main",
+            organizationName: "Acme Production Org",
+            role: "admin",
+          },
+          {
+            id: "analytics-db",
+            name: "Analytics DB",
+            organizationId: "org-main",
+            organizationName: "Acme Production Org",
+            role: "viewer",
+          },
+        ]}
       >
         <PreviewScreen
           deleteDatabase={deleteDatabase}

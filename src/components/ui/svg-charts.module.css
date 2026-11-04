@@ -1,0 +1,179 @@
+.gaugeWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.gaugeSvg {
+  overflow: visible;
+}
+
+.gaugeTrack {
+  fill: none;
+  stroke: var(--surface-muted);
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+
+.gaugeValue {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  transition:
+    stroke-dashoffset 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    stroke 0.3s ease;
+}
+
+.gaugeCenter {
+  position: absolute;
+  top: 52%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.gaugeNumber {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.gaugeMax {
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin-top: 2px;
+}
+
+/* Donut chart */
+.donutWrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.donutSvg {
+  flex-shrink: 0;
+  transform: rotate(-90deg);
+}
+
+.donutSegment {
+  fill: none;
+  stroke-width: 14;
+  transition:
+    stroke-dasharray 0.4s ease,
+    stroke-dashoffset 0.4s ease;
+}
+
+.donutLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  font-size: 12px;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.legendLabelWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legendDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legendLabel {
+  color: var(--ink-soft);
+}
+
+.legendValue {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Sparkline */
+.sparklineSvg {
+  overflow: visible;
+}
+
+.sparklineArea {
+  opacity: 0.18;
+}
+
+.sparklineLine {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Quota ring */
+.ringWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ringSvg {
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+
+.ringTrack {
+  fill: none;
+  stroke: var(--surface-muted);
+  stroke-width: 4;
+}
+
+.ringProgress {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  transition:
+    stroke-dashoffset 0.4s ease,
+    stroke 0.3s ease;
+}
+
+.ringPercent {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Timeline */
+.timelineWrap {
+  width: 100%;
+}
+
+.timelineSvg {
+  width: 100%;
+  height: 60px;
+  overflow: visible;
+}
+
+.timelineBar {
+  transition:
+    opacity 0.2s ease,
+    y 0.3s ease,
+    height 0.3s ease;
+  rx: 3px;
+  ry: 3px;
+}
+
+.timelineBar:hover {
+  opacity: 0.8;
+  cursor: pointer;
+}

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { AccessScreen } from "@/components/dashboard/screens";
+import { LiveAccessScreen } from "@/components/dashboard/live-screens";
 
-export const metadata: Metadata = { title: "Access & roles" };
+export const metadata: Metadata = { title: "Access & roles · Nanogres" };
 
 export default function AccessPage() {
-  return <AccessScreen mode="live" />;
+  return <LiveAccessScreen page="list" />;
 }

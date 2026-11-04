@@ -391,6 +391,11 @@
   box-shadow: 0 7px 17px color-mix(in srgb, var(--green) 20%, transparent);
 }
 
+.signInButton:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  box-shadow: none;
+}
+
 .signInButton:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--green) 34%, transparent);
   outline-offset: 3px;
@@ -439,13 +444,22 @@
   transition:
     border-color 150ms ease,
     background-color 150ms ease,
-    color 150ms ease;
+    color 150ms ease,
+    transform 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .singleSignOnButton:hover {
   border-color: var(--green);
   background: var(--surface-green);
   color: var(--green-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--green) 12%, transparent);
+}
+
+.singleSignOnButton:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: none;
 }
 
 .setupHint {

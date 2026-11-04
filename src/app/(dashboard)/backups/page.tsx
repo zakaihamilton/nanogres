@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { BackupsScreen } from "@/components/dashboard/screens";
+import { LiveBackupsScreen } from "@/components/dashboard/live-screens";
 
-export const metadata: Metadata = { title: "Backups" };
+export const metadata: Metadata = { title: "Backups · Nanogres" };
 
 export default function BackupsPage() {
-  return <BackupsScreen mode="live" />;
+  return <LiveBackupsScreen page="list" />;
 }

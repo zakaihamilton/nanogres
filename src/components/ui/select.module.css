@@ -33,6 +33,10 @@
   background: var(--surface-raised);
 }
 
+.trigger:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
 .trigger:focus-visible {
   outline: 2px solid var(--green);
   outline-offset: 2px;

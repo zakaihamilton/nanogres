@@ -13,7 +13,14 @@ export type IconName =
   | "server"
   | "shield"
   | "sparkle"
-  | "copy";
+  | "copy"
+  | "sql"
+  | "search"
+  | "filter"
+  | "terminal"
+  | "play"
+  | "trash"
+  | "refresh";
 
 const drawings: Record<IconName, ReactNode> = {
   overview: (
@@ -82,6 +89,43 @@ const drawings: Record<IconName, ReactNode> = {
     <>
       <rect x="8" y="8" width="12" height="12" rx="2" />
       <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
+    </>
+  ),
+  sql: (
+    <>
+      <polyline points="4 17 10 11 4 5" />
+      <line x1="12" y1="19" x2="20" y2="19" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </>
+  ),
+  filter: (
+    <>
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </>
+  ),
+  terminal: (
+    <>
+      <rect x="2" y="3" width="20" height="18" rx="2" />
+      <path d="m7 8 4 4-4 4M13 16h4" />
+    </>
+  ),
+  play: <polygon points="5 3 19 12 5 21 5 3" />,
+  trash: (
+    <>
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </>
+  ),
+  refresh: (
+    <>
+      <polyline points="23 4 23 10 17 10" />
+      <polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
     </>
   ),
 };

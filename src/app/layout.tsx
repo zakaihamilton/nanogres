@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     template: "%s · Nanogres",
   },
   description:
-    "A private workspace for managing Postgres databases, access roles, and backups on your VPS.",
+    "A private workspace for managing Postgres databases, access roles, and backups in your system.",
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

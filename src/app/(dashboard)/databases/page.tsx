@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { DatabasesScreen } from "@/components/dashboard/screens";
+import { LiveDatabasesScreen } from "@/components/dashboard/live-screens";
 
-export const metadata: Metadata = { title: "Databases" };
+export const metadata: Metadata = { title: "Databases · Nanogres" };
 
 export default function DatabasesPage() {
-  return <DatabasesScreen mode="live" />;
+  return <LiveDatabasesScreen page="list" />;
 }

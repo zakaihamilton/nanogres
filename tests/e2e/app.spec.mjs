@@ -9,7 +9,7 @@ const apiControl = "http://127.0.0.1:4312/__test__";
 const syntheticUpload = Buffer.from("trusted isolated browser-test fixture".padEnd(41, "!"));
 const previewScreens = [
   ["overview", "Your Postgres, in one place.", "Overview"],
-  ["getting-started", "Connect your VPS to see your Postgres workspace.", "Getting started"],
+  ["getting-started", "Connect your workspace to see your Postgres databases.", "Getting started"],
   ["databases", "Databases", "Databases"],
   ["database-new", "Create a database", "Create database"],
   ["delete-confirmation", "Delete database?", "Delete confirmation"],
@@ -244,7 +244,7 @@ test.describe("authenticated management journeys", () => {
     expect(state.uploadCount).toBe(0);
   });
 
-  test("surfaces workspace permission denial before a write reaches the VPS", async ({
+  test("surfaces workspace permission denial before a write reaches the workspace", async ({
     page,
     request,
   }) => {
@@ -271,7 +271,7 @@ test.describe("authenticated management journeys", () => {
     await expect(
       page
         .getByRole("alert")
-        .filter({ hasText: "The Nanogres VPS API failed to complete the request." }),
+        .filter({ hasText: "The Nanogres workspace service failed to complete the request." }),
     ).toBeVisible();
     await request.post(`${apiControl}/configure`, { data: { failReads: false } });
     await page.getByRole("button", { name: "Try again" }).click();
@@ -290,7 +290,10 @@ test.describe("authenticated management journeys", () => {
     await expect(page.getByText("No Nanogres operations recorded yet.")).toBeVisible();
   });
 
-  test("shows a read permission denial without rendering VPS data", async ({ page, request }) => {
+  test("shows a read permission denial without rendering workspace data", async ({
+    page,
+    request,
+  }) => {
     await request.post(`${identityControl}/configure`, {
       data: { deniedAction: "nanogres:workspace:read" },
     });
@@ -341,7 +344,7 @@ test.describe("authenticated management journeys", () => {
     await expect(
       page
         .getByRole("alert")
-        .filter({ hasText: "The Nanogres VPS API failed to complete the request." }),
+        .filter({ hasText: "The Nanogres workspace service failed to complete the request." }),
     ).toBeVisible();
     const state = await (await request.get(`${apiControl}/state`)).json();
     expect(state.uploadCount).toBe(0);

@@ -116,7 +116,7 @@ export default async function LoginPage({
               <span className={styles.privateLabel}>SERVER-SIDE ACCESS</span>
             </div>
             <div
-              aria-label="Your browser connects to the Nanogres server, which manages Postgres on your VPS."
+              aria-label="Your browser connects to the Nanogres server, which manages Postgres in your workspace."
               className={styles.architectureFlow}
               role="img"
             >
@@ -135,11 +135,14 @@ export default async function LoginPage({
                 →
               </span>
               <span className={styles.architectureNode}>
-                <small>YOUR VPS</small>
+                <small>WORKSPACE</small>
                 <strong>Postgres</strong>
               </span>
             </div>
-            <p>Postgres stays on your server. The browser never receives the VPS API token.</p>
+            <p>
+              Postgres stays protected in your workspace. The browser never receives internal API
+              tokens.
+            </p>
           </div>
           <p className={styles.footer}>Built for personal projects and small teams.</p>
         </section>

@@ -143,7 +143,7 @@ function ScreenHeading({
           </button>
           {!onAction ? (
             <small className={styles.previewActionHint}>
-              Available when the VPS API is connected
+              Available when the workspace is connected
             </small>
           ) : null}
         </div>
@@ -159,10 +159,10 @@ function ApiNotice() {
         <Icon name="server" size={17} />
       </span>
       <div>
-        <strong>VPS API connection pending</strong>
+        <strong>Workspace connection pending</strong>
         <p>
           The dashboard is ready for your Postgres server. Live inventory and controls will appear
-          here once the HTTPS management API is connected.
+          here once the workspace API is connected.
         </p>
       </div>
       <span className={styles.pendingPill}>NOT CONNECTED</span>
@@ -489,13 +489,13 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
 
       <div className={styles.metrics}>
         <MetricCard
-          detail={preview ? "Across your workspace" : "Waiting for the VPS API"}
+          detail={preview ? "Across your workspace" : "Waiting for system connection"}
           icon="database"
           label="Databases"
           value={preview ? "3" : "—"}
         />
         <MetricCard
-          detail={preview ? "Across active databases" : "Waiting for the VPS API"}
+          detail={preview ? "Across active databases" : "Waiting for system connection"}
           icon="activity"
           label="Active connections"
           tone="blue"
@@ -531,13 +531,13 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
             <DatabaseTable rows={demoDatabases} onOpen={() => onPreviewNavigate?.("databases")} />
           ) : (
             <EmptyState
-              description="Connect the VPS API to see database size, owners, and connection counts."
+              description="Connect the workspace to see database size, owners, and connection counts."
               title="No live inventory yet"
             />
           )}
         </Panel>
 
-        <Panel detail="VPS health and connection status" title="Server health">
+        <Panel detail="System health and connection status" title="System health">
           <div className={styles.healthCard}>
             <div className={styles.healthStatus}>
               <span className={`${styles.healthOrb} ${preview ? styles.healthOrbGood : ""}`}>
@@ -546,7 +546,9 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
               <span>
                 <strong>{preview ? "All systems healthy" : "Waiting for first check"}</strong>
                 <small>
-                  {preview ? "PostgreSQL 17 · running" : "Server health will load from the VPS API"}
+                  {preview
+                    ? "PostgreSQL 17 · running"
+                    : "System health will load from the workspace"}
                 </small>
               </span>
             </div>
@@ -572,7 +574,10 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
         </Panel>
       </div>
 
-      <Panel detail="Current VPS disk usage and estimated growth room" title="Storage capacity">
+      <Panel
+        detail="Current workspace disk usage and estimated growth room"
+        title="Storage capacity"
+      >
         <StorageCapacity databases={demoDatabases} disk={demoDisk} growthPercent={25} />
       </Panel>
 
@@ -595,7 +600,7 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
             <p className={styles.eyebrow}>SECURE BY DEFAULT</p>
             <h2>Your database stays private.</h2>
             <p>
-              Nanogres talks to the VPS API from the server. Postgres is never opened to the
+              Nanogres connects securely from the backend server. Postgres is never opened to the
               browser.
             </p>
           </div>
@@ -671,7 +676,7 @@ export function DatabasesScreen({
             <DatabaseTable rows={demoDatabases} variant="management" onDelete={onPreviewDelete} />
           </Panel>
           <Panel
-            detail="Current VPS disk usage and per-database growth room"
+            detail="Current workspace disk usage and per-database growth room"
             title="Storage capacity"
           >
             <StorageCapacity databases={demoDatabases} disk={demoDisk} growthPercent={25} />
@@ -800,7 +805,7 @@ export function BackupsScreen({
               </span>
               <span>
                 <small>Destination</small>
-                <strong>VPS + DigitalOcean Spaces</strong>
+                <strong>Local disk + DigitalOcean Spaces</strong>
               </span>
             </div>
           </div>

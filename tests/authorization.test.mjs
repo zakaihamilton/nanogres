@@ -18,6 +18,10 @@ test("maps read and management operations to separate permissions", () => {
   assert.equal(actionFor("DELETE", ["roles", "admin"]), null);
   assert.equal(actionFor("GET", ["unknown"]), null);
   assert.equal(actionFor("PUT", ["restore-uploads"]), null);
+  assert.equal(actionFor("POST", ["query"]), "nanogres:members:manage");
+  assert.equal(actionFor("GET", ["databases", "my_db", "schema"]), "nanogres:workspace:read");
+  assert.equal(actionFor("GET", ["databases", "my_db", "queries"]), "nanogres:workspace:read");
+  assert.equal(actionFor("GET", ["events", "stream"]), "nanogres:workspace:read");
 });
 
 test("fails closed when the product identifier is missing", () => {

@@ -1,10 +1,13 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Select } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatBytes } from "./storage-capacity";
+import { BackupTimelineChart } from "@/components/ui/svg-charts";
+import { Icon } from "./icons";
 import {
   type Backup,
   type ServerStatus,
@@ -115,10 +118,36 @@ export function LiveBackupsScreen({
   } = useDatabases();
   const backupsQuery = useApiData<{ backups: Backup[] }>("/api/nanogres/backups");
   const overviewQuery = useApiData<{ status: ServerStatus }>("/api/nanogres/overview");
-  const backups = backupsQuery.data?.backups ?? [];
+  const rawBackups = backupsQuery.data?.backups;
+  const backups = rawBackups ?? [];
   const offsite = overviewQuery.data?.status.offsiteBackup;
   const userDatabases = databases.filter((item) => !item.systemDatabase);
-  const [database, setDatabase] = useState("");
+  const [filterDb, setFilterDb] = useState("");
+
+  const dailyTimeline = useMemo(() => {
+    if (!rawBackups) return [];
+    const map = new Map<string, { sizeBytes: number; count: number }>();
+    rawBackups.forEach((b) => {
+      const day = b.createdAt.substring(0, 10);
+      const existing = map.get(day) || { sizeBytes: 0, count: 0 };
+      map.set(day, { sizeBytes: existing.sizeBytes + b.sizeBytes, count: existing.count + 1 });
+    });
+    return Array.from(map.entries())
+      .map(([date, val]) => ({ date, ...val }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [rawBackups]);
+
+  const filteredBackups = useMemo(() => {
+    if (!rawBackups) return [];
+    if (!filterDb.trim()) return rawBackups;
+    return rawBackups.filter((b) =>
+      b.database.toLowerCase().includes(filterDb.toLowerCase().trim()),
+    );
+  }, [rawBackups, filterDb]);
+  const searchParams = useSearchParams();
+  const [database, setDatabase] = useState(
+    () => searchParams.get("db") || searchParams.get("database") || "",
+  );
   const selectedDatabase = database || userDatabases[0]?.name || "";
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -316,7 +345,7 @@ export function LiveBackupsScreen({
         upload.chunkSizeBytes > TRANSFER_CHUNK_BYTES ||
         upload.chunkCount !== Math.ceil(file.size / upload.chunkSizeBytes)
       ) {
-        throw new Error("The VPS returned invalid upload settings.");
+        throw new Error("The upload service returned invalid settings.");
       }
 
       for (let offset = 0, index = 0; offset < file.size; index += 1) {
@@ -362,7 +391,7 @@ export function LiveBackupsScreen({
         try {
           await apiRequest("/api/nanogres/restore-uploads/" + uploadId, { method: "DELETE" });
         } catch {
-          // The VPS also removes abandoned uploads after 24 hours.
+          // The system also removes abandoned uploads after 24 hours.
         }
       }
     } finally {
@@ -436,9 +465,9 @@ export function LiveBackupsScreen({
                   ? "Unknown"
                   : offsite?.configured
                     ? offsite.lastSuccessAt
-                      ? "VPS + DigitalOcean Spaces"
+                      ? "Local disk + DigitalOcean Spaces"
                       : "Spaces upload pending"
-                    : "Private VPS disk"}
+                    : "Local workspace disk"}
               </strong>
             </div>
           </div>
@@ -451,25 +480,45 @@ export function LiveBackupsScreen({
           ) : offsite?.configured ? (
             <Notice tone={offsite.lastError ? "error" : "info"}>
               {offsite.lastError
-                ? "The latest off-site upload needs attention. The VPS backup remains available; check the off-site service log."
+                ? "The latest off-site upload needs attention. The local backup snapshot remains available; check the off-site service log."
                 : offsite.lastSuccessAt
                   ? `${offsite.backupCount} retained backup${offsite.backupCount === 1 ? "" : "s"} stored in Spaces (${formatBytes(offsite.storedBytes)}). Last successful upload: ${formatDate(offsite.lastSuccessAt)}. Remote copies are never removed automatically.`
                   : "Spaces is configured. The first off-site copy will run after the next backup cycle."}
             </Notice>
           ) : (
             <Notice tone="info">
-              Off-site storage is not configured yet. Local backups remain on the VPS for 14 days.
+              Off-site storage is not configured yet. Local backup snapshots remain in the workspace
+              for 14 days.
             </Notice>
           )}
+          {dailyTimeline.length > 1 ? (
+            <Panel title="Backup retention timeline" detail="Daily snapshot size history">
+              <BackupTimelineChart backups={dailyTimeline} />
+            </Panel>
+          ) : null}
+          <div className={styles.tableToolbar}>
+            <div className={styles.searchInputWrap}>
+              <Icon name="search" size={14} />
+              <input
+                aria-label="Filter backups by database"
+                className={styles.searchInput}
+                onChange={(e) => setFilterDb(e.target.value)}
+                placeholder="Filter by database..."
+                value={filterDb}
+              />
+            </div>
+          </div>
           <Panel
             title="Backup history"
-            detail={backups.length + " retained file" + (backups.length === 1 ? "" : "s")}
+            detail={
+              filteredBackups.length + " retained file" + (filteredBackups.length === 1 ? "" : "s")
+            }
           >
             {backupsQuery.loading && !backupsQuery.data ? (
               <Loading />
             ) : backupsQuery.error && !backupsQuery.data ? (
               <Empty>Nanogres could not load backup history. Use Try again above to retry.</Empty>
-            ) : backups.length ? (
+            ) : filteredBackups.length ? (
               <div
                 aria-label="Backup history"
                 className={styles.tableWrap}
@@ -488,7 +537,7 @@ export function LiveBackupsScreen({
                     </tr>
                   </thead>
                   <tbody>
-                    {backups.map((backup) => (
+                    {filteredBackups.map((backup) => (
                       <tr key={backup.filename}>
                         <td>
                           <span className={styles.databaseName}>{backup.database}</span>
@@ -519,13 +568,19 @@ export function LiveBackupsScreen({
                 </table>
               </div>
             ) : (
-              <Empty>No backup files yet. The daily timer runs near 02:00 UTC.</Empty>
+              <Empty>
+                {filterDb.trim()
+                  ? `No backups match database “${filterDb}”.`
+                  : "No backup files yet. The daily timer runs near 02:00 UTC."}
+              </Empty>
             )}
           </Panel>
         </>
       ) : page === "new" ? (
         <>
-          <Link href="/backups">← Back to backups</Link>
+          <Link className={styles.backLink} href="/backups">
+            ← Back to backups
+          </Link>
           <Panel
             title="Create a backup now"
             detail="Create a compressed PostgreSQL dump and save a copy to your device."
@@ -566,7 +621,9 @@ export function LiveBackupsScreen({
         </>
       ) : page === "restore-existing" ? (
         <>
-          <Link href="/backups">← Back to backups</Link>
+          <Link className={styles.backLink} href="/backups">
+            ← Back to backups
+          </Link>
           <Panel title="Restore a backup" detail="Restore this recovery point into a new database.">
             {backupsQuery.loading && !backupsQuery.data ? (
               <Loading />
@@ -602,7 +659,9 @@ export function LiveBackupsScreen({
                   </small>
                 </div>
                 <div className={styles.formActions}>
-                  <Link href="/backups">Cancel</Link>
+                  <Link className={styles.secondary} href="/backups">
+                    Cancel
+                  </Link>
                   <Button disabled={transferBusy || Boolean(message)} type="submit">
                     {restoring === restoreBackup.filename ? "Restoring…" : "Restore"}
                   </Button>
@@ -613,7 +672,9 @@ export function LiveBackupsScreen({
         </>
       ) : (
         <>
-          <Link href="/backups">← Back to backups</Link>
+          <Link className={styles.backLink} href="/backups">
+            ← Back to backups
+          </Link>
           <Panel
             title="Restore from a file"
             detail="Import a trusted custom-format PostgreSQL dump into a new database."
@@ -642,7 +703,7 @@ export function LiveBackupsScreen({
                 />
                 <small>
                   Supports compressed custom-format .dump and .backup files. The upload is sent in
-                  small encrypted chunks and removed from the VPS after restore.
+                  small encrypted chunks and removed from the system after restore.
                 </small>
               </div>
               <div className={styles.field}>
@@ -671,7 +732,7 @@ export function LiveBackupsScreen({
       )}
       <Notice tone="info">
         Restores create a separate database and never overwrite an existing one. Keep downloaded
-        copies somewhere separate from this VPS for off-server recovery.
+        copies in off-site storage for disaster recovery.
       </Notice>
     </div>
   );

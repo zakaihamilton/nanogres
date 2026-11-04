@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { ActivityScreen } from "@/components/dashboard/screens";
+import { LiveActivityScreen } from "@/components/dashboard/live-screens";
 
-export const metadata: Metadata = { title: "Activity" };
+export const metadata: Metadata = { title: "Activity · Nanogres" };
 
 export default function ActivityPage() {
-  return <ActivityScreen mode="live" />;
+  return <LiveActivityScreen />;
 }

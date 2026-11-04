@@ -155,7 +155,7 @@ export function StorageCapacity({
       <div className={styles.diskSummary}>
         <div className={styles.summaryHeading}>
           <div>
-            <strong>VPS data volume</strong>
+            <strong>Workspace storage volume</strong>
             <span>
               {formatBytes(disk.usedBytes)} used of {formatBytes(disk.totalBytes)}
             </span>
@@ -166,7 +166,7 @@ export function StorageCapacity({
           </div>
         </div>
         <div
-          aria-label={`VPS disk ${formatBytes(disk.usedBytes)} used of ${formatBytes(disk.totalBytes)}`}
+          aria-label={`Workspace disk ${formatBytes(disk.usedBytes)} used of ${formatBytes(disk.totalBytes)}`}
           aria-valuemax={100}
           aria-valuemin={0}
           aria-valuenow={Math.round(diskUsedPercent)}
@@ -355,15 +355,15 @@ export function StorageCapacity({
       {!quotaEnforced ? (
         <p className={styles.advisoryNote} role="note">
           These targets update with free disk space, but are not hard limits. PostgreSQL does not
-          enforce per-database size caps; filesystem project quotas must be enabled and verified on
-          the VPS to stop a database at its target.{" "}
+          enforce per-database size caps; filesystem project quotas must be enabled and verified in
+          the system to stop a database at its target.{" "}
           {enforcementReason ?? "The quota filesystem is not active yet."}
         </p>
       ) : null}
       {quotaEnforced ? (
         <p className={styles.advisoryNote} role="note">
           Database totals use allocated blocks in each database directory. Hard caps apply to the
-          primary PostgreSQL tablespace; shared WAL, backups, and server files also use VPS disk
+          primary PostgreSQL tablespace; shared WAL, backups, and server files also use system disk
           space, so the database total is lower than total disk usage.
         </p>
       ) : null}
