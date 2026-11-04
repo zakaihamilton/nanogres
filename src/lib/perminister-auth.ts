@@ -32,20 +32,24 @@ type PerministerAccount = {
   lastName?: string | null;
 };
 
+type PerministerResourceScope =
+  | { kind: "product"; organizationId: string; productId: string }
+  | { kind: "project"; organizationId: string; productId: string; projectId: string }
+  | { kind: "workspace"; organizationId: string; productId: string; workspaceId: string };
+
+type PerministerPermissionGrant = {
+  scope: PerministerResourceScope;
+  actions: string[];
+};
+
 type PerministerOrganization = {
   organizationId: string;
   organizationName: string;
   organizationRole?: string;
   productId: string;
-  permissions?: string[];
+  permissions?: Array<string | PerministerPermissionGrant>;
   resourceRoles?: Array<{
-    scope: {
-      kind: "product" | "project" | "workspace";
-      organizationId: string;
-      productId: string;
-      workspaceId?: string;
-      projectId?: string;
-    };
+    scope: PerministerResourceScope;
     role: string | null;
     actions: string[];
   }>;
@@ -146,6 +150,29 @@ function isAccount(value: unknown): value is PerministerAccount {
   );
 }
 
+function isResourceScope(value: unknown): value is PerministerResourceScope {
+  if (typeof value !== "object" || value === null) return false;
+  const scope = value as Record<string, unknown>;
+  if (typeof scope.organizationId !== "string" || typeof scope.productId !== "string") {
+    return false;
+  }
+
+  if (scope.kind === "product") return true;
+  if (scope.kind === "project") return typeof scope.projectId === "string";
+  if (scope.kind === "workspace") return typeof scope.workspaceId === "string";
+  return false;
+}
+
+function isPermissionGrant(value: unknown): value is PerministerPermissionGrant {
+  if (typeof value !== "object" || value === null) return false;
+  const grant = value as Record<string, unknown>;
+  return (
+    isResourceScope(grant.scope) &&
+    Array.isArray(grant.actions) &&
+    grant.actions.every((action) => typeof action === "string")
+  );
+}
+
 function isOrganization(value: unknown): value is PerministerOrganization {
   if (typeof value !== "object" || value === null) return false;
   const organization = value as Record<string, unknown>;
@@ -155,18 +182,16 @@ function isOrganization(value: unknown): value is PerministerOrganization {
     typeof organization.productId === "string" &&
     (organization.permissions === undefined ||
       (Array.isArray(organization.permissions) &&
-        organization.permissions.every((permission) => typeof permission === "string"))) &&
+        organization.permissions.every(
+          (permission) => typeof permission === "string" || isPermissionGrant(permission),
+        ))) &&
     (organization.resourceRoles === undefined ||
       (Array.isArray(organization.resourceRoles) &&
         organization.resourceRoles.every((role) => {
           if (typeof role !== "object" || role === null) return false;
           const resourceRole = role as Record<string, unknown>;
-          if (typeof resourceRole.scope !== "object" || resourceRole.scope === null) return false;
-          const scope = resourceRole.scope as Record<string, unknown>;
           return (
-            (scope.kind === "product" || scope.kind === "project" || scope.kind === "workspace") &&
-            typeof scope.organizationId === "string" &&
-            typeof scope.productId === "string" &&
+            isResourceScope(resourceRole.scope) &&
             (resourceRole.role === null || typeof resourceRole.role === "string") &&
             Array.isArray(resourceRole.actions) &&
             resourceRole.actions.every((action) => typeof action === "string")
