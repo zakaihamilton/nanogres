@@ -658,7 +658,7 @@ export function LiveBackupsScreen({
                 className={styles.formGrid}
                 onSubmit={(event) => void restoreFromBackup(event, restoreBackup)}
               >
-                <p>
+                <p className={styles.restoreBackupSummary}>
                   Backup: <strong>{restoreBackup.filename}</strong> ·{" "}
                   {formatBytes(restoreBackup.sizeBytes)} · {formatDate(restoreBackup.createdAt)}
                 </p>
