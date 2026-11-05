@@ -1,0 +1,77 @@
+.wrapper {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.button {
+  display: inline-grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: help;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.button:hover,
+.button:focus-visible {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--green);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 1200;
+  top: calc(100% + 7px);
+  right: 0;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 64px));
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--surface) 15%, transparent);
+  border-radius: 8px;
+  background: var(--ink);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 18%);
+  color: var(--surface);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  visibility: hidden;
+  white-space: normal;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    visibility 120ms ease;
+}
+
+.wrapper:hover .tooltip,
+.wrapper:focus-within .tooltip {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .tooltip {
+    transition: none;
+  }
+}

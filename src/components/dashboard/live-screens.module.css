@@ -175,7 +175,14 @@
   background: var(--surface);
 }
 
-.metric > span {
+.metricHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.metricHeader > span:first-child {
   color: var(--ink-soft);
   font-size: 11px;
 }
@@ -919,6 +926,7 @@
   }
 
   .metrics,
+  .telemetryGrid,
   .backupSummary,
   .formGrid {
     grid-template-columns: 1fr;
@@ -1233,7 +1241,13 @@
   color: var(--ink);
 }
 
-.telemetryCardHeader span {
+.telemetryCardMeta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.telemetryCardMeta > span:first-child {
   font-size: 11px;
   color: var(--ink-muted);
 }

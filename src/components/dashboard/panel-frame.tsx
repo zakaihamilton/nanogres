@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
+import { SectionInfo } from "./section-info";
 
 export type PanelFrameProps = {
   title: string;
   detail?: string;
+  info?: string;
   children: ReactNode;
   className: string;
   headingClassName: string;
@@ -11,6 +13,7 @@ export type PanelFrameProps = {
 export function PanelFrame({
   title,
   detail,
+  info,
   children,
   className,
   headingClassName,
@@ -22,6 +25,7 @@ export function PanelFrame({
           <h2>{title}</h2>
           {detail ? <p>{detail}</p> : null}
         </div>
+        {info ? <SectionInfo label={info} /> : null}
       </div>
       {children}
     </section>

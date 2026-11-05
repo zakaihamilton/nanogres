@@ -210,10 +210,12 @@ export function Button({
 export function Panel({
   title,
   detail,
+  info,
   children,
 }: {
   title: string;
   detail?: string;
+  info?: string;
   children: ReactNode;
 }) {
   return (
@@ -222,6 +224,7 @@ export function Panel({
       headingClassName={styles.panelHeader}
       title={title}
       detail={detail}
+      info={info}
     >
       {children}
     </PanelFrame>
