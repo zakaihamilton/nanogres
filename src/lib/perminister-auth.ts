@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cookies } from "next/headers";
+import { noStoreErrorResponse } from "@/lib/api-response";
 
 export const SESSION_COOKIE = "nanogres_session";
 export const WORKSPACE_COOKIE = "nanogres_workspace_id";
@@ -317,7 +318,25 @@ export async function revokePerministerSession(
   }
 }
 
-export type NanogresRole = "admin" | "viewer" | "manager";
+export async function registerPerministerWorkspace(
+  config: PerministerConfig,
+  session: CurrentSession,
+  organizationId: string,
+  workspaceId: string,
+): Promise<Response> {
+  return fetch(`${config.baseUrl}/api/auth/consumer/workspaces`, {
+    method: "POST",
+    headers: {
+      ...clientHeaders(config, session.token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ organizationId, workspaceId }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(6_000),
+  });
+}
+
+type NanogresRole = "admin" | "viewer" | "manager";
 
 export type NanogresWorkspaceChoice = {
   id: string;
@@ -338,7 +357,7 @@ export type NanogresWorkspaceContext = {
   role: NanogresRole;
 };
 
-export function getAccessibleWorkspaces(
+function getAccessibleWorkspaces(
   session: CurrentSession,
   filterOrganizationId?: string,
   customNames?: Record<string, string>,
@@ -394,29 +413,6 @@ export function getAccessibleWorkspaces(
   }
 
   return choices;
-}
-
-export async function setWorkspaceCookies(
-  workspaceId: string,
-  organizationId?: string,
-): Promise<void> {
-  const jar = await cookies();
-  jar.set(WORKSPACE_COOKIE, workspaceId, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 365,
-  });
-  if (organizationId) {
-    jar.set(ORGANIZATION_COOKIE, organizationId, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365,
-    });
-  }
 }
 
 export async function getNanogresWorkspaceContext(
@@ -536,19 +532,10 @@ export async function authorizeNanogresAction(action: string): Promise<
       }
     }
     if (response.status === 403 || response.status === 401) {
-      return Response.json(
-        { error: "Perminister denied this action." },
-        { status: 403, headers: { "Cache-Control": "no-store" } },
-      );
+      return noStoreErrorResponse("Perminister denied this action.", 403);
     }
-    return Response.json(
-      { error: "Perminister is temporarily unavailable." },
-      { status: 503, headers: { "Cache-Control": "no-store" } },
-    );
+    return noStoreErrorResponse("Perminister is temporarily unavailable.", 503);
   } catch {
-    return Response.json(
-      { error: "Perminister is temporarily unavailable." },
-      { status: 503, headers: { "Cache-Control": "no-store" } },
-    );
+    return noStoreErrorResponse("Perminister is temporarily unavailable.", 503);
   }
 }
