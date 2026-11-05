@@ -104,55 +104,6 @@
   color: var(--ink);
 }
 
-/* Sparkline */
-.sparklineSvg {
-  overflow: visible;
-}
-
-.sparklineArea {
-  opacity: 0.18;
-}
-
-.sparklineLine {
-  fill: none;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-/* Quota ring */
-.ringWrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ringSvg {
-  transform: rotate(-90deg);
-  overflow: visible;
-}
-
-.ringTrack {
-  fill: none;
-  stroke: var(--surface-muted);
-  stroke-width: 4;
-}
-
-.ringProgress {
-  fill: none;
-  stroke-width: 4;
-  stroke-linecap: round;
-  transition:
-    stroke-dashoffset 0.4s ease,
-    stroke 0.3s ease;
-}
-
-.ringPercent {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink);
-}
-
 /* Timeline */
 .timelineWrap {
   position: relative;

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/dashboard/icons";
 import styles from "./command-palette.module.css";
 
-export type PaletteItem = {
+type PaletteItem = {
   id: string;
   label: string;
   group: "Navigation" | "Databases" | "Actions";
@@ -195,9 +195,8 @@ export function CommandPalette({
     onSelect: () => navigate(`/databases/${encodeURIComponent(db)}`),
   }));
 
-  const allItems = (previewMode
-    ? baseItems.filter((item) => item.id !== "nav-sql")
-    : [...baseItems, ...dbItems]
+  const allItems = (
+    previewMode ? baseItems.filter((item) => item.id !== "nav-sql") : [...baseItems, ...dbItems]
   ).sort((a, b) => a.label.localeCompare(b.label));
 
   const filteredItems = query.trim()
