@@ -2,8 +2,16 @@
   min-height: 100svh;
   padding: clamp(26px, 5vw, 64px) clamp(18px, 6vw, 88px);
   background:
-    radial-gradient(ellipse at 12% 8%, color-mix(in srgb, var(--surface-green) 78%, transparent), transparent 35%),
-    radial-gradient(ellipse at 92% 94%, color-mix(in srgb, var(--blue-pale) 76%, transparent), transparent 32%),
+    radial-gradient(
+      ellipse at 12% 8%,
+      color-mix(in srgb, var(--surface-green) 78%, transparent),
+      transparent 35%
+    ),
+    radial-gradient(
+      ellipse at 92% 94%,
+      color-mix(in srgb, var(--blue-pale) 76%, transparent),
+      transparent 32%
+    ),
     var(--canvas);
 }
 

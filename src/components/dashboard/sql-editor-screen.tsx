@@ -45,18 +45,12 @@ export function SqlEditorScreen() {
   const initialQuery = searchParams.get("q");
 
   const { databases, loading: dbsLoading } = useDatabases();
-  const [selectedDb, setSelectedDb] = useState(initialDb);
-
-  useEffect(() => {
-    if (dbsLoading) return;
-    if (!selectedDb) {
-      if (!initialDb && databases.length > 0) setSelectedDb(databases[0].name);
-      return;
-    }
-    if (!databases.some((database) => database.name === selectedDb)) {
-      setSelectedDb("");
-    }
-  }, [databases, dbsLoading, initialDb, selectedDb]);
+  const [selectedDbChoice, setSelectedDb] = useState(initialDb);
+  const selectedDb = databases.some((database) => database.name === selectedDbChoice)
+    ? selectedDbChoice
+    : initialDb
+      ? ""
+      : (databases[0]?.name ?? "");
 
   // Tabs state with localStorage
   const [tabs, setTabs] = useState<TabState[]>(() => {
@@ -335,7 +329,7 @@ export function SqlEditorScreen() {
               Limit 100
             </label>
           </Tooltip>
-          <label
+          <div
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -344,10 +338,10 @@ export function SqlEditorScreen() {
               color: "var(--ink-soft)",
             }}
           >
-            Timeout:
+            <label htmlFor="query-timeout">Timeout:</label>
             <Select
-              aria-label="Query timeout"
               className={styles.timeoutSelect}
+              id="query-timeout"
               onChange={(value) => setTimeoutSeconds(Number(value))}
               value={String(timeoutSeconds)}
             >
@@ -355,7 +349,7 @@ export function SqlEditorScreen() {
               <option value="15">15s</option>
               <option value="30">30s</option>
             </Select>
-          </label>
+          </div>
         </div>
 
         <div className={styles.actionButtons}>
@@ -365,7 +359,11 @@ export function SqlEditorScreen() {
           <Button disabled={!selectedDb} onClick={() => handleExplain(true)} variant="secondary">
             Explain Analyze
           </Button>
-          <Button disabled={executing || !selectedDb} onClick={() => void executeSql()} variant="primary">
+          <Button
+            disabled={executing || !selectedDb}
+            onClick={() => void executeSql()}
+            variant="primary"
+          >
             {executing ? "Executing..." : "Run Query ⌘↵"}
           </Button>
         </div>

@@ -11,7 +11,9 @@ export function Tooltip({ children, label }: { children: ReactNode; label?: stri
 
   const target = isValidElement<TooltipTargetProps>(children)
     ? cloneElement(children, {
-        "aria-describedby": [children.props["aria-describedby"], tooltipId].filter(Boolean).join(" "),
+        "aria-describedby": [children.props["aria-describedby"], tooltipId]
+          .filter(Boolean)
+          .join(" "),
       })
     : children;
 

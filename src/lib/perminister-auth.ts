@@ -379,9 +379,7 @@ export function getAccessibleWorkspaces(
                   ? "manager"
                   : "viewer";
             const displayName =
-              customNames?.[wsId] ||
-              customNames?.[wsId.toLowerCase()] ||
-              org.organizationName;
+              customNames?.[wsId] || customNames?.[wsId.toLowerCase()] || org.organizationName;
             choices.push({
               id: wsId,
               name: displayName,

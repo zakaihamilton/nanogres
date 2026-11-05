@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-05T11:36:58.277Z",
+  "entries": [
+    {
+      "fingerprint": "4f86b76d2fd40dd3e9be8463",
+      "provider": "Knip",
+      "category": "dead-code",
+      "type": "unused-export",
+      "scope": ".",
+      "file": "src/lib/perminister-auth.ts",
+      "line": 341
+    },
+    {
+      "fingerprint": "9f376975e29e53f38f9f1549",
+      "provider": "Knip",
+      "category": "dead-code",
+      "type": "unused-export",
+      "scope": ".",
+      "file": "src/lib/perminister-auth.ts",
+      "line": 399
+    },
+    {
+      "fingerprint": "db896f0edb44958983d76b9e",
+      "provider": "Knip",
+      "category": "dead-code",
+      "type": "unused-export",
+      "scope": ".",
+      "file": "src/lib/perminister-auth.ts",
+      "line": 320
+    },
+    {
+      "fingerprint": "35712257f9500312f1ba98c6",
+      "provider": "Knip",
+      "category": "dead-code",
+      "type": "unused-export",
+      "scope": ".",
+      "file": "src/lib/perminister-auth.ts",
+      "line": 322
+    },
+    {
+      "fingerprint": "6373ce16176b96aba9acc169",
+      "provider": "Knip",
+      "category": "dead-code",
+      "type": "unused-export",
+      "scope": ".",
+      "file": "src/components/ui/toast.tsx",
+      "line": 119
+    },
+    {
+      "fingerprint": "0397d114e832960f273eb516",
+      "provider": "Knip",
+      "category": "dead-code",
+      "type": "unused-export",
+      "scope": ".",
+      "file": "src/components/ui/toast.tsx",
+      "line": 6
+    },
+    {
+      "fingerprint": "85d3f8ee454195cc55162bd2",
+      "provider": "Knip",
+      "category": "dead-code",
+      "type": "unused-export",
+      "scope": ".",
+      "file": "src/components/ui/svg-charts.tsx",
+      "line": 168
+    },
+    {
+      "fingerprint": "d7311134a57581ae8d54910f",
+      "provider": "Knip",
+      "category": "dead-code",
+      "type": "unused-export",
+      "scope": ".",
+      "file": "src/components/ui/svg-charts.tsx",
+      "line": 216
+    },
+    {
+      "fingerprint": "b74f7671878fe644fc61b88e",
+      "provider": "Knip",
+      "category": "dead-code",
+      "type": "unused-export",
+      "scope": ".",
+      "file": "src/components/ui/command-palette.tsx",
+      "line": 8
+    },
+    {
+      "fingerprint": "ee51e45c13af5703b39ada85",
+      "provider": "jscpd",
+      "category": "duplication",
+      "type": "duplication",
+      "scope": ".",
+      "file": "app/(dashboard)/workspaces/workspaces-client.tsx",
+      "line": 86
+    },
+    {
+      "fingerprint": "a83b80caa5b38fc1c4667636",
+      "provider": "jscpd",
+      "category": "duplication",
+      "type": "duplication",
+      "scope": ".",
+      "file": "app/(dashboard)/workspaces/workspaces-client.tsx",
+      "line": 351
+    },
+    {
+      "fingerprint": "489791aff933c948a46d9b19",
+      "provider": "jscpd",
+      "category": "duplication",
+      "type": "duplication",
+      "scope": ".",
+      "file": "app/(dashboard)/workspaces/workspaces-client.tsx",
+      "line": 386
+    },
+    {
+      "fingerprint": "941e7305e104e6e4be92eb10",
+      "provider": "jscpd",
+      "category": "duplication",
+      "type": "duplication",
+      "scope": ".",
+      "file": "app/api/setup/workspace/route.ts",
+      "line": 36
+    },
+    {
+      "fingerprint": "2b920bf41feb4d79f77565e1",
+      "provider": "jscpd",
+      "category": "duplication",
+      "type": "duplication",
+      "scope": ".",
+      "file": "app/api/workspaces/rename/route.ts",
+      "line": 6
+    },
+    {
+      "fingerprint": "541b6fecf45b45b69255ab71",
+      "provider": "jscpd",
+      "category": "duplication",
+      "type": "duplication",
+      "scope": ".",
+      "file": "app/page.tsx",
+      "line": 151
+    },
+    {
+      "fingerprint": "1c9ce2202e03711ffb092554",
+      "provider": "jscpd",
+      "category": "duplication",
+      "type": "duplication",
+      "scope": ".",
+      "file": "components/dashboard/database-workspace.tsx",
+      "line": 359
+    },
+    {
+      "fingerprint": "ff6dbccdf7e470d0b7dc59d5",
+      "provider": "jscpd",
+      "category": "duplication",
+      "type": "duplication",
+      "scope": ".",
+      "file": "components/dashboard/live-access.tsx",
+      "line": 46
+    },
+    {
+      "fingerprint": "7ec0a3559ec1b3c344a35090",
+      "provider": "jscpd",
+      "category": "duplication",
+      "type": "duplication",
+      "scope": ".",
+      "file": "components/dashboard/live-transfers.tsx",
+      "line": 257
+    }
+  ]
+}

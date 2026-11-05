@@ -177,7 +177,7 @@ export function StorageCapacity({
           <span className={styles.diskFill} style={{ width: `${diskUsedPercent}%` }} />
         </div>
         <div className={styles.databaseTotal}>
-          <span>Your organization's databases</span>
+          <span>Your organization&apos;s databases</span>
           <strong>{formatBytes(totalDatabaseUsageBytes)} database files on disk</strong>
         </div>
       </div>

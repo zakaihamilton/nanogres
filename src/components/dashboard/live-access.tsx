@@ -141,8 +141,8 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
                     value={name}
                   />
                   <small>
-                    Lowercase letters, numbers, and underscores. Max{" "}
-                    {TENANT_NAME_MAX_LENGTH} characters.
+                    Lowercase letters, numbers, and underscores. Max {TENANT_NAME_MAX_LENGTH}{" "}
+                    characters.
                   </small>
                 </div>
                 <div className={styles.field}>
