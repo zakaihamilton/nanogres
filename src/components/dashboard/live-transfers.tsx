@@ -230,7 +230,7 @@ export function LiveTransfersScreen() {
                     id="import-target"
                     maxLength={37}
                     pattern="[a-z][a-z0-9_]{0,36}"
-                    placeholder="visitoring"
+                    placeholder="app_analytics"
                     required
                     value={targetDatabase}
                     onChange={(event) => setTargetDatabase(event.target.value)}

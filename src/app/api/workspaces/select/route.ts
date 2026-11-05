@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  getAppOrigin,
   getCurrentPerministerSession,
   getNanogresWorkspaceContext,
   ORGANIZATION_COOKIE,
@@ -9,6 +10,11 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest): Promise<Response> {
+  const appOrigin = getAppOrigin();
+  if (!appOrigin || request.headers.get("origin") !== appOrigin) {
+    return NextResponse.json({ error: "Request origin is not allowed." }, { status: 403 });
+  }
+
   const session = await getCurrentPerministerSession();
   if (!session) {
     return NextResponse.json({ error: "Sign in to continue." }, { status: 401 });

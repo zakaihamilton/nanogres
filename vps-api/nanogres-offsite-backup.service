@@ -1,5 +1,5 @@
 [Unit]
-Description=Copy retained Nanogres backups to DigitalOcean Spaces
+Description=Copy retained Nanogres backups to S3 Storage
 ConditionPathExists=/etc/nanogres/backup.env
 After=network-online.target
 Wants=network-online.target

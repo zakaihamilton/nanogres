@@ -331,16 +331,32 @@
 }
 
 .breadcrumbs {
+  min-width: 0;
+  flex: 1 1 auto;
   gap: 9px;
+  overflow: hidden;
   color: var(--ink-muted);
   font-size: 10px;
   font-weight: 730;
   letter-spacing: 0.09em;
+  white-space: nowrap;
 }
 
 .breadcrumbs strong {
+  overflow: hidden;
   color: var(--ink-soft);
   font-weight: 730;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breadcrumbs > .crumbLink,
+.breadcrumbs > span > .crumbLink,
+.breadcrumbs > span > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .crumbLink {
@@ -379,6 +395,7 @@
 }
 
 .topbarActions {
+  flex: 0 0 auto;
   gap: 16px;
 }
 
@@ -421,40 +438,12 @@
   color: var(--ink-muted);
 }
 
-.apiStatus {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--ink-soft);
-  font-size: 11px;
-  font-weight: 570;
-}
-
-.apiStatus svg {
-  flex: 0 0 auto;
-  color: var(--green);
-}
-
 .mainContent {
   width: min(100%, 1440px);
   flex: 1;
   margin: 0 auto;
   padding: 36px 42px 54px;
   overflow-x: clip;
-}
-
-.footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 42px 20px;
-  color: var(--ink-muted);
-  font-size: 10px;
-}
-
-.footer span:first-child {
-  color: var(--ink-soft);
-  font-weight: 680;
 }
 
 @media (width <= 960px) {
@@ -468,11 +457,6 @@
 
   .mainContent {
     padding: 30px 25px 42px;
-  }
-
-  .footer {
-    padding-right: 25px;
-    padding-left: 25px;
   }
 }
 
@@ -557,16 +541,8 @@
     gap: 11px;
   }
 
-  .apiStatus {
-    font-size: 0;
-  }
-
   .mainContent {
     padding: 25px 17px 34px;
-  }
-
-  .footer {
-    padding: 12px 17px 17px;
   }
 }
 

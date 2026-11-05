@@ -1610,6 +1610,12 @@ def inspect_user_query(sql: str) -> list[str]:
                 index = end + len(marker)
                 continue
 
+        # psql -c can execute meta-commands such as `\!` as local shell commands.
+        # A bare backslash is not valid SQL; strings and comments were skipped
+        # above, so reject it before passing the text to psql.
+        if char == "\\":
+            raise ApiError(400, "psql meta-commands are not supported; submit SQL only.")
+
         word = re.match(r"[A-Za-z_][A-Za-z_0-9]*", sql[index:])
         if word:
             words.append(word.group(0).upper())

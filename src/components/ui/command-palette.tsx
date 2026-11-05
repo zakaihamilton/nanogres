@@ -31,11 +31,69 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const paletteRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
     if (isOpen) {
       inputRef.current?.focus();
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousDocumentOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousDocumentOverflow;
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const overlay = overlayRef.current;
+    const palette = paletteRef.current;
+    const list = listRef.current;
+    if (!overlay || !palette || !list) return;
+
+    const containWheel = (event: WheelEvent) => {
+      if (!palette.contains(event.target as Node)) {
+        event.preventDefault();
+        return;
+      }
+
+      if (!list.contains(event.target as Node)) {
+        const deltaY =
+          event.deltaY *
+          (event.deltaMode === WheelEvent.DOM_DELTA_LINE
+            ? 16
+            : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+              ? list.clientHeight
+              : 1);
+        list.scrollTop += deltaY;
+        event.preventDefault();
+        return;
+      }
+
+      const maxScrollTop = list.scrollHeight - list.clientHeight;
+      const atTop = list.scrollTop <= 0;
+      const atBottom = list.scrollTop >= maxScrollTop;
+
+      if ((event.deltaY < 0 && atTop) || (event.deltaY > 0 && atBottom)) {
+        event.preventDefault();
+      }
+    };
+
+    overlay.addEventListener("wheel", containWheel, { passive: false });
+    return () => overlay.removeEventListener("wheel", containWheel);
   }, [isOpen]);
 
   const handleClose = useCallback(() => {
@@ -137,9 +195,10 @@ export function CommandPalette({
     onSelect: () => navigate(`/databases/${encodeURIComponent(db)}`),
   }));
 
-  const allItems = previewMode
+  const allItems = (previewMode
     ? baseItems.filter((item) => item.id !== "nav-sql")
-    : [...baseItems, ...dbItems];
+    : [...baseItems, ...dbItems]
+  ).sort((a, b) => a.label.localeCompare(b.label));
 
   const filteredItems = query.trim()
     ? allItems.filter(
@@ -148,6 +207,10 @@ export function CommandPalette({
           item.group.toLowerCase().includes(query.trim().toLowerCase()),
       )
     : allItems;
+
+  useEffect(() => {
+    itemRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
@@ -172,21 +235,35 @@ export function CommandPalette({
   if (!isOpen) return null;
 
   return (
-    <div className={styles.overlay}>
+    <div className={styles.overlay} ref={overlayRef}>
       <button
         aria-label="Close command palette overlay"
         className={styles.backdrop}
         onClick={handleClose}
         type="button"
       />
-      <div aria-label="Command palette" aria-modal="true" className={styles.palette} role="dialog">
+      <div
+        aria-label="Command palette"
+        aria-modal="true"
+        className={styles.palette}
+        ref={paletteRef}
+        role="dialog"
+      >
         <div className={styles.inputWrap}>
           <span className={styles.searchIcon}>
             <Icon name="search" size={16} />
           </span>
           <input
             ref={inputRef}
+            aria-activedescendant={
+              filteredItems[selectedIndex]
+                ? `command-${filteredItems[selectedIndex].id}`
+                : undefined
+            }
             aria-label="Search pages, databases, and actions"
+            aria-controls="command-list"
+            aria-expanded="true"
+            aria-haspopup="listbox"
             className={styles.input}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -194,24 +271,38 @@ export function CommandPalette({
             }}
             onKeyDown={handleKeyDown}
             placeholder="Type a command, database name, or page..."
+            role="combobox"
             value={query}
           />
           <kbd className={styles.shortcut}>ESC</kbd>
         </div>
 
-        <ul className={styles.list} role="listbox">
+        <ul
+          aria-label="Commands"
+          className={styles.list}
+          id="command-list"
+          ref={listRef}
+          role="listbox"
+        >
           {filteredItems.length === 0 ? (
             <li className={styles.empty}>No commands or databases found</li>
           ) : (
             filteredItems.map((item, index) => {
               const isSelected = index === selectedIndex;
               return (
-                <li key={item.id} role="option" aria-selected={isSelected}>
+                <li key={item.id} role="presentation">
                   <button
+                    ref={(element) => {
+                      itemRefs.current[index] = element;
+                    }}
+                    aria-selected={isSelected}
                     className={`${styles.item} ${isSelected ? styles.itemSelected : ""}`}
                     onClick={() => item.onSelect()}
-                    onMouseEnter={() => setSelectedIndex(index)}
-                    style={{ width: "100%", textAlign: "left", background: "none", border: "none" }}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseMove={() => setSelectedIndex(index)}
+                    id={`command-${item.id}`}
+                    role="option"
+                    tabIndex={-1}
                     type="button"
                   >
                     <span className={styles.itemLeft}>

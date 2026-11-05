@@ -23,7 +23,7 @@ export default async function DashboardLayout({ children }: Readonly<{ children:
 
   return (
     <DashboardShell
-      account={{ name: displayName, email: session.account.email ?? "Perminister account" }}
+      account={{ name: displayName, email: session.account.email }}
       currentOrganization={currentOrganization}
       currentWorkspace={currentWorkspace}
       workspaces={workspaces}

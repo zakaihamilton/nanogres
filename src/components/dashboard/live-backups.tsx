@@ -29,6 +29,14 @@ import { TENANT_NAME_MAX_LENGTH, TENANT_NAME_PATTERN } from "@/lib/tenant-names"
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Keyboard-focusable regions let users scroll wide data tables on small screens. */
 const TRANSFER_CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_BUFFERED_DOWNLOAD_BYTES = 128 * 1024 * 1024;
+const BACKUP_TIMELINE_DAYS = 14;
+
+function localDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 type TransferFileWriter = {
   write: (chunk: Uint8Array) => Promise<void>;
@@ -129,13 +137,24 @@ export function LiveBackupsScreen({
     if (!rawBackups) return [];
     const map = new Map<string, { sizeBytes: number; count: number }>();
     rawBackups.forEach((b) => {
-      const day = b.createdAt.substring(0, 10);
+      const createdAt = new Date(b.createdAt);
+      if (Number.isNaN(createdAt.getTime())) return;
+      const day = localDateKey(createdAt);
       const existing = map.get(day) || { sizeBytes: 0, count: 0 };
       map.set(day, { sizeBytes: existing.sizeBytes + b.sizeBytes, count: existing.count + 1 });
     });
-    return Array.from(map.entries())
-      .map(([date, val]) => ({ date, ...val }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const firstDay = new Date(today);
+    firstDay.setDate(firstDay.getDate() - (BACKUP_TIMELINE_DAYS - 1));
+
+    return Array.from({ length: BACKUP_TIMELINE_DAYS }, (_, index) => {
+      const day = new Date(firstDay);
+      day.setDate(firstDay.getDate() + index);
+      const date = localDateKey(day);
+      return { date, ...(map.get(date) ?? { sizeBytes: 0, count: 0 }) };
+    });
   }, [rawBackups]);
 
   const filteredBackups = useMemo(() => {
@@ -472,8 +491,8 @@ export function LiveBackupsScreen({
                   ? "Unknown"
                   : offsite?.configured
                     ? offsite.lastSuccessAt
-                      ? "Local disk + DigitalOcean Spaces"
-                      : "Spaces upload pending"
+                      ? "Local disk + S3 Storage"
+                      : "S3 upload pending"
                     : "Local workspace disk"}
               </strong>
             </div>
@@ -498,8 +517,8 @@ export function LiveBackupsScreen({
               for 14 days.
             </Notice>
           )}
-          {dailyTimeline.length > 1 ? (
-            <Panel title="Backup retention timeline" detail="Daily snapshot size history">
+          {rawBackups ? (
+            <Panel title="Backup retention timeline" detail="Daily backup size · last 14 days">
               <BackupTimelineChart backups={dailyTimeline} />
             </Panel>
           ) : null}

@@ -15,7 +15,7 @@ import styles from "./dashboard-shell.module.css";
 
 type AccountView = {
   name: string;
-  email: string;
+  email?: string | null;
 };
 
 type NavigationItem = {
@@ -200,20 +200,22 @@ export function DashboardShell({
           </nav>
 
           <div className={styles.sidebarSpacer} />
-          <div className={styles.sidebarStatus}>
-            <span className={styles.statusDot} />
-            <span>
-              <strong>{previewMode ? "Preview mode" : "Perminister session"}</strong>
-              <small>{previewMode ? "Synthetic data only" : "Access checked per action"}</small>
-            </span>
-          </div>
+          {previewMode ? (
+            <div className={styles.sidebarStatus}>
+              <span className={styles.statusDot} />
+              <span>
+                <strong>Preview mode</strong>
+                <small>Synthetic data only</small>
+              </span>
+            </div>
+          ) : null}
           <div className={styles.profile}>
             <span aria-hidden="true" className={styles.avatar}>
               {initials(account.name) || "N"}
             </span>
             <span className={styles.profileText}>
               <strong>{account.name}</strong>
-              <small>{account.email}</small>
+              {account.email ? <small>{account.email}</small> : null}
             </span>
             {!previewMode ? (
               <form action="/api/auth/logout" method="post">
@@ -263,20 +265,12 @@ export function DashboardShell({
                 <span>Commands</span>
                 <kbd className={styles.cmdKey}>⌘K</kbd>
               </button>
-              <div className={styles.apiStatus}>
-                <Icon name="shield" size={15} />
-                {previewMode ? "Preview data" : "Authorized session"}
-              </div>
               {!previewMode ? <ThemeControl /> : null}
             </div>
           </header>
           <main className={styles.mainContent} id="main-content" tabIndex={-1}>
             {children}
           </main>
-          <footer className={styles.footer}>
-            <span>Nanogres</span>
-            <span>PostgreSQL cluster manager</span>
-          </footer>
         </div>
       </div>
       <CommandPalette

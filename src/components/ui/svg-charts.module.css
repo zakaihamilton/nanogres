@@ -155,25 +155,194 @@
 
 /* Timeline */
 .timelineWrap {
+  position: relative;
   width: 100%;
+  padding-top: 52px;
 }
 
-.timelineSvg {
-  width: 100%;
-  height: 60px;
-  overflow: visible;
+.timelineChart {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 8px 10px;
+}
+
+.timelineYAxis {
+  display: flex;
+  height: 82px;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  color: var(--ink-muted);
+  font-size: 9px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.timelinePlot {
+  position: relative;
+  height: 82px;
+}
+
+.timelineGridlines {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.timelineGridlines span {
+  border-top: 1px solid var(--line);
+}
+
+.timelineGridlines span:last-child {
+  border-color: var(--line-strong);
+}
+
+.timelineDays {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  height: 100%;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+}
+
+.timelineDay {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.timelineDay:focus-visible {
+  outline: none;
 }
 
 .timelineBar {
+  display: block;
+  width: min(64%, 36px);
+  min-height: 4px;
+  border-radius: 5px 5px 2px 2px;
+  background: linear-gradient(180deg, var(--green-strong), var(--green));
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--green) 20%, transparent);
+  transform-origin: bottom;
   transition:
-    opacity 0.2s ease,
-    y 0.3s ease,
-    height 0.3s ease;
-  rx: 3px;
-  ry: 3px;
+    filter 140ms ease,
+    transform 140ms ease,
+    box-shadow 140ms ease;
 }
 
-.timelineBar:hover {
-  opacity: 0.8;
-  cursor: pointer;
+.timelineDay:hover .timelineBar,
+.timelineDay:focus-visible .timelineBar {
+  filter: brightness(1.08);
+  transform: scaleX(1.12);
+  box-shadow: 0 3px 9px color-mix(in srgb, var(--green) 30%, transparent);
+}
+
+.timelineDay:focus-visible .timelineBar,
+.timelineDay:focus-visible .timelineZeroMarker {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+
+.timelineZeroMarker {
+  display: block;
+  width: min(48%, 10px);
+  height: 3px;
+  margin-bottom: 1px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  opacity: 0.85;
+}
+
+.timelineDay:hover .timelineZeroMarker,
+.timelineDay:focus-visible .timelineZeroMarker {
+  background: var(--green);
+  opacity: 1;
+}
+
+.timelineEmptyMessage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.timelineXAxis {
+  display: grid;
+  min-height: 16px;
+  grid-column: 2;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+}
+
+.timelineAxisLabel {
+  justify-self: center;
+  color: var(--ink-muted);
+  font-size: 9px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.timelineAxisEndpoint:first-child {
+  justify-self: start;
+}
+
+.timelineAxisEndpoint:last-child {
+  justify-self: end;
+}
+
+.timelineTooltip {
+  position: absolute;
+  z-index: 3;
+  top: 4px;
+  display: grid;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 24px), calc(100% - 16px));
+  gap: 3px;
+  padding: 7px 10px;
+  transform: translateX(-50%);
+  border: 1px solid color-mix(in srgb, var(--surface) 15%, transparent);
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 10px;
+  line-height: 1.35;
+  pointer-events: none;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 18%);
+}
+
+.timelineTooltip strong {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+@media (width <= 540px) {
+  .timelineChart {
+    grid-template-columns: 38px minmax(0, 1fr);
+    column-gap: 7px;
+  }
+
+  .timelineAxisLabel:not(.timelineAxisMobileTick) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timelineBar {
+    transition: none;
+  }
 }

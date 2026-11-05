@@ -1,5 +1,6 @@
 "use client";
 
+import { useId, useRef, useState } from "react";
 import styles from "./svg-charts.module.css";
 
 // 1. Connection Gauge (240-degree arc)
@@ -247,45 +248,176 @@ export function Sparkline({
 }
 
 // 5. Daily Backup Bar Timeline
+function formatTimelineSize(bytes: number): string {
+  const safeBytes = Math.max(0, bytes);
+  if (safeBytes < 1024) return `${Math.round(safeBytes)} B`;
+  if (safeBytes < 1024 ** 2) {
+    const kilobytes = safeBytes / 1024;
+    return `${kilobytes.toFixed(kilobytes < 10 ? 1 : 0)} KB`;
+  }
+  if (safeBytes < 1024 ** 3) {
+    const megabytes = safeBytes / 1024 ** 2;
+    return `${megabytes.toFixed(megabytes < 10 ? 1 : 0)} MB`;
+  }
+  const gigabytes = safeBytes / 1024 ** 3;
+  return `${gigabytes.toFixed(gigabytes < 10 ? 1 : 0)} GB`;
+}
+
+function niceTimelineMaximum(value: number): number {
+  const safeValue = Math.max(1, value);
+  const magnitude = 10 ** Math.floor(Math.log10(safeValue));
+  const normalized = safeValue / magnitude;
+  const step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return step * magnitude;
+}
+
+function formatTimelineDate(dateKey: string, long = false): string {
+  const date = new Date(`${dateKey}T12:00:00`);
+  return new Intl.DateTimeFormat(
+    undefined,
+    long
+      ? { weekday: "long", month: "long", day: "numeric", year: "numeric" }
+      : { month: "short", day: "numeric" },
+  ).format(date);
+}
+
 export function BackupTimelineChart({
   backups,
-  height = 54,
+  height = 82,
 }: {
   backups: Array<{ date: string; sizeBytes: number; count: number }>;
   height?: number;
 }) {
+  const tooltipId = useId();
+  const [activeTooltip, setActiveTooltip] = useState<{ index: number; left: number } | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   if (!backups.length) return null;
-  const maxBytes = Math.max(...backups.map((b) => b.sizeBytes), 1024 * 1024);
+
+  const hasBackups = backups.some((backup) => backup.count > 0);
+  const largestSize = Math.max(...backups.map((backup) => backup.sizeBytes), 0);
+  const scaleMaximum = niceTimelineMaximum(largestSize || 1024);
+
+  const showTooltip = (index: number, target: HTMLButtonElement) => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    const wrapperBounds = wrapper.getBoundingClientRect();
+    const dayBounds = target.getBoundingClientRect();
+    const edgeInset = Math.min(132, Math.max(8, (wrapperBounds.width - 16) / 2));
+    const dayCenter = dayBounds.left + dayBounds.width / 2 - wrapperBounds.left;
+    const left = Math.max(edgeInset, Math.min(wrapperBounds.width - edgeInset, dayCenter));
+    setActiveTooltip({ index, left });
+  };
+
+  const hideTooltip = (index: number, target: HTMLButtonElement) => {
+    if (document.activeElement === target) return;
+    setActiveTooltip((current) => (current?.index === index ? null : current));
+  };
 
   return (
-    <div className={styles.timelineWrap}>
-      <svg
-        className={styles.timelineSvg}
-        height={height}
-        preserveAspectRatio="none"
-        viewBox="0 0 100 50"
-      >
-        {backups.map((item, idx) => {
-          const barWidth = 85 / Math.max(backups.length, 7);
-          const x = 5 + idx * (90 / Math.max(backups.length, 7));
-          const barHeight = Math.max(4, (item.sizeBytes / maxBytes) * 44);
-          const y = 48 - barHeight;
+    <div className={styles.timelineWrap} ref={wrapperRef}>
+      <div className={styles.timelineChart}>
+        <div aria-hidden="true" className={styles.timelineYAxis} style={{ height }}>
+          <span>{hasBackups ? formatTimelineSize(scaleMaximum) : "—"}</span>
+          <span>{hasBackups ? formatTimelineSize(scaleMaximum / 2) : "—"}</span>
+          <span>0 B</span>
+        </div>
+        <div className={styles.timelinePlot} style={{ height }}>
+          <div aria-hidden="true" className={styles.timelineGridlines}>
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className={styles.timelineDays}>
+            {backups.map((item, index) => {
+              const hasBackup = item.count > 0;
+              const barHeight = hasBackup
+                ? Math.max(5, (Math.max(0, item.sizeBytes) / scaleMaximum) * 100)
+                : 0;
+              const description =
+                item.count === 0
+                  ? `${formatTimelineDate(item.date, true)}: no backups`
+                  : `${formatTimelineDate(item.date, true)}: ${formatTimelineSize(item.sizeBytes)} total, ${item.count} backups`;
 
-          return (
-            <g key={item.date}>
-              <title>{`${item.date}: ${(item.sizeBytes / 1024 ** 2).toFixed(1)} MB (${item.count} backups)`}</title>
-              <rect
-                className={styles.timelineBar}
-                fill="var(--green)"
-                height={barHeight}
-                width={barWidth}
-                x={x}
-                y={y}
-              />
-            </g>
-          );
-        })}
-      </svg>
+              return (
+                <button
+                  aria-describedby={
+                    activeTooltip?.index === index ? `${tooltipId}-${index}` : undefined
+                  }
+                  aria-label={description}
+                  className={styles.timelineDay}
+                  key={item.date}
+                  onBlur={(event) => hideTooltip(index, event.currentTarget)}
+                  onClick={(event) => showTooltip(index, event.currentTarget)}
+                  onFocus={(event) => showTooltip(index, event.currentTarget)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") setActiveTooltip(null);
+                  }}
+                  onPointerEnter={(event) => {
+                    if (event.pointerType !== "touch") showTooltip(index, event.currentTarget);
+                  }}
+                  onPointerLeave={(event) => {
+                    if (event.pointerType !== "touch") hideTooltip(index, event.currentTarget);
+                  }}
+                  type="button"
+                >
+                  {hasBackup ? (
+                    <span
+                      aria-hidden="true"
+                      className={styles.timelineBar}
+                      style={{ height: `${barHeight}%` }}
+                    />
+                  ) : (
+                    <span aria-hidden="true" className={styles.timelineZeroMarker} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {!hasBackups ? (
+            <p className={styles.timelineEmptyMessage}>No backups in the last 14 days</p>
+          ) : null}
+        </div>
+        <div aria-hidden="true" className={styles.timelineXAxis}>
+          {backups.map((item, index) => {
+            const endpoint = index === 0 || index === backups.length - 1;
+            const mobileTick = endpoint || index % 6 === 0;
+            const showLabel = endpoint || index % 3 === 0;
+            if (!showLabel) return null;
+
+            return (
+              <span
+                className={[
+                  styles.timelineAxisLabel,
+                  endpoint ? styles.timelineAxisEndpoint : "",
+                  mobileTick ? styles.timelineAxisMobileTick : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                key={item.date}
+                style={{ gridColumn: index + 1 }}
+              >
+                {formatTimelineDate(item.date)}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+      {activeTooltip && backups[activeTooltip.index] ? (
+        <div
+          className={styles.timelineTooltip}
+          id={`${tooltipId}-${activeTooltip.index}`}
+          role="tooltip"
+          style={{ left: activeTooltip.left }}
+        >
+          <strong>{formatTimelineDate(backups[activeTooltip.index].date, true)}</strong>
+          <span>
+            {backups[activeTooltip.index].count === 0
+              ? "No backups"
+              : `${formatTimelineSize(backups[activeTooltip.index].sizeBytes)} total · ${backups[activeTooltip.index].count} backups`}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

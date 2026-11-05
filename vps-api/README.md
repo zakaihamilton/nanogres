@@ -89,7 +89,7 @@ See `install-vps.md` for the offline maintenance procedure needed on the current
 ## Backups
 
 The timer creates custom-format `pg_dump` files daily near 02:00 UTC and retains 14 days locally.
-Each daily backup batch and each manual backup queues a copy to the private DigitalOcean Spaces
+Each daily backup batch and each manual backup queues a copy to the private S3-compatible storage
 bucket `nanogres-backups`. The uploader verifies that all retained local dump files exist remotely
 with matching sizes. The dashboard considers a successful copy fresh for 36 hours and shows a
 warning after a newer failed attempt or when the latest success is older. Its status response
@@ -122,9 +122,9 @@ NANOGRES_ALERT_WEBHOOK_FORMAT=generic
 NANOGRES_ALERT_WEBHOOK_BEARER_TOKEN=...
 ```
 
-No remote lifecycle or deletion rule is configured. This bucket is Cold Storage with a 30-day
+No remote lifecycle or deletion rule is configured. This bucket uses Cold Storage with a 30-day
 minimum storage period; early deletion or replacement may incur minimum-retention charges. Review
-current [Spaces pricing](https://docs.digitalocean.com/products/spaces/details/pricing/) and
+current [S3 storage pricing](https://docs.digitalocean.com/products/spaces/details/pricing/) and
 [lifecycle rules](https://docs.digitalocean.com/products/spaces/how-to/configure-lifecycle-rules/)
 before changing remote retention.
 
