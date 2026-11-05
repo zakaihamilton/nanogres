@@ -7,6 +7,7 @@ import { formatBytes, StorageCapacity } from "./storage-capacity";
 import { ConnectionGauge, StorageDonut } from "@/components/ui/svg-charts";
 import { ConnectionModal } from "@/components/ui/connection-modal";
 import { Tooltip } from "@/components/ui/tooltip";
+import { SectionInfo } from "./section-info";
 import { useTelemetryStream } from "@/lib/use-stream";
 import {
   type Database,
@@ -130,7 +131,10 @@ export function LiveOverviewScreen() {
             <div className={styles.telemetryCard}>
               <div className={styles.telemetryCardHeader}>
                 <h3>Active Connections</h3>
-                <span>Real-time pool load</span>
+                <div className={styles.telemetryCardMeta}>
+                  <span>Server connection usage</span>
+                  <SectionInfo label="Counts active PostgreSQL sessions across the whole server against its cluster-wide max_connections setting. Other workspaces and maintenance sessions share this connection ceiling." />
+                </div>
               </div>
               <div className={styles.telemetryCardBody}>
                 <ConnectionGauge
@@ -143,7 +147,12 @@ export function LiveOverviewScreen() {
             <div className={styles.telemetryCard}>
               <div className={styles.telemetryCardHeader}>
                 <h3>Disk & Storage Allocation</h3>
-                <span>Workspace root filesystem</span>
+                <div className={styles.telemetryCardMeta}>
+                  <span>Workspace root filesystem</span>
+                  <SectionInfo
+                    label={`Shows organization database file sizes and free space on the workspace filesystem. The ${formatBytes(status.databaseQuotaReserveBytes ?? 1024 ** 3)} growth reserve is taken from available disk, not extra physical storage; it can overlap the free-space value, so the chart segments are not additive.`}
+                  />
+                </div>
               </div>
               <div className={styles.telemetryCardBody}>
                 <StorageDonut items={storageItems} size={120} totalBytes={status.disk.totalBytes} />
@@ -156,21 +165,25 @@ export function LiveOverviewScreen() {
               label="Managed databases"
               value={String(managedDatabases.length)}
               detail={`${systemDatabaseCount} protected system database${systemDatabaseCount === 1 ? "" : "s"} excluded`}
+              info="Counts organization databases and excludes protected system databases. There is no fixed count limit shown here; practical growth is bounded by shared disk space and the per-database quota policy."
             />
             <Metric
               label="Connections"
               value={String(status.connections)}
               detail={`Maximum ${status.maxConnections}`}
+              info="Current active PostgreSQL sessions across the whole server compared with the cluster-wide max_connections ceiling. Sessions from other workspaces and maintenance tasks share this limit."
             />
             <Metric
               label="Database storage"
               value={formatBytes(totalSize)}
               detail="Across organization databases"
+              info="Sum of database file sizes returned for this organization; protected PostgreSQL system databases are excluded. These files share workspace disk with backups and other files. Database growth targets are hard caps only when quota enforcement is active."
             />
             <Metric
               label="Free disk"
               value={formatBytes(status.disk.freeBytes)}
               detail={`of ${formatBytes(status.disk.totalBytes)}`}
+              info="Free space on PostgreSQL's workspace filesystem. Databases, local backups, and other workspace files share this volume; this is not a database-only quota."
             />
           </div>
         </>
@@ -182,10 +195,15 @@ export function LiveOverviewScreen() {
             <Panel
               title="Databases"
               detail={`${databases.length} total · ${managedDatabases.length} managed · ${systemDatabaseCount} protected system · ${formatBytes(totalSize)} used`}
+              info="This overview preview shows up to six rows. Open Databases for the full organization list. Organization-scoped lists exclude protected PostgreSQL system databases."
             >
               <DatabaseTable databases={databases.slice(0, 6)} />
             </Panel>
-            <Panel title="System health" detail="PostgreSQL workspace status">
+            <Panel
+              title="System health"
+              detail="PostgreSQL workspace status"
+              info={`Shows server response and runtime details. Local backup retention follows the server setting (${status.backupRetentionDays} days). An off-site copy is marked stale after 36 hours without a verified successful upload.`}
+            >
               <div className={styles.health}>
                 <span className={styles.healthyDot} />
                 <div>
@@ -231,6 +249,7 @@ export function LiveOverviewScreen() {
           <Panel
             title="Storage capacity"
             detail="Disk usage and current growth room for each user database"
+            info={`Growth targets share ${status.databaseGrowthPercent ?? 25}% of free disk after a ${formatBytes(status.databaseQuotaReserveBytes ?? 1024 ** 3)} system reserve across user databases. Custom limits use that shared budget; Auto databases share what remains. Targets are advisory unless hard quota enforcement is active, and the whole workspace disk is shared with backups and other files.`}
           >
             <StorageCapacity
               databases={databases}
@@ -240,13 +259,18 @@ export function LiveOverviewScreen() {
               reserveBytes={status.databaseQuotaReserveBytes}
             />
           </Panel>
-          <Panel title="Recent activity" detail="Database and access changes in this workspace">
+          <Panel
+            title="Recent activity"
+            detail="Database and access changes in this workspace"
+            info="Shows the eight latest organization-scoped operations here. Open Activity to browse up to 50 recent events from the log."
+          >
             <ActivityList error={null} events={data.activity} loading={false} />
           </Panel>
           <Notice
             tone={offsiteFreshness === "stale" || offsiteFreshness === "error" ? "warning" : "info"}
           >
-            {offsiteNotice}
+            <span>{offsiteNotice}</span>
+            <SectionInfo label="Off-site backup status reflects verified successful uploads. A copy is stale after 36 hours without a verified success. Off-site storage is separate from local backups, which follow the workspace retention period shown in System health." />
           </Notice>
         </>
       ) : null}
@@ -337,10 +361,23 @@ export function FirstRunCard({ error }: { error: string | null }) {
   );
 }
 
-function Metric({ label, value, detail }: { label: string; value: string; detail: string }) {
+function Metric({
+  label,
+  value,
+  detail,
+  info,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  info: string;
+}) {
   return (
     <section className={styles.metric}>
-      <span>{label}</span>
+      <div className={styles.metricHeader}>
+        <span>{label}</span>
+        <SectionInfo label={info} />
+      </div>
       <strong>{value}</strong>
       <small>{detail}</small>
     </section>
