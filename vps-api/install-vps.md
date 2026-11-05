@@ -3,6 +3,7 @@
 Run `vps-api/install-vps.sh` as root after copying this directory onto the server. It installs the
 loopback-only API, local and off-site backup units, quota reconciler, and generates a random bearer
 token in `/etc/nanogres/api.env`. It installs Ubuntu's `rclone` and `quota` packages if missing. It
+restarts the API service after installing its files, so rerunning it also applies API updates. It
 does not enable the Nginx proxy or open a firewall port.
 
 Before enabling the public proxy:

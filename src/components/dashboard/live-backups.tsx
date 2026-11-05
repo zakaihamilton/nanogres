@@ -24,6 +24,7 @@ import {
   useDatabases,
 } from "./live-shared";
 import styles from "./live-screens.module.css";
+import { TENANT_NAME_MAX_LENGTH, TENANT_NAME_PATTERN } from "@/lib/tenant-names";
 
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Keyboard-focusable regions let users scroll wide data tables on small screens. */
 const TRANSFER_CHUNK_BYTES = 4 * 1024 * 1024;
@@ -155,7 +156,10 @@ export function LiveBackupsScreen({
   const restoreBackup = backups.find((item) => item.filename === backupFilename);
   const [restoreNameInput, setRestoreName] = useState<string | null>(null);
   const restoreName =
-    restoreNameInput ?? (restoreBackup ? restoreBackup.database.slice(0, 29) + "_restore" : "");
+    restoreNameInput ??
+    (restoreBackup
+      ? restoreBackup.database.slice(0, TENANT_NAME_MAX_LENGTH - "_restore".length) + "_restore"
+      : "");
   const [restoring, setRestoring] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<{
     message: string;
@@ -445,7 +449,7 @@ export function LiveBackupsScreen({
             <Link className={styles.primaryButton} href="/backups/new">
               Create backup
             </Link>
-            <Link className={styles.button} href="/backups/restore">
+            <Link className={`${styles.button} ${styles.secondary}`} href="/backups/restore">
               Restore from file
             </Link>
           </div>
@@ -647,15 +651,16 @@ export function LiveBackupsScreen({
                   <input
                     autoComplete="off"
                     id="restore-existing-name"
-                    maxLength={37}
+                    maxLength={TENANT_NAME_MAX_LENGTH}
                     minLength={1}
-                    pattern="[a-z][a-z0-9_]{0,36}"
+                    pattern={TENANT_NAME_PATTERN}
                     required
                     value={restoreName}
                     onChange={(event) => setRestoreName(event.target.value)}
                   />
                   <small>
-                    Restores into a separate database. Existing databases are never replaced.
+                    Restores into a separate database. Existing databases are never replaced. Max{" "}
+                    {TENANT_NAME_MAX_LENGTH} characters.
                   </small>
                 </div>
                 <div className={styles.formActions}>
@@ -694,7 +699,7 @@ export function LiveBackupsScreen({
                         .toLowerCase()
                         .replace(/[^a-z0-9_]/g, "_")
                         .replace(/^[^a-z]+/, "")
-                        .slice(0, 29);
+                        .slice(0, TENANT_NAME_MAX_LENGTH - "_restore".length);
                       setRestoreFileName((base || "restored_db") + "_restore");
                     }
                   }}
@@ -711,15 +716,17 @@ export function LiveBackupsScreen({
                 <input
                   autoComplete="off"
                   id="restore-file-database"
-                  maxLength={37}
+                  maxLength={TENANT_NAME_MAX_LENGTH}
                   minLength={1}
                   onChange={(event) => setRestoreFileName(event.target.value)}
-                  pattern="[a-z][a-z0-9_]{0,36}"
+                  pattern={TENANT_NAME_PATTERN}
                   placeholder="restored_project"
                   required
                   value={restoreFileName}
                 />
-                <small>Existing databases are never overwritten.</small>
+                <small>
+                  Existing databases are never overwritten. Max {TENANT_NAME_MAX_LENGTH} characters.
+                </small>
               </div>
               <div className={styles.formActions}>
                 <Button disabled={transferBusy || restoreFile === null} type="submit">

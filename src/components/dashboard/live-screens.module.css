@@ -567,6 +567,17 @@
   padding-top: 3px;
 }
 
+.passwordInputRow {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.passwordInputRow input {
+  min-width: 0;
+  flex: 1;
+}
+
 .inlineForm {
   display: flex;
   max-width: 580px;
@@ -924,6 +935,14 @@
 
   .formActions {
     grid-column: auto;
+  }
+
+  .passwordInputRow {
+    flex-wrap: wrap;
+  }
+
+  .passwordInputRow input {
+    flex-basis: 100%;
   }
 
   .dialogActions {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PanelFrame } from "./panel-frame";
 import { formatBytes, type DatabaseStorage, type StorageDisk } from "./storage-capacity";
 import styles from "./live-screens.module.css";
+import { TENANT_NAME_MAX_LENGTH } from "@/lib/tenant-names";
 
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Keyboard-focusable regions let users scroll wide data tables on small screens. */
 export type Database = DatabaseStorage & {
@@ -432,7 +433,7 @@ export function DeleteDatabaseDialog({
             autoComplete="off"
             disabled={busy}
             id="delete-database-confirmation"
-            maxLength={37}
+            maxLength={TENANT_NAME_MAX_LENGTH}
             onChange={(event) => setConfirmationName(event.target.value)}
             placeholder="Type the database name"
             ref={nameInputRef}

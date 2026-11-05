@@ -1,9 +1,11 @@
-import type { FormEvent, ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Icon } from "./icons";
 import { PanelFrame } from "./panel-frame";
 import { Select } from "@/components/ui/select";
+import { generateSecurePassword } from "@/lib/generate-password";
 import { StorageCapacity, type DatabaseStorage, type StorageDisk } from "./storage-capacity";
 import styles from "./screens.module.css";
+import { TENANT_NAME_MAX_LENGTH, TENANT_NAME_PATTERN } from "@/lib/tenant-names";
 import {
   LiveAccessScreen,
   LiveActivityScreen,
@@ -299,6 +301,7 @@ function DatabaseTable({
                 <Icon name="database" size={15} />
               </span>
               <strong>{row.name}</strong>
+              {row.systemDatabase ? <small className={styles.systemBadge}>System</small> : null}
             </span>
           </td>
           <td className={styles.mutedCell}>{row.owner}</td>
@@ -393,10 +396,10 @@ function DatabaseCreatePreviewForm({ onSubmit }: { onSubmit?: (name: string) => 
         <input
           autoComplete="off"
           id="preview-database-name"
-          maxLength={37}
+          maxLength={TENANT_NAME_MAX_LENGTH}
           minLength={2}
           name="database-name"
-          pattern="[a-z][a-z0-9_]{1,36}"
+          pattern={TENANT_NAME_PATTERN}
           placeholder="my_project"
           required
         />
@@ -409,12 +412,17 @@ function DatabaseCreatePreviewForm({ onSubmit }: { onSubmit?: (name: string) => 
 }
 
 function RoleCreatePreviewForm({ onSubmit }: { onSubmit?: (name: string) => void }) {
+  const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const name = String(new FormData(form).get("role-name") ?? "");
     onSubmit?.(name);
     form.reset();
+    setPassword("");
+    setPasswordVisible(false);
   }
 
   return (
@@ -424,10 +432,10 @@ function RoleCreatePreviewForm({ onSubmit }: { onSubmit?: (name: string) => void
         <input
           autoComplete="off"
           id="preview-role-name"
-          maxLength={37}
+          maxLength={TENANT_NAME_MAX_LENGTH}
           minLength={2}
           name="role-name"
-          pattern="[a-z][a-z0-9_]{1,36}"
+          pattern={TENANT_NAME_PATTERN}
           placeholder="my_app_user"
           required
         />
@@ -449,15 +457,38 @@ function RoleCreatePreviewForm({ onSubmit }: { onSubmit?: (name: string) => void
       </div>
       <div className={styles.previewField}>
         <label htmlFor="preview-role-password">Initial password</label>
-        <input
-          autoComplete="new-password"
-          id="preview-role-password"
-          minLength={16}
-          name="role-password"
-          required
-          type="password"
-        />
-        <small>Use at least 16 characters. Generate and store it in your password manager.</small>
+        <div className={styles.passwordInputRow}>
+          <input
+            autoComplete="new-password"
+            id="preview-role-password"
+            minLength={16}
+            name="role-password"
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            type={passwordVisible ? "text" : "password"}
+            value={password}
+          />
+          <button
+            aria-controls="preview-role-password"
+            aria-label={passwordVisible ? "Hide password" : "Show password"}
+            aria-pressed={passwordVisible}
+            className={styles.secondaryButton}
+            onClick={() => setPasswordVisible((visible) => !visible)}
+            type="button"
+          >
+            {passwordVisible ? "Hide" : "Show"}
+          </button>
+          <button
+            className={styles.secondaryButton}
+            onClick={() => setPassword(generateSecurePassword())}
+            type="button"
+          >
+            Generate
+          </button>
+        </div>
+        <small>
+          Generate a secure 24-character password, show it, then save it in your password manager.
+        </small>
       </div>
       <div className={styles.previewFormActions}>
         <button disabled={!onSubmit} type="submit">
@@ -489,9 +520,11 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
 
       <div className={styles.metrics}>
         <MetricCard
-          detail={preview ? "Across your workspace" : "Waiting for system connection"}
+          detail={
+            preview ? "3 managed · 1 protected system database" : "Waiting for system connection"
+          }
           icon="database"
-          label="Databases"
+          label="Managed databases"
           value={preview ? "3" : "—"}
         />
         <MetricCard
@@ -522,7 +555,7 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
           className={styles.databasePanel}
           detail={
             preview
-              ? "3 databases · refreshed just now"
+              ? "4 total · 3 managed · 1 protected system · refreshed just now"
               : "Live inventory will appear after connection"
           }
           title="Databases"
@@ -639,9 +672,11 @@ export function DatabasesScreen({
   return (
     <div className={styles.screen}>
       <ScreenHeading
+        action={previewPage === "list" ? "Create a database" : undefined}
         description="Create databases and review size, owners, and active connections."
         eyebrow="DATA"
         title="Databases"
+        onAction={() => onPreviewNavigate?.("database-new")}
       />
       {previewNotice ? (
         <div className={styles.previewNotice} role="status">
@@ -650,11 +685,15 @@ export function DatabasesScreen({
       ) : null}
       {previewPage === "new" ? (
         <>
-          <button type="button" onClick={() => onPreviewNavigate?.("databases")}>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={() => onPreviewNavigate?.("databases")}
+          >
             ← Back to databases
           </button>
           <Panel
-            detail="Names use lowercase letters, numbers, and underscores."
+            detail={`Lowercase letters, numbers, and underscores; max ${TENANT_NAME_MAX_LENGTH} characters.`}
             title="Create a database"
           >
             <DatabaseCreatePreviewForm onSubmit={onPreviewCreateDatabase} />
@@ -662,17 +701,7 @@ export function DatabasesScreen({
         </>
       ) : (
         <>
-          <button
-            className={styles.primaryButton}
-            type="button"
-            onClick={() => onPreviewNavigate?.("database-new")}
-          >
-            Create database
-          </button>
-          <Panel
-            detail={`${demoDatabases.length} database${demoDatabases.length === 1 ? "" : "s"}`}
-            title="All databases"
-          >
+          <Panel detail="4 total · 3 managed · 1 protected system" title="All databases">
             <DatabaseTable rows={demoDatabases} variant="management" onDelete={onPreviewDelete} />
           </Panel>
           <Panel
@@ -703,9 +732,11 @@ export function AccessScreen({
   return (
     <div className={styles.screen}>
       <ScreenHeading
+        action={previewPage === "list" ? "Create role" : undefined}
         description="Create least-privilege Postgres login roles for individual databases."
         eyebrow="SECURITY"
         title="Access & roles"
+        onAction={() => onPreviewNavigate?.("access-new")}
       />
       {previewNotice ? (
         <div className={styles.previewNotice} role="status">
@@ -723,7 +754,11 @@ export function AccessScreen({
       </div>
       {previewPage === "new" ? (
         <>
-          <button type="button" onClick={() => onPreviewNavigate?.("access")}>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={() => onPreviewNavigate?.("access")}
+          >
             ← Back to login roles
           </button>
           <Panel
@@ -735,13 +770,6 @@ export function AccessScreen({
         </>
       ) : (
         <>
-          <button
-            className={styles.primaryButton}
-            type="button"
-            onClick={() => onPreviewNavigate?.("access-new")}
-          >
-            Create role
-          </button>
           <Panel title="Login roles" detail="2 Postgres login roles">
             <RoleTable variant="access" />
           </Panel>
@@ -776,7 +804,11 @@ export function BackupsScreen({
             >
               Create backup
             </button>{" "}
-            <button type="button" onClick={() => onPreviewNavigate?.("backups-restore")}>
+            <button
+              className={styles.secondaryButton}
+              type="button"
+              onClick={() => onPreviewNavigate?.("backups-restore")}
+            >
               Restore from file
             </button>
           </div>
@@ -821,7 +853,11 @@ export function BackupsScreen({
         </>
       ) : previewPage === "new" ? (
         <>
-          <button type="button" onClick={() => onPreviewNavigate?.("backups")}>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={() => onPreviewNavigate?.("backups")}
+          >
             ← Back to backups
           </button>
           <Panel
@@ -850,7 +886,11 @@ export function BackupsScreen({
         </>
       ) : previewPage === "restore-existing" ? (
         <>
-          <button type="button" onClick={() => onPreviewNavigate?.("backups")}>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={() => onPreviewNavigate?.("backups")}
+          >
             ← Back to backups
           </button>
           <Panel title="Restore a backup" detail="Restore this recovery point into a new database.">
@@ -859,8 +899,16 @@ export function BackupsScreen({
             </p>
             <div className={styles.previewField}>
               <label htmlFor="preview-existing-name">New database name</label>
-              <input id="preview-existing-name" defaultValue={`${previewBackup}_restore`} />
-              <small>Existing databases are never replaced.</small>
+              <input
+                id="preview-existing-name"
+                defaultValue={`${previewBackup}_restore`}
+                maxLength={TENANT_NAME_MAX_LENGTH}
+                minLength={1}
+                pattern={TENANT_NAME_PATTERN}
+              />
+              <small>
+                Existing databases are never replaced. Max {TENANT_NAME_MAX_LENGTH} characters.
+              </small>
             </div>
             <button className={styles.primaryButton} disabled type="button">
               Restore
@@ -870,7 +918,11 @@ export function BackupsScreen({
         </>
       ) : (
         <>
-          <button type="button" onClick={() => onPreviewNavigate?.("backups")}>
+          <button
+            className={styles.secondaryButton}
+            type="button"
+            onClick={() => onPreviewNavigate?.("backups")}
+          >
             ← Back to backups
           </button>
           <Panel
@@ -890,7 +942,13 @@ export function BackupsScreen({
               </div>
               <div className={styles.previewField}>
                 <label htmlFor="preview-restore-database">New database name</label>
-                <input id="preview-restore-database" placeholder="restored_project" disabled />
+                <input
+                  id="preview-restore-database"
+                  maxLength={TENANT_NAME_MAX_LENGTH}
+                  pattern={TENANT_NAME_PATTERN}
+                  placeholder="restored_project"
+                  disabled
+                />
               </div>
               <div className={styles.previewAction}>
                 <button className={styles.primaryButton} disabled type="button">

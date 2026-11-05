@@ -18,10 +18,14 @@ export function CommandPalette({
   isOpen,
   onClose,
   databases = [],
+  onNavigate,
+  previewMode = false,
 }: {
   isOpen: boolean;
   onClose: () => void;
   databases?: string[];
+  onNavigate?: (href: string) => void;
+  previewMode?: boolean;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -43,9 +47,10 @@ export function CommandPalette({
   const navigate = useCallback(
     (href: string) => {
       handleClose();
-      router.push(href);
+      if (onNavigate) onNavigate(href);
+      else router.push(href);
     },
-    [handleClose, router],
+    [handleClose, onNavigate, router],
   );
 
   const baseItems: PaletteItem[] = [
@@ -132,7 +137,9 @@ export function CommandPalette({
     onSelect: () => navigate(`/databases/${encodeURIComponent(db)}`),
   }));
 
-  const allItems = [...baseItems, ...dbItems];
+  const allItems = previewMode
+    ? baseItems.filter((item) => item.id !== "nav-sql")
+    : [...baseItems, ...dbItems];
 
   const filteredItems = query.trim()
     ? allItems.filter(

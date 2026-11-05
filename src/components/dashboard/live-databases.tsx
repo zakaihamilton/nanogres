@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatBytes, StorageCapacity, type DatabaseQuotaChange } from "./storage-capacity";
 import { ConnectionModal } from "@/components/ui/connection-modal";
 import { Icon } from "./icons";
+import { TENANT_NAME_MAX_LENGTH, TENANT_NAME_PATTERN } from "@/lib/tenant-names";
 import {
   type Database,
   apiRequest,
@@ -153,7 +154,7 @@ export function LiveDatabasesScreen({ page = "list" }: { page?: "list" | "new" }
           </Link>
           <Panel
             title="Create a database"
-            detail="Names use lowercase letters, numbers, and underscores."
+            detail={`Lowercase letters, numbers, and underscores; max ${TENANT_NAME_MAX_LENGTH} characters.`}
           >
             <form className={styles.form} onSubmit={createDatabase}>
               <label htmlFor="database-name">Database name</label>
@@ -161,10 +162,10 @@ export function LiveDatabasesScreen({ page = "list" }: { page?: "list" | "new" }
                 <input
                   autoComplete="off"
                   id="database-name"
-                  maxLength={37}
+                  maxLength={TENANT_NAME_MAX_LENGTH}
                   minLength={2}
                   onChange={(event) => setName(event.target.value)}
-                  pattern="[a-z][a-z0-9_]{1,36}"
+                  pattern={TENANT_NAME_PATTERN}
                   placeholder="my_project"
                   required
                   value={name}

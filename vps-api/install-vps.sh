@@ -57,7 +57,8 @@ systemctl enable --now nanogres-quota.timer
 systemctl enable --now nanogres-quota.path
 systemctl enable --now nanogres-offsite-backup.path
 systemctl enable --now nanogres-backup-alert.timer
-systemctl enable --now nanogres-api.service
+systemctl enable nanogres-api.service
+systemctl restart nanogres-api.service
 
 echo "Nanogres API is installed and bound to 127.0.0.1:8765."
 echo "The HTTPS proxy config is staged but not enabled; no firewall rules were changed."

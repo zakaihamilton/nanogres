@@ -103,7 +103,7 @@ export function DashboardShell({
   const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [databaseNames, setDatabaseNames] = useState<string[]>(() =>
-    previewMode ? ["production_app", "analytics_warehouse", "staging_db"] : [],
+    previewMode ? ["app_main", "event_store", "sandbox"] : [],
   );
   const breadcrumbs = getBreadcrumbs(activePath ?? pathname);
 
@@ -166,32 +166,41 @@ export function DashboardShell({
 
           <p className={styles.sectionLabel}>Manage</p>
           <nav className={styles.navigation}>
-            {navigation.map((item) => {
-              const active = isActive(pathname, item, activePath);
-              return (
-                <Link
-                  aria-current={active ? "page" : undefined}
-                  aria-disabled={(previewMode && !onPreviewNavigate) || undefined}
-                  className={`${styles.navItem} ${active ? styles.navItemActive : ""}`}
-                  href={item.href}
-                  onClick={
-                    previewMode
-                      ? (event) => {
-                          event.preventDefault();
-                          onPreviewNavigate?.(item.href);
-                        }
-                      : undefined
-                  }
-                  key={item.href}
-                >
-                  <Icon name={item.icon} size={18} />
-                  <span>{item.label}</span>
-                  {item.href === "/databases" && previewMode ? (
-                    <span className={styles.navCount}>3</span>
-                  ) : null}
-                </Link>
-              );
-            })}
+            {navigation
+              .filter((item) => !previewMode || item.href !== "/sql")
+              .map((item) => {
+                const active = isActive(pathname, item, activePath);
+                return (
+                  <Link
+                    aria-label={
+                      previewMode && item.href === "/databases"
+                        ? `Databases, ${databaseNames.length} managed databases`
+                        : undefined
+                    }
+                    aria-current={active ? "page" : undefined}
+                    aria-disabled={(previewMode && !onPreviewNavigate) || undefined}
+                    className={`${styles.navItem} ${active ? styles.navItemActive : ""}`}
+                    href={item.href}
+                    onClick={
+                      previewMode
+                        ? (event) => {
+                            event.preventDefault();
+                            onPreviewNavigate?.(item.href);
+                          }
+                        : undefined
+                    }
+                    key={item.href}
+                  >
+                    <Icon name={item.icon} size={18} />
+                    <span>{item.label}</span>
+                    {item.href === "/databases" && previewMode ? (
+                      <span aria-hidden="true" className={styles.navCount}>
+                        {databaseNames.length}
+                      </span>
+                    ) : null}
+                  </Link>
+                );
+              })}
           </nav>
 
           <div className={styles.sidebarSpacer} />
@@ -278,7 +287,9 @@ export function DashboardShell({
       <CommandPalette
         databases={databaseNames}
         isOpen={paletteOpen}
+        onNavigate={previewMode ? onPreviewNavigate : undefined}
         onClose={() => setPaletteOpen(false)}
+        previewMode={previewMode}
       />
     </ToastProvider>
   );

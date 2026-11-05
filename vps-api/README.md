@@ -11,6 +11,7 @@ uses local peer authentication for administration. SQL editor queries and restor
 - `GET /v1/databases`, `POST /v1/databases`, `DELETE /v1/databases/{name}`
 - `POST /v1/databases/{name}/quota` with `{"mode":"auto"}` or `{"mode":"custom","maxBytes":1073741824}`
 - `GET /v1/roles`, `POST /v1/roles`
+- `POST /v1/query` executes one SQL statement against an organization database
 - `GET /v1/backups`, `POST /v1/backups`
 - `GET /v1/backups/{filename}?offset={bytes}&length={bytes}` downloads one range up to 4 MiB
 - `POST /v1/backups/{filename}/restore` with `{"database":"new_name"}`

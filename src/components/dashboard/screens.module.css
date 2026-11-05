@@ -62,6 +62,48 @@
     border-color 140ms ease;
 }
 
+.secondaryButton {
+  display: inline-flex;
+  min-height: 36px;
+  justify-self: start;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.secondaryButton:hover {
+  background: var(--surface-muted);
+  border-color: var(--ink-muted);
+}
+
+.secondaryButton:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.passwordInputRow {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.passwordInputRow input {
+  min-width: 0;
+  flex: 1;
+}
+
 .primaryButton:disabled {
   border-color: var(--line-strong);
   background: var(--surface-muted);
@@ -420,6 +462,17 @@
   border-radius: 7px;
   background: var(--surface-muted);
   color: var(--green);
+}
+
+.systemBadge {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--surface-muted);
+  color: var(--ink-muted);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .statePill {
@@ -1057,6 +1110,14 @@
 
   .primaryButton {
     min-height: 38px;
+  }
+
+  .passwordInputRow {
+    flex-wrap: wrap;
+  }
+
+  .passwordInputRow input {
+    flex-basis: 100%;
   }
 
   .createFormRow,

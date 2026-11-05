@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Select } from "@/components/ui/select";
 import { ConnectionModal } from "@/components/ui/connection-modal";
 import { nanogresToast } from "@/components/ui/toast";
+import { generateSecurePassword } from "@/lib/generate-password";
 import { Icon } from "./icons";
 import {
   type Role,
@@ -21,6 +22,7 @@ import {
   useDatabases,
 } from "./live-shared";
 import styles from "./live-screens.module.css";
+import { TENANT_NAME_MAX_LENGTH, TENANT_NAME_PATTERN } from "@/lib/tenant-names";
 
 /* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Keyboard-focusable regions let users scroll wide data tables on small screens. */
 export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
@@ -38,6 +40,7 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
   const [database, setDatabase] = useState("");
   const selectedDatabase = database || userDatabases[0]?.name || "";
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [access, setAccess] = useState<"readwrite" | "readonly">("readwrite");
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -67,6 +70,7 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
       });
       setName("");
       setPassword("");
+      setPasswordVisible(false);
       const successMsg = `Role “${name}” created for ${selectedDatabase}. Store the password safely; Nanogres will not show it again.`;
       setMessage(successMsg);
       nanogresToast.success(`Role “${name}” created successfully`);
@@ -127,15 +131,18 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
                   <input
                     autoComplete="off"
                     id="role-name"
-                    maxLength={37}
+                    maxLength={TENANT_NAME_MAX_LENGTH}
                     minLength={2}
                     onChange={(event) => setName(event.target.value)}
-                    pattern="[a-z][a-z0-9_]{1,36}"
+                    pattern={TENANT_NAME_PATTERN}
                     placeholder="app_service"
                     required
                     value={name}
                   />
-                  <small>Lowercase letters, numbers, and underscores.</small>
+                  <small>
+                    Lowercase letters, numbers, and underscores. Max{" "}
+                    {TENANT_NAME_MAX_LENGTH} characters.
+                  </small>
                 </div>
                 <div className={styles.field}>
                   <label htmlFor="role-database">Database</label>
@@ -166,18 +173,38 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
                 </div>
                 <div className={styles.field}>
                   <label htmlFor="role-password">Password</label>
-                  <input
-                    autoComplete="new-password"
-                    id="role-password"
-                    minLength={16}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder="At least 16 characters"
-                    required
-                    type="password"
-                    value={password}
-                  />
+                  <div className={styles.passwordInputRow}>
+                    <input
+                      autoComplete="new-password"
+                      id="role-password"
+                      minLength={16}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder="At least 16 characters"
+                      required
+                      type={passwordVisible ? "text" : "password"}
+                      value={password}
+                    />
+                    <button
+                      aria-controls="role-password"
+                      aria-label={passwordVisible ? "Hide password" : "Show password"}
+                      aria-pressed={passwordVisible}
+                      className={`${styles.button} ${styles.secondary}`}
+                      onClick={() => setPasswordVisible((visible) => !visible)}
+                      type="button"
+                    >
+                      {passwordVisible ? "Hide" : "Show"}
+                    </button>
+                    <Button
+                      onClick={() => setPassword(generateSecurePassword())}
+                      type="button"
+                      variant="secondary"
+                    >
+                      Generate
+                    </Button>
+                  </div>
                   <small>
-                    Use at least 16 characters. Generate and store it in your password manager.
+                    Generate a secure 24-character password, show it, then save it in your password
+                    manager.
                   </small>
                 </div>
                 <div className={styles.formActions}>
@@ -251,7 +278,9 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
                             disabled={!role.connectionDatabase}
                             onClick={() => setConnectRole(role)}
                             type="button"
-                            title={!role.connectionDatabase ? "Role has no database access" : undefined}
+                            title={
+                              !role.connectionDatabase ? "Role has no database access" : undefined
+                            }
                           >
                             Connect snippet
                           </button>
@@ -273,9 +302,7 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
       )}
 
       <ConnectionModal
-        database={
-          connectRole?.connectionDatabase ?? ""
-        }
+        database={connectRole?.connectionDatabase ?? ""}
         isOpen={Boolean(connectRole?.connectionDatabase)}
         onClose={() => setConnectRole(null)}
         user={connectRole?.loginName ?? "your_role"}

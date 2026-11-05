@@ -1,10 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { nanogresToast } from "./toast";
 import styles from "./connection-modal.module.css";
 
 type Tab = "uri" | "psql" | "node" | "python" | "go" | "env";
+const connectionTabs: Array<[Tab, string]> = [
+  ["uri", "Connection URI"],
+  ["psql", "psql CLI"],
+  ["node", "Node.js (pg)"],
+  ["python", "Python (psycopg)"],
+  ["go", "Go (pgx)"],
+  ["env", ".env"],
+];
 
 export function ConnectionModal({
   database,
@@ -23,15 +31,24 @@ export function ConnectionModal({
 }) {
   const [tab, setTab] = useState<Tab>("uri");
   const [copied, setCopied] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
     if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (!dialog.open) dialog.showModal();
+    closeButtonRef.current?.focus();
+
+    return () => {
+      if (dialog.open) dialog.close();
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -118,25 +135,43 @@ PGPASSWORD="[YOUR_PASSWORD]"`;
     }
   };
 
+  function handleTabKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, currentTab: Tab) {
+    const currentIndex = connectionTabs.findIndex(([key]) => key === currentTab);
+    let nextIndex: number;
+    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % connectionTabs.length;
+    else if (event.key === "ArrowLeft")
+      nextIndex = (currentIndex - 1 + connectionTabs.length) % connectionTabs.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = connectionTabs.length - 1;
+    else return;
+
+    event.preventDefault();
+    const nextTab = connectionTabs[nextIndex][0];
+    setTab(nextTab);
+    tabRefs.current[nextIndex]?.focus();
+  }
+
   return (
-    <div className={styles.overlay}>
-      <button
-        aria-label="Close modal overlay"
-        className={styles.backdrop}
-        onClick={onClose}
-        type="button"
-      />
-      <div
+    <>
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- Backdrop clicks close the dialog; Escape and the close button remain available. */}
+      <dialog
+        ref={dialogRef}
         aria-labelledby="conn-modal-title"
-        aria-modal="true"
         className={styles.modal}
-        role="dialog"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) onClose();
+        }}
+        onCancel={(event) => {
+          event.preventDefault();
+          onClose();
+        }}
       >
         <div className={styles.modalHeader}>
           <h2 id="conn-modal-title" className={styles.modalTitle}>
             Connect to “{database}”
           </h2>
           <button
+            ref={closeButtonRef}
             className={styles.closeButton}
             onClick={onClose}
             type="button"
@@ -146,23 +181,21 @@ PGPASSWORD="[YOUR_PASSWORD]"`;
           </button>
         </div>
         <div className={styles.modalBody}>
-          <div className={styles.tabs} role="tablist">
-            {(
-              [
-                ["uri", "Connection URI"],
-                ["psql", "psql CLI"],
-                ["node", "Node.js (pg)"],
-                ["python", "Python (psycopg)"],
-                ["go", "Go (pgx)"],
-                ["env", ".env"],
-              ] as const
-            ).map(([key, label]) => (
+          <div aria-label="Connection examples" className={styles.tabs} role="tablist">
+            {connectionTabs.map(([key, label], index) => (
               <button
                 key={key}
+                ref={(element) => {
+                  tabRefs.current[index] = element;
+                }}
+                id={`connection-tab-${key}`}
                 role="tab"
+                aria-controls="connection-code-panel"
                 aria-selected={tab === key}
+                tabIndex={tab === key ? 0 : -1}
                 className={`${styles.tab} ${tab === key ? styles.tabActive : ""}`}
                 onClick={() => setTab(key)}
+                onKeyDown={(event) => handleTabKeyDown(event, key)}
                 type="button"
               >
                 {label}
@@ -170,7 +203,13 @@ PGPASSWORD="[YOUR_PASSWORD]"`;
             ))}
           </div>
 
-          <div className={styles.codeBox}>
+          <div
+            aria-labelledby={`connection-tab-${tab}`}
+            className={styles.codeBox}
+            id="connection-code-panel"
+            role="tabpanel"
+            tabIndex={0}
+          >
             <button className={styles.copyButton} onClick={copy} type="button">
               {copied ? "Copied!" : "Copy"}
             </button>
@@ -178,12 +217,12 @@ PGPASSWORD="[YOUR_PASSWORD]"`;
           </div>
 
           <p className={styles.note}>
-            Use a login role created for this organization's database in Nanogres Access. Replace{" "}
-            <code>[PASSWORD]</code> with that role's password. PostgreSQL stays private on the VPS;
-            connect through your approved network or tunnel.
+            Use a login role created for this organization&apos;s database in Nanogres Access.
+            Replace <code>[PASSWORD]</code> with that role&apos;s password. PostgreSQL stays private
+            on the VPS; connect through your approved network or tunnel.
           </p>
         </div>
-      </div>
-    </div>
+      </dialog>
+    </>
   );
 }

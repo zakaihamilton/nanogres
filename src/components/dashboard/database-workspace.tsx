@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useEffect, type FormEvent } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "./icons";
@@ -21,6 +27,7 @@ import styles from "./database-workspace.module.css";
 import liveStyles from "./live-screens.module.css";
 
 type Tab = "overview" | "schema" | "queries" | "backups";
+const tabOrder: Tab[] = ["overview", "schema", "queries", "backups"];
 
 type ColumnMeta = {
   name: string;
@@ -75,6 +82,7 @@ type ActiveQuery = {
 export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
   const [connectModalOpen, setConnectModalOpen] = useState(false);
 
   // Queries state
@@ -102,14 +110,22 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
     "id SERIAL PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT NOW(), name TEXT NOT NULL",
   );
   const [isDdlSaving, setIsDdlSaving] = useState(false);
+  const createTableDialogRef = useRef<HTMLDialogElement>(null);
+  const newTableNameInputRef = useRef<HTMLInputElement>(null);
+  const createTableOpenerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!createTableModal) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setCreateTableModal(false);
+    const dialog = createTableDialogRef.current;
+    if (!dialog) return;
+    const opener = createTableOpenerRef.current;
+    if (!dialog.open) dialog.showModal();
+    newTableNameInputRef.current?.focus();
+
+    return () => {
+      if (dialog.open) dialog.close();
+      if (opener?.isConnected) opener.focus();
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [createTableModal]);
 
   // Load database info from fleet overview
@@ -199,6 +215,22 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
     }
   };
 
+  function handleTabKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, currentTab: Tab) {
+    const currentIndex = tabOrder.indexOf(currentTab);
+    let nextIndex: number;
+    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % tabOrder.length;
+    else if (event.key === "ArrowLeft")
+      nextIndex = (currentIndex - 1 + tabOrder.length) % tabOrder.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = tabOrder.length - 1;
+    else return;
+
+    event.preventDefault();
+    const nextTab = tabOrder[nextIndex];
+    setActiveTab(nextTab);
+    tabRefs.current[nextTab]?.focus();
+  }
+
   return (
     <div className={styles.workspaceScreen}>
       <div className={styles.headerWrap}>
@@ -238,7 +270,7 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
         </div>
       </div>
 
-      <nav aria-label="Database tabs" className={styles.tabsBar}>
+      <div aria-label="Database sections" className={styles.tabsBar} role="tablist">
         {(
           [
             ["overview", "Overview & Connect"],
@@ -249,20 +281,33 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
         ).map(([key, label]) => (
           <button
             key={key}
+            ref={(element) => {
+              tabRefs.current[key] = element;
+            }}
+            id={`database-tab-${key}`}
             aria-selected={activeTab === key}
+            aria-controls="database-panel"
             className={`${styles.tabBtn} ${activeTab === key ? styles.tabBtnActive : ""}`}
             onClick={() => setActiveTab(key)}
+            onKeyDown={(event) => handleTabKeyDown(event, key)}
             role="tab"
+            tabIndex={activeTab === key ? 0 : -1}
             type="button"
           >
             {label}
           </button>
         ))}
-      </nav>
+      </div>
 
       {/* Tab 1: Overview */}
       {activeTab === "overview" ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div
+          aria-labelledby="database-tab-overview"
+          id="database-panel"
+          role="tabpanel"
+          style={{ display: "flex", flexDirection: "column", gap: 16 }}
+          tabIndex={0}
+        >
           <div className={liveStyles.metrics}>
             <div className={liveStyles.metric}>
               <span>Storage Size</span>
@@ -307,12 +352,25 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
 
       {/* Tab 2: Schema & Tables */}
       {activeTab === "schema" ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div
+          aria-labelledby="database-tab-schema"
+          id="database-panel"
+          role="tabpanel"
+          style={{ display: "flex", flexDirection: "column", gap: 14 }}
+          tabIndex={0}
+        >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
               Inspect tables, columns, indexes, and run DDL operations.
             </span>
-            <Button onClick={() => setCreateTableModal(true)} variant="primary">
+            <Button
+              onClick={() => {
+                createTableOpenerRef.current =
+                  document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                setCreateTableModal(true);
+              }}
+              variant="primary"
+            >
               <Icon name="plus" size={14} /> Create Table
             </Button>
           </div>
@@ -458,7 +516,13 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
 
       {/* Tab 3: Live Queries */}
       {activeTab === "queries" ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div
+          aria-labelledby="database-tab-queries"
+          id="database-panel"
+          role="tabpanel"
+          style={{ display: "flex", flexDirection: "column", gap: 14 }}
+          tabIndex={0}
+        >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
@@ -564,7 +628,13 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
 
       {/* Tab 4: Backups */}
       {activeTab === "backups" ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div
+          aria-labelledby="database-tab-backups"
+          id="database-panel"
+          role="tabpanel"
+          style={{ display: "flex", flexDirection: "column", gap: 14 }}
+          tabIndex={0}
+        >
           <Notice tone="info">
             Backups specific to database “{databaseName}”. You can create a new dump or browse all
             snapshots in the main Backups tab.
@@ -585,18 +655,19 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
 
       {/* Create Table Modal Dialog */}
       {createTableModal ? (
-        <div className={styles.modalOverlay}>
-          <button
-            aria-label="Close modal overlay"
-            className={styles.modalBackdrop}
-            onClick={() => setCreateTableModal(false)}
-            type="button"
-          />
-          <div
+        <>
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- Backdrop clicks close the dialog; Escape and Cancel remain available. */}
+          <dialog
+            ref={createTableDialogRef}
             aria-labelledby="create-table-title"
-            aria-modal="true"
             className={styles.modalContainer}
-            role="dialog"
+            onCancel={(event) => {
+              event.preventDefault();
+              setCreateTableModal(false);
+            }}
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setCreateTableModal(false);
+            }}
           >
             <h2 id="create-table-title" style={{ fontSize: 17, marginBottom: 12 }}>
               Create Table in “{databaseName}”
@@ -605,6 +676,7 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
               <div className={styles.formField} style={{ marginBottom: 12 }}>
                 <label htmlFor="new-tbl-name">Table name</label>
                 <input
+                  ref={newTableNameInputRef}
                   id="new-tbl-name"
                   onChange={(e) => setNewTableName(e.target.value)}
                   placeholder="e.g. users, orders, posts"
@@ -631,8 +703,8 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
                 </Button>
               </div>
             </form>
-          </div>
-        </div>
+          </dialog>
+        </>
       ) : null}
 
       <ConnectionModal

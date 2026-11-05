@@ -43,9 +43,6 @@ export default function WelcomePage() {
         </nav>
         <div className={styles.actions}>
           <ThemeControl />
-          <Link className={styles.secondaryButton} href="/login">
-            Sign In
-          </Link>
           <Link className={styles.primaryButton} href="/login">
             Open Workspace <span aria-hidden="true">→</span>
           </Link>
@@ -433,9 +430,6 @@ export default function WelcomePage() {
           <Link className={styles.ctaPrimary} href="/login">
             Open Workspace <span aria-hidden="true">→</span>
           </Link>
-          <Link className={styles.ctaSecondary} href="/login">
-            Sign In with Perminister
-          </Link>
         </div>
       </section>
 
@@ -460,9 +454,6 @@ export default function WelcomePage() {
           </a>
           <Link className={styles.footerLink} href="/sql">
             SQL Studio
-          </Link>
-          <Link className={styles.footerLink} href="/login">
-            Sign In
           </Link>
         </div>
       </footer>

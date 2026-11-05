@@ -40,6 +40,8 @@ export function LiveOverviewScreen() {
 
   const status = telemetry?.status ?? data?.status;
   const databases = data?.databases ?? [];
+  const managedDatabases = databases.filter((item) => !item.systemDatabase);
+  const systemDatabaseCount = databases.length - managedDatabases.length;
   const totalSize = databases.reduce((sum, database) => sum + database.sizeBytes, 0);
   const offsite = status?.offsiteBackup;
   const offsiteFreshness =
@@ -146,9 +148,9 @@ export function LiveOverviewScreen() {
 
           <div className={styles.metrics}>
             <Metric
-              label="Databases"
-              value={String(databases.filter((item) => !item.systemDatabase).length)}
-              detail="User databases"
+              label="Managed databases"
+              value={String(managedDatabases.length)}
+              detail={`${systemDatabaseCount} protected system database${systemDatabaseCount === 1 ? "" : "s"} excluded`}
             />
             <Metric
               label="Connections"
@@ -174,7 +176,7 @@ export function LiveOverviewScreen() {
           <div className={styles.twoColumns}>
             <Panel
               title="Databases"
-              detail={`${databases.length} total · ${formatBytes(totalSize)} used`}
+              detail={`${databases.length} total · ${managedDatabases.length} managed · ${systemDatabaseCount} protected system · ${formatBytes(totalSize)} used`}
             >
               <DatabaseTable databases={databases.slice(0, 6)} />
             </Panel>

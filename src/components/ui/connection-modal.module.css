@@ -1,37 +1,24 @@
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgb(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 999;
-  padding: 16px;
-  animation: fade-in 0.15s ease;
-}
-
-.backdrop {
-  position: absolute;
-  inset: 0;
-  background: transparent;
-  border: none;
-  cursor: default;
-}
-
 .modal {
+  margin: auto;
+  padding: 0;
   background: var(--surface-raised);
   border: 1px solid var(--line-strong);
   border-radius: 12px;
   max-width: 600px;
   width: 100%;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
   box-shadow:
     var(--shadow-soft),
     0 16px 40px rgb(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   animation: scale-up 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal::backdrop {
+  background: rgb(0 0 0 / 45%);
+  backdrop-filter: blur(2px);
 }
 
 .modalHeader {
@@ -105,6 +92,14 @@
 
 .tab:active {
   transform: scale(0.97);
+}
+
+.tab:focus-visible,
+.codeBox:focus-visible,
+.closeButton:focus-visible,
+.copyButton:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
 }
 
 .tabActive {

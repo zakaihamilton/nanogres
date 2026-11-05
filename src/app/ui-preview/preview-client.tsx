@@ -261,11 +261,17 @@ export default function PreviewClient() {
       "/": "overview",
       "/overview": "overview",
       "/databases": "databases",
+      "/databases/new": "database-new",
       "/access": "access",
+      "/access/new": "access-new",
       "/backups": "backups",
+      "/backups/new": "backups-new",
       "/activity": "activity",
     };
-    setScreen(screenByPath[pathOrScreen] ?? pathOrScreen);
+    const validScreen = screens.some((option) => option.value === pathOrScreen)
+      ? pathOrScreen
+      : "overview";
+    setScreen(screenByPath[pathOrScreen] ?? validScreen);
     setPreviewNotice(null);
   }
 

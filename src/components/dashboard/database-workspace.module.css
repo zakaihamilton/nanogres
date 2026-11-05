@@ -116,6 +116,11 @@
   transform: scale(0.98);
 }
 
+.tabBtn:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
+}
+
 .tabBtnActive {
   color: var(--green-strong);
   font-weight: 600;
@@ -128,6 +133,27 @@
   grid-template-columns: 240px 1fr;
   gap: 16px;
   min-height: 400px;
+}
+
+@media (width <= 760px) {
+  .schemaBrowser {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .tableListPanel {
+    max-height: 220px;
+    overflow: auto;
+  }
+
+  .tableDetailPanel {
+    min-width: 0;
+    padding: 16px;
+  }
+
+  .statsStrip {
+    flex-wrap: wrap;
+  }
 }
 
 .tableListPanel {
@@ -246,40 +272,25 @@
   margin-left: 6px;
 }
 
-/* Modals */
-.modalOverlay {
-  position: fixed;
-  inset: 0;
-  background: rgb(0 0 0 / 45%);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 999;
-  padding: 16px;
-  animation: fade-in 0.15s ease;
-}
-
-.modalBackdrop {
-  position: absolute;
-  inset: 0;
-  background: transparent;
-  border: none;
-  cursor: default;
-}
-
 .modalContainer {
-  position: relative;
+  margin: auto;
   background: var(--surface-raised);
   border: 1px solid var(--line-strong);
   border-radius: 12px;
   padding: 24px;
   max-width: 520px;
-  width: 100%;
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
   box-shadow:
     var(--shadow-soft),
     0 16px 40px rgb(0 0 0 / 20%);
   animation: scale-up 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modalContainer::backdrop {
+  background: rgb(0 0 0 / 45%);
+  backdrop-filter: blur(2px);
 }
 
 .modalForm {
