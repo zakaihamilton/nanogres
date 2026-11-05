@@ -138,7 +138,9 @@ export function SqlEditorScreen() {
         /^\s*SELECT\b/i.test(sqlToRun) &&
         !/\bLIMIT\b/i.test(sqlToRun)
       ) {
-        sqlToRun += "\nLIMIT 100";
+        const hasTrailingSemicolon = sqlToRun.endsWith(";");
+        const query = hasTrailingSemicolon ? sqlToRun.slice(0, -1).trimEnd() : sqlToRun;
+        sqlToRun = `${query}\nLIMIT 100${hasTrailingSemicolon ? ";" : ""}`;
       }
 
       setExecuting(true);
