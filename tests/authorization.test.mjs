@@ -4,13 +4,17 @@ import { actionFor } from "../src/lib/nanogres-actions.ts";
 
 test("maps read and management operations to separate permissions", () => {
   process.env.PERMINISTER_PRODUCT_ID = "Nanogres";
-  for (const resource of ["overview", "databases", "roles", "backups", "activity"]) {
+  for (const resource of ["overview", "databases", "roles", "backups", "transfers", "activity"]) {
     assert.equal(actionFor("GET", [resource]), "nanogres:workspace:read");
   }
-  for (const resource of ["databases", "roles", "backups", "restore-uploads"]) {
+  for (const resource of ["databases", "roles", "backups", "transfers", "restore-uploads"]) {
     assert.equal(actionFor("POST", [resource]), "nanogres:members:manage");
   }
   assert.equal(actionFor("DELETE", ["databases", "project"]), "nanogres:members:manage");
+  assert.equal(
+    actionFor("DELETE", ["transfers", "0123456789abcdef0123456789abcdef"]),
+    "nanogres:members:manage",
+  );
   assert.equal(
     actionFor("PUT", ["restore-uploads", "id", "chunks", "0"]),
     "nanogres:members:manage",
@@ -18,6 +22,7 @@ test("maps read and management operations to separate permissions", () => {
   assert.equal(actionFor("DELETE", ["roles", "admin"]), null);
   assert.equal(actionFor("GET", ["unknown"]), null);
   assert.equal(actionFor("PUT", ["restore-uploads"]), null);
+  assert.equal(actionFor("DELETE", ["transfers"]), null);
   assert.equal(actionFor("POST", ["query"]), "nanogres:members:manage");
   assert.equal(actionFor("GET", ["databases", "my_db", "schema"]), "nanogres:workspace:read");
   assert.equal(actionFor("GET", ["databases", "my_db", "queries"]), "nanogres:workspace:read");

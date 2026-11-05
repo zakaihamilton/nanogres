@@ -27,7 +27,7 @@ export default function WelcomePage() {
     <main className={styles.page}>
       <header className={styles.header}>
         <Link aria-label="Nanogres home" className={styles.brand} href="/">
-          <Image alt="" height={34} src="/icon.svg" width={34} />
+          <Image alt="" height={34} src="/icon.png" width={34} />
           <span>nanogres</span>
         </Link>
         <nav aria-label="Main navigation" className={styles.navPills}>
@@ -65,10 +65,6 @@ export default function WelcomePage() {
         <div className={styles.heroActions}>
           <Link className={styles.ctaPrimary} href="/login">
             Open Workspace <span aria-hidden="true">→</span>
-          </Link>
-          <Link className={styles.ctaSecondary} href="/sql">
-            <Icon name="sql" size={16} />
-            Launch SQL Studio
           </Link>
         </div>
 
@@ -436,11 +432,7 @@ export default function WelcomePage() {
       {/* Footer */}
       <footer className={styles.footer}>
         <div className={styles.footerBrand}>
-          <Image alt="" height={20} src="/icon.svg" width={20} />
-          <span>Nanogres · PostgreSQL Studio</span>
-        </div>
-        <div className={styles.footerInfo}>
-          <span>PostgreSQL 14–17 compatible</span>
+          <Image alt="" height={20} src="/icon.png" width={20} />
         </div>
         <div className={styles.footerLinks}>
           <a className={styles.footerLink} href="#overview">

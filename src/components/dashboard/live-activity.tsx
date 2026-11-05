@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Icon } from "./icons";
 import { useTelemetryStream } from "@/lib/use-stream";
 import { nanogresToast } from "@/components/ui/toast";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   type ActivityEvent,
   useApiData,
@@ -63,13 +64,12 @@ export function LiveActivityScreen() {
       <PageHeader
         action={
           <div className={styles.actionGroup}>
-            <span
-              className={`${styles.livePill} ${isLive ? "" : styles.livePillOffline}`}
-              title={isLive ? "Live real-time stream active" : "Polling mode"}
-            >
-              <span className={styles.pulsingDot} />
-              {isLive ? "LIVE FEED" : "POLLING"}
-            </span>
+            <Tooltip label={isLive ? "Live real-time stream active" : "Polling mode"}>
+              <span className={`${styles.livePill} ${isLive ? "" : styles.livePillOffline}`}>
+                <span className={styles.pulsingDot} />
+                {isLive ? "LIVE FEED" : "POLLING"}
+              </span>
+            </Tooltip>
             <button className={styles.actionSecondaryButton} onClick={exportActivity} type="button">
               Export JSON
             </button>

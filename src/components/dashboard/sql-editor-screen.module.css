@@ -33,14 +33,13 @@
 }
 
 .selectDb {
-  padding: 6px 12px;
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  min-width: 190px;
+  max-width: 280px;
   font-size: 13px;
-  color: var(--ink);
-  outline: none;
-  cursor: pointer;
+}
+
+.timeoutSelect {
+  width: 112px;
 }
 
 /* Tabs */

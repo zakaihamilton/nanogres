@@ -37,17 +37,21 @@ async function chooseDropdown(page, label, optionLabel) {
 
 async function signIn(page) {
   await page.goto("/");
-  await page.getByRole("link", { name: "Open your workspace" }).click();
+  await page.getByRole("link", { name: "Open Workspace" }).first().click();
   await page.getByRole("link", { name: "Continue with Perminister" }).click();
   await page.getByRole("button", { name: "Continue as test admin" }).click();
   await expect(page).toHaveURL(/\/overview$/);
-  await expect(page.getByRole("heading", { name: "Your Postgres, in one place." })).toBeVisible();
-  await page.waitForLoadState("networkidle");
+  await expect(page.getByRole("heading", { name: "Cluster Overview" })).toBeVisible();
 }
 
 async function settlePage(page) {
   await page.waitForLoadState("networkidle");
-  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(true))));
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))),
+      ),
+  );
 }
 
 async function auditAccessibility(page) {
@@ -69,11 +73,13 @@ async function auditAccessibility(page) {
 test("welcome, sign-in route, and protected dashboard entry are discoverable", async ({ page }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "A clearer home for your databases." }),
+    page.getByRole("heading", {
+      name: "A simpler, friendlier way to manage Postgres databases.",
+    }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "Open your workspace" }).click();
+  await page.getByRole("link", { name: "Open Workspace" }).first().click();
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("heading", { name: "Welcome back." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to Nanogres" })).toBeVisible();
 
   await page.goto("/overview");
   await expect(page).toHaveURL(/\/login$/);
@@ -148,8 +154,8 @@ test.describe("authenticated management journeys", () => {
     await settlePage(page);
     await page.getByLabel("Role name").fill("e2e_reader");
     await chooseDropdown(page, "Database", "e2e_project");
-    await chooseDropdown(page, "Access level", "Read only");
-    await page.getByLabel("Initial password").fill("test-role-password-long-enough");
+    await chooseDropdown(page, "Access level", "Read-only");
+    await page.getByLabel("Password", { exact: true }).fill("test-role-password-long-enough");
     await page.getByRole("button", { name: "Create role", exact: true }).click();
     await expect(
       page.getByRole("status").filter({ hasText: "Role “e2e_reader” created for e2e_project." }),
@@ -244,6 +250,29 @@ test.describe("authenticated management journeys", () => {
     expect(state.uploadCount).toBe(0);
   });
 
+  test("starts a one-time PostgreSQL import and can cancel its job", async ({ page, request }) => {
+    await resetTestServices(request);
+    await signIn(page);
+    await page.getByRole("link", { name: "Backups", exact: true }).click();
+    await settlePage(page);
+    await page.getByRole("link", { name: "Import / export database" }).click();
+    await settlePage(page);
+    await expect(page.getByRole("heading", { name: "Database transfers" })).toBeVisible();
+    await page.getByLabel("New database name").fill("visitoring");
+    await page
+      .getByLabel("Source PostgreSQL connection string")
+      .fill("postgresql://migrate:browser-secret@db.example/visitoring");
+    await page.getByRole("button", { name: "Start import" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Transfer started" })).toBeVisible();
+    await expect(page.getByLabel("Source PostgreSQL connection string")).toHaveValue("");
+
+    const state = await (await request.get(`${apiControl}/state`)).json();
+    expect(state.transfers).toHaveLength(1);
+    expect(JSON.stringify(state.transfers)).not.toContain("browser-secret");
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByText("cancelled", { exact: true })).toBeVisible();
+  });
+
   test("surfaces workspace permission denial before a write reaches the workspace", async ({
     page,
     request,
@@ -267,7 +296,6 @@ test.describe("authenticated management journeys", () => {
   test("reports and recovers from read outages", async ({ page, request }) => {
     await request.post(`${apiControl}/configure`, { data: { failReads: true } });
     await page.getByRole("link", { name: "Databases", exact: true }).click();
-    await settlePage(page);
     await expect(
       page
         .getByRole("alert")
@@ -441,6 +469,7 @@ test("public, preview, and authenticated screens meet WCAG 2.1 AA automated chec
     ["/backups", "Backups"],
     ["/backups/new", "Create a backup"],
     ["/backups/restore", "Restore from a file"],
+    ["/backups/transfers", "Database transfers"],
     ["/activity", "Activity"],
   ]) {
     await page.goto(href);
@@ -534,7 +563,7 @@ test("the preview keeps every screen within narrow viewports and respects reduce
   for (const width of [320, 375, 768]) {
     await page.setViewportSize({ width, height: 844 });
     for (const [href, heading] of [
-      ["/overview", "Your Postgres, in one place."],
+      ["/overview", "Cluster Overview"],
       ["/databases", "Databases"],
       ["/databases/new", "Create a database"],
       ["/access", "Access & roles"],

@@ -3,6 +3,8 @@ import importlib.util
 import json
 import http.client
 import os
+import re
+import socket
 import threading
 import tempfile
 import unittest
@@ -105,7 +107,7 @@ class RestoreTests(unittest.TestCase):
         name = "app__20261104T120000000000Z.dump"
         (self.backup_dir / name).write_bytes(b"dump")
         physical_database = api.organization_database_name(TEST_ORGANIZATION_ID, "new_db")
-        with patch.object(api, "run_sql", side_effect=["f", "", ""]) as sql, patch.object(api, "ensure_organization_query_role", return_value=api.organization_query_role(TEST_ORGANIZATION_ID)), patch.object(api, "prepare_organization_database"), patch.object(api, "clear_database_quota_setting"), patch.object(api, "request_quota_reconcile"), patch.object(api.subprocess, "run", return_value=type("Result", (), {"returncode": 1})()):
+        with patch.dict(os.environ, {"NANOGRES_API_TOKEN": "x" * 32}), patch.object(api, "run_sql", side_effect=["f", "", ""]) as sql, patch.object(api, "ensure_organization_query_role", return_value=api.organization_query_role(TEST_ORGANIZATION_ID)), patch.object(api, "prepare_organization_database"), patch.object(api, "clear_database_quota_setting"), patch.object(api, "request_quota_reconcile"), patch.object(api.subprocess, "run", return_value=type("Result", (), {"returncode": 1})()):
             with self.assertRaises(api.ApiError) as error:
                 api.restore_backup(TEST_ORGANIZATION_ID, name, "new_db")
             self.assertEqual(error.exception.status, 503)
@@ -114,7 +116,7 @@ class RestoreTests(unittest.TestCase):
     def test_successful_upload_restore_cleans_chunks_and_records_actor(self):
         upload_id = api.create_restore_upload({"sizeBytes": 3}, TEST_ORGANIZATION_ID)["uploadId"]
         api.store_restore_chunk(upload_id, 0, b"abc", TEST_ORGANIZATION_ID)
-        with patch.object(api, "run_sql", side_effect=["f", ""]), patch.object(api, "ensure_organization_query_role", return_value=api.organization_query_role(TEST_ORGANIZATION_ID)), patch.object(api, "prepare_organization_database"), patch.object(api, "transfer_database_objects"), patch.object(api, "clear_database_quota_setting"), patch.object(api, "request_quota_reconcile"), patch.object(api, "run_pg_restore_from_upload", return_value=0):
+        with patch.dict(os.environ, {"NANOGRES_API_TOKEN": "x" * 32}), patch.object(api, "run_sql", side_effect=["f", ""]), patch.object(api, "ensure_organization_query_role", return_value=api.organization_query_role(TEST_ORGANIZATION_ID)), patch.object(api, "prepare_organization_database"), patch.object(api, "transfer_database_objects"), patch.object(api, "clear_database_quota_setting"), patch.object(api, "request_quota_reconcile"), patch.object(api, "run_pg_restore_from_upload", return_value=0):
             result = api.restore_uploaded_dump(upload_id, "new_db", "actor-1", TEST_ORGANIZATION_ID)
         self.assertEqual(result["database"], "new_db")
         self.assertFalse((api.RESTORE_UPLOAD_DIR / upload_id).exists())
@@ -128,6 +130,351 @@ class RestoreTests(unittest.TestCase):
         for size in [0, -1, True, "4"]:
             with self.subTest(size=size), self.assertRaises(api.ApiError):
                 api.create_restore_upload({"sizeBytes": size}, TEST_ORGANIZATION_ID)
+
+
+class DatabaseTransferTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.transfer_dir = self.root / "transfers"
+        self.transfer_dir.mkdir(mode=0o700)
+        self.patcher = patch.object(api, "TRANSFER_DIR", self.transfer_dir)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+        api.transfer_jobs.clear()
+        api.transfer_workers.clear()
+        api.transfer_processes.clear()
+        api.transfer_cancel_events.clear()
+
+    def test_external_url_is_pinned_to_public_tls_host_and_password_file_is_private(self):
+        work_dir = self.transfer_dir / "job"
+        work_dir.mkdir(mode=0o700)
+        address = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 5432))
+        with patch.object(api.socket, "getaddrinfo", return_value=[address]):
+            conninfo, env = api._external_connection(
+                "postgresql://migrate:s%3Acret@db.example:6543/visitoring?sslmode=disable",
+                work_dir,
+            )
+        self.assertIn("hostaddr='8.8.8.8'", conninfo)
+        self.assertIn("sslmode='verify-full'", conninfo)
+        self.assertNotIn("secret", conninfo)
+        passfile = Path(env["PGPASSFILE"])
+        self.assertEqual(passfile.stat().st_mode & 0o777, 0o600)
+        self.assertIn(r"s\:cret", passfile.read_text())
+
+    def test_external_url_rejects_private_addresses_and_libpq_options(self):
+        work_dir = self.transfer_dir / "job"
+        work_dir.mkdir(mode=0o700)
+        loopback = (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 5432))
+        with patch.object(api.socket, "getaddrinfo", return_value=[loopback]):
+            with self.assertRaises(api.ApiError):
+                api._external_connection("postgres://user:secret@db.example/app", work_dir)
+        with patch.object(api.socket, "getaddrinfo", return_value=[loopback]):
+            with self.assertRaises(api.ApiError):
+                api._external_connection(
+                    "postgres://user:secret@db.example/app?options=-c%20search_path%3Dpublic",
+                    work_dir,
+                )
+
+    def test_connection_string_is_not_written_to_job_metadata_or_public_job(self):
+        secret = "postgresql://migrate:do-not-persist@db.example/visitoring"
+        with patch.object(api, "_run_transfer_job") as worker:
+            job = api.create_transfer_job(
+                {
+                    "direction": "import",
+                    "targetMode": "new",
+                    "targetDatabase": "visitoring",
+                    "connectionString": secret,
+                },
+                TEST_ORGANIZATION_ID,
+                "user-1",
+            )
+            api.transfer_workers[job["transferId"]].join(timeout=2)
+        serialized = Path(self.transfer_dir, job["transferId"] + ".json").read_text()
+        self.assertTrue(worker.called)
+        self.assertNotIn(secret, serialized)
+        self.assertNotIn("do-not-persist", str(job))
+        self.assertNotIn("connectionString", serialized)
+
+    def test_worker_error_does_not_expose_postgres_client_stderr(self):
+        transfer_id = "a" * 32
+        api.transfer_cancel_events[transfer_id] = threading.Event()
+        api.transfer_jobs[transfer_id] = {
+            "transferId": transfer_id,
+            "organizationPrefix": api.organization_prefix(TEST_ORGANIZATION_ID),
+            "status": "running",
+        }
+
+        class FailedProcess:
+            returncode = 1
+
+            def communicate(self, timeout=None):
+                return "", "authentication failed for password secret-value"
+
+        with patch.object(api.subprocess, "Popen", return_value=FailedProcess()):
+            with self.assertRaises(api.ApiError) as error:
+                api._transfer_command(transfer_id, "dumping", ["pg_dump"], {})
+        self.assertNotIn("secret-value", error.exception.message)
+        self.assertEqual(error.exception.status, 400)
+        self.assertIn("Check credentials", error.exception.message)
+
+    def test_newer_remote_server_version_has_a_clear_error(self):
+        transfer_id = "e" * 32
+        api.transfer_cancel_events[transfer_id] = threading.Event()
+        api.transfer_jobs[transfer_id] = {
+            "transferId": transfer_id,
+            "organizationPrefix": api.organization_prefix(TEST_ORGANIZATION_ID),
+            "status": "running",
+        }
+
+        class FailedProcess:
+            returncode = 1
+
+            def communicate(self, timeout=None):
+                return "", "server version: 17.4; pg_dump version: 16.8"
+
+        with patch.object(api.subprocess, "Popen", return_value=FailedProcess()):
+            with self.assertRaises(api.ApiError) as error:
+                api._transfer_command(transfer_id, "dumping", ["pg_dump"], {})
+        self.assertEqual(error.exception.status, 400)
+        self.assertIn("do not support that database version", error.exception.message)
+
+    def test_transfer_job_status_is_scoped_to_organization(self):
+        job = {
+            "transferId": "b" * 32,
+            "organizationPrefix": api.organization_prefix(TEST_ORGANIZATION_ID),
+            "direction": "import",
+            "status": "running",
+            "phase": "dumping_external_database",
+            "message": "Dumping external database",
+            "sourceDatabase": "external PostgreSQL",
+            "targetDatabase": "visitoring",
+        }
+        api.transfer_jobs[job["transferId"]] = job
+        api._write_transfer_metadata(job)
+        with self.assertRaises(api.ApiError) as error:
+            api._load_transfer_job(job["transferId"], "another-org")
+        self.assertEqual(error.exception.status, 404)
+        self.assertEqual(len(api.list_transfer_jobs(TEST_ORGANIZATION_ID)), 1)
+
+    def test_transfer_cannot_be_cancelled_during_database_swap(self):
+        transfer_id = "2" * 32
+        job = {
+            "transferId": transfer_id,
+            "organizationPrefix": api.organization_prefix(TEST_ORGANIZATION_ID),
+            "status": "running",
+            "phase": "finalizing_database",
+            "swapStarted": True,
+        }
+        api.transfer_jobs[transfer_id] = job
+        api.transfer_cancel_events[transfer_id] = threading.Event()
+        api._write_transfer_metadata(job)
+        with self.assertRaises(api.ApiError) as error:
+            api.cancel_transfer_job(transfer_id, TEST_ORGANIZATION_ID)
+        self.assertEqual(error.exception.status, 409)
+        self.assertFalse(api.transfer_cancel_events[transfer_id].is_set())
+
+    def test_startup_recovery_completes_a_swap_that_finished_before_restart(self):
+        transfer_id = "f" * 32
+        prefix = api.organization_prefix(TEST_ORGANIZATION_ID)
+        target = api.organization_database_name(TEST_ORGANIZATION_ID, "visitoring")
+        backup = prefix + "transfer_old_" + transfer_id[:24]
+        names = {target, backup}
+        job = {
+            "transferId": transfer_id,
+            "organizationPrefix": prefix,
+            "organizationId": TEST_ORGANIZATION_ID,
+            "direction": "import",
+            "targetMode": "replace",
+            "targetDatabase": "visitoring",
+            "swapStarted": True,
+            "swapAttempted": True,
+            "status": "running",
+            "phase": "finalizing_database",
+        }
+        api.transfer_jobs[transfer_id] = job
+        api._write_transfer_metadata(job)
+
+        def run_sql(statement, database="postgres"):
+            if statement.startswith("SELECT EXISTS"):
+                name = re.search(r"datname = '([^']+)'", statement).group(1)
+                return "t" if name in names else "f"
+            alter = re.search(r'ALTER DATABASE "([^"]+)" RENAME TO "([^"]+)"', statement)
+            if alter:
+                names.remove(alter.group(1))
+                names.add(alter.group(2))
+            drop = re.search(r'DROP DATABASE "([^"]+)"', statement)
+            if drop:
+                names.discard(drop.group(1))
+            return ""
+
+        with patch.object(api, "run_sql", side_effect=run_sql), patch.object(api, "record_event"):
+            api._recover_import_database(job, was_active=True)
+        self.assertEqual(job["status"], "succeeded")
+        self.assertEqual(names, {target})
+
+    def test_startup_recovery_restores_old_database_when_swap_was_interrupted(self):
+        transfer_id = "1" * 32
+        prefix = api.organization_prefix(TEST_ORGANIZATION_ID)
+        target = api.organization_database_name(TEST_ORGANIZATION_ID, "visitoring")
+        staging = prefix + "transfer_" + transfer_id[:24]
+        backup = prefix + "transfer_old_" + transfer_id[:24]
+        names = {staging, backup}
+        job = {
+            "transferId": transfer_id,
+            "organizationPrefix": prefix,
+            "organizationId": TEST_ORGANIZATION_ID,
+            "direction": "import",
+            "targetMode": "replace",
+            "targetDatabase": "visitoring",
+            "swapStarted": True,
+            "oldDatabaseRenamed": True,
+            "status": "running",
+            "phase": "finalizing_database",
+        }
+        api.transfer_jobs[transfer_id] = job
+        api._write_transfer_metadata(job)
+
+        def run_sql(statement, database="postgres"):
+            if statement.startswith("SELECT EXISTS"):
+                name = re.search(r"datname = '([^']+)'", statement).group(1)
+                return "t" if name in names else "f"
+            alter = re.search(r'ALTER DATABASE "([^"]+)" RENAME TO "([^"]+)"', statement)
+            if alter:
+                names.remove(alter.group(1))
+                names.add(alter.group(2))
+            drop = re.search(r'DROP DATABASE "([^"]+)"', statement)
+            if drop:
+                names.discard(drop.group(1))
+            return ""
+
+        with patch.object(api, "run_sql", side_effect=run_sql):
+            api._recover_import_database(job, was_active=True)
+        self.assertEqual(job["status"], "failed")
+        self.assertIn("previous database was preserved", job["message"])
+        self.assertEqual(names, {target})
+
+    def _export_job(self, mode):
+        transfer_id = "d" * 32
+        work_dir = self.transfer_dir / transfer_id
+        work_dir.mkdir(mode=0o700)
+        job = {
+            "transferId": transfer_id,
+            "organizationPrefix": api.organization_prefix(TEST_ORGANIZATION_ID),
+            "organizationId": TEST_ORGANIZATION_ID,
+            "actor": "user-1",
+            "direction": "export",
+            "targetMode": mode,
+            "sourceDatabase": "visitoring",
+            "targetDatabase": "external PostgreSQL",
+            "status": "running",
+        }
+        api.transfer_jobs[transfer_id] = job
+        api.transfer_cancel_events[transfer_id] = threading.Event()
+        return transfer_id, job, work_dir
+
+    def test_export_requires_empty_external_database_before_restore(self):
+        transfer_id, job, work_dir = self._export_job("empty")
+        phases = []
+
+        def run_command(_transfer_id, phase, command, _env, **_kwargs):
+            phases.append(phase)
+            if "--file" in command:
+                Path(command[command.index("--file") + 1]).write_bytes(b"dump")
+            if phase == "checking_external_database":
+                return "t"
+            return ""
+
+        with patch.object(api, "require_organization_database", return_value="physical_db"), \
+                patch.object(api, "_external_connection", return_value=("conninfo", {})), \
+                patch.object(api, "_transfer_command", side_effect=run_command):
+            with self.assertRaises(api.ApiError) as error:
+                api._export_transfer(transfer_id, job, "postgres://user:secret@public.example/app", work_dir)
+        self.assertEqual(error.exception.status, 409)
+        self.assertNotIn("restoring_external_database", phases)
+
+    def test_external_replace_clears_and_restores_in_one_transaction(self):
+        transfer_id = "3" * 32
+        work_dir = self.transfer_dir / transfer_id
+        work_dir.mkdir(mode=0o700)
+        archive = work_dir / "database.dump"
+        archive.write_bytes(b"custom archive")
+        api.transfer_jobs[transfer_id] = {
+            "transferId": transfer_id,
+            "organizationPrefix": api.organization_prefix(TEST_ORGANIZATION_ID),
+            "status": "running",
+        }
+        api.transfer_cancel_events[transfer_id] = threading.Event()
+        commands = []
+
+        def run_command(_transfer_id, phase, command, _env, **_kwargs):
+            commands.append((phase, command))
+            file_index = command.index("--file") + 1
+            if phase == "preparing_external_restore":
+                Path(command[file_index]).write_text("CREATE TABLE public.visits (id integer);\n")
+            if phase == "restoring_external_database":
+                script = Path(command[file_index]).read_text()
+                self.assertIn("DROP SCHEMA", script)
+                self.assertIn("CREATE TABLE public.visits", script)
+                self.assertIn("--single-transaction", command)
+            return ""
+
+        with patch.object(api, "_transfer_command", side_effect=run_command):
+            api._restore_external_archive(
+                transfer_id,
+                "host='db.example'",
+                {},
+                archive,
+                work_dir,
+                phase="restoring_external_database",
+                clear_first=True,
+                include_acls=False,
+            )
+        self.assertEqual([phase for phase, _command in commands], ["preparing_external_restore", "restoring_external_database"])
+
+    def test_replace_export_restores_rollback_copy_when_destination_restore_fails(self):
+        transfer_id, job, work_dir = self._export_job("replace")
+        phases = []
+
+        def run_command(_transfer_id, phase, command, _env, **_kwargs):
+            phases.append(phase)
+            if "--file" in command:
+                Path(command[command.index("--file") + 1]).write_bytes(b"dump")
+            if phase == "restoring_external_database":
+                raise api.ApiError(503, "PostgreSQL could not complete the transfer step.")
+            return ""
+
+        with patch.object(api, "require_organization_database", return_value="physical_db"), \
+                patch.object(api, "_external_connection", return_value=("conninfo", {})), \
+                patch.object(api, "_transfer_command", side_effect=run_command):
+            with self.assertRaises(api.ApiError) as error:
+                api._export_transfer(transfer_id, job, "postgres://user:secret@public.example/app", work_dir)
+        self.assertEqual(error.exception.status, 503)
+        self.assertIn("preparing_external_restore", phases)
+        self.assertIn("restoring_external_rollback_copy", phases)
+        self.assertFalse(job.get("recoveryBackupRetained"))
+
+    def test_failed_external_rollback_retains_only_the_recovery_dump(self):
+        transfer_id, job, work_dir = self._export_job("replace")
+        (work_dir / "pgpass").write_text("private connection secret")
+
+        def run_command(_transfer_id, phase, command, _env, **_kwargs):
+            if "--file" in command:
+                Path(command[command.index("--file") + 1]).write_bytes(b"dump")
+            if phase in {"restoring_external_database", "restoring_external_rollback_copy"}:
+                raise api.ApiError(503, "PostgreSQL could not complete the transfer step.")
+            return ""
+
+        with patch.object(api, "require_organization_database", return_value="physical_db"), \
+                patch.object(api, "_external_connection", return_value=("conninfo", {})), \
+                patch.object(api, "_transfer_command", side_effect=run_command):
+            api._run_transfer_job(transfer_id, "postgres://user:secret@public.example/app")
+        self.assertIn("recovery copy remains", str(api.transfer_jobs[transfer_id]["message"]))
+        self.assertTrue(job["recoveryBackupRetained"])
+        self.assertTrue((self.transfer_dir / f"{transfer_id}.recovery.dump").is_file())
+        self.assertFalse(work_dir.exists())
+        self.assertNotIn("private connection secret", (self.transfer_dir / f"{transfer_id}.recovery.dump").read_text())
 
 
 class HttpAuthorizationTests(unittest.TestCase):
@@ -189,6 +536,44 @@ class HttpAuthorizationTests(unittest.TestCase):
             self.assertEqual(self.request("POST", "/v1/databases", body="[]", headers=headers)[0], 400)
             self.assertEqual(self.request("POST", "/v1/databases", body=json.dumps({"name": "INVALID"}), headers=headers)[0], 400)
             sql.assert_not_called()
+
+    def test_transfer_routes_require_authorization_and_keep_the_connection_out_of_responses(self):
+        token = "x" * 32
+        headers = {
+            "Authorization": "Bearer " + token,
+            "Content-Type": "application/json",
+            "X-Nanogres-Actor": "user-1",
+            "X-Nanogres-Organization": TEST_ORGANIZATION_ID,
+        }
+        transfer_id = "c" * 32
+        public_job = {
+            "transferId": transfer_id,
+            "direction": "import",
+            "status": "queued",
+            "phase": "queued",
+            "message": "Waiting to start",
+            "sourceDatabase": "external PostgreSQL",
+            "targetDatabase": "visitoring",
+        }
+        body = {
+            "direction": "import",
+            "targetMode": "new",
+            "targetDatabase": "visitoring",
+            "connectionString": "postgresql://user:private-secret@db.example/visitoring",
+        }
+        with patch.dict(os.environ, {"NANOGRES_API_TOKEN": token}), \
+                patch.object(api, "list_transfer_jobs", return_value=[public_job]), \
+                patch.object(api, "create_transfer_job", return_value=public_job), \
+                patch.object(api, "cancel_transfer_job", return_value={**public_job, "status": "cancelling"}) as cancel:
+            self.assertEqual(self.request("GET", "/v1/transfers")[0], 401)
+            status, payload = self.request("GET", "/v1/transfers", headers=headers)
+            self.assertEqual((status, payload["transfers"][0]["transferId"]), (200, transfer_id))
+            status, payload = self.request("POST", "/v1/transfers", json.dumps(body), headers)
+            self.assertEqual((status, payload["transfer"]["status"]), (202, "queued"))
+            self.assertNotIn("private-secret", json.dumps(payload))
+            status, payload = self.request("DELETE", f"/v1/transfers/{transfer_id}", headers=headers)
+            self.assertEqual((status, payload["transfer"]["status"]), (200, "cancelling"))
+            cancel.assert_called_once_with(transfer_id, TEST_ORGANIZATION_ID)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ export function actionFor(method: string, segments: string[]): string | null {
   const manage = `${productId}:members:manage`;
 
   if (method === "GET") {
-    if (["overview", "databases", "roles", "backups", "activity"].includes(resource)) {
+    if (["overview", "databases", "roles", "backups", "transfers", "activity"].includes(resource)) {
       if (
         resource === "databases" &&
         identifier &&
@@ -23,7 +23,9 @@ export function actionFor(method: string, segments: string[]): string | null {
   }
 
   if (method === "POST") {
-    if (["databases", "roles", "backups", "restore-uploads", "query"].includes(resource)) {
+    if (
+      ["databases", "roles", "backups", "transfers", "restore-uploads", "query"].includes(resource)
+    ) {
       return manage;
     }
     if (resource === "activity" && identifier === "queries" && segments[3] === "terminate") {
@@ -34,5 +36,6 @@ export function actionFor(method: string, segments: string[]): string | null {
   if (method === "PUT" && resource === "restore-uploads" && identifier) return manage;
   if (method === "DELETE" && resource === "databases" && identifier) return manage;
   if (method === "DELETE" && resource === "restore-uploads" && identifier) return manage;
+  if (method === "DELETE" && resource === "transfers" && identifier) return manage;
   return null;
 }

@@ -15,6 +15,10 @@ uses local peer authentication for administration. SQL editor queries and restor
 - `GET /v1/backups`, `POST /v1/backups`
 - `GET /v1/backups/{filename}?offset={bytes}&length={bytes}` downloads one range up to 4 MiB
 - `POST /v1/backups/{filename}/restore` with `{"database":"new_name"}`
+- `GET /v1/transfers` lists the most recent transfer jobs for the organization
+- `GET /v1/transfers/{id}` returns one organization-scoped transfer job
+- `POST /v1/transfers` starts an import/export job using a one-time connection string
+- `DELETE /v1/transfers/{id}` requests cancellation of a running transfer
 - `POST /v1/restore-uploads` with `{"sizeBytes":123}` starts a temporary upload
 - `PUT /v1/restore-uploads/{id}/chunks/{index}` accepts an application/octet-stream chunk up to 4 MiB
 - `POST /v1/restore-uploads/{id}/complete` with `{"database":"new_name"}` restores the dump
@@ -35,6 +39,16 @@ The SQL editor uses the organization's restricted query role instead of the Post
 That role can create and modify objects in the organization's databases but cannot create databases,
 manage roles, or connect to other organizations' databases. The VPS API token is used to derive its
 loopback database password; the password is not returned to the dashboard.
+
+Transfer creation accepts a `connectionString` and either
+`{"direction":"import","targetMode":"new|replace","targetDatabase":"name"}` or
+`{"direction":"export","targetMode":"empty|replace","sourceDatabase":"name"}`. Transfers
+run on the VPS with `pg_dump` and `pg_restore`; at most two jobs run at once. Job metadata contains
+status and logical database names, never the connection URL or password. The URL is pinned to a
+public DNS address, TLS hostname verification is required, and a short-lived mode-0600 password file
+is removed when the job ends. If the VPS restarts during an import, startup reconciles staged database
+names: it keeps a completed replacement or restores the previous database if the swap was incomplete.
+Other interrupted jobs are marked failed, and temporary work directories are removed at startup.
 
 ## Storage reporting and limits
 
@@ -120,6 +134,19 @@ route, keeping the VPS address and bearer token out of the browser. Temporary up
 24 hours. Restores accept custom-format `.dump` and `.backup` files and always create a new database;
 they never overwrite an existing one. Restore files can contain commands selected by their source
 database superuser, so restore only files you trust.
+
+The Backups page also supports full database transfers to or from an existing PostgreSQL connection.
+The connection string is supplied once for each job and is not saved as a profile. The VPS initiates
+the database connection, so its outbound network must reach the provider. Add the VPS egress IP to a
+provider's network allowlist when required. Imports can create a new Nanogres database or replace an
+existing one after staging and restoring the incoming database; the current database is kept until
+the staged database is ready, then active sessions are disconnected during the swap. Exports require
+an empty destination by default. The confirmed replace option first keeps a temporary rollback dump,
+then removes non-system schemas and restores the Nanogres database in one transaction. The rollback dump is removed after
+success or successful recovery. If recovery fails, a copy is retained on the VPS and the transfer
+status reports it. Database contents, schemas, and supported extensions move; cluster roles,
+ownership, and grants do not. VPS PostgreSQL client tools must support the remote server version, and
+provider TLS certificates must validate against the VPS system trust store.
 
 ## Install
 

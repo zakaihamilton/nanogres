@@ -20,6 +20,7 @@ type OptionProps = {
 };
 
 type SelectProps = {
+  align?: "start" | "end";
   "aria-describedby"?: string;
   "aria-invalid"?: boolean | "false" | "grammar" | "spelling" | "true";
   "aria-label"?: string;
@@ -45,8 +46,8 @@ type SelectOption = {
 type PopupPosition = {
   left: number;
   maxHeight: number;
+  minWidth: number;
   top: number;
-  width: number;
 };
 
 function optionText(value: ReactNode): string {
@@ -56,6 +57,7 @@ function optionText(value: ReactNode): string {
 }
 
 export function Select({
+  align = "start",
   "aria-describedby": describedBy,
   "aria-invalid": ariaInvalid,
   "aria-label": ariaLabel,
@@ -229,12 +231,13 @@ export function Select({
       const roomAbove = rect.top - 12;
       const openAbove = roomBelow < desiredHeight && roomAbove > roomBelow;
       const maxHeight = Math.max(64, Math.min(desiredHeight, openAbove ? roomAbove : roomBelow));
-      const width = Math.min(Math.max(rect.width, 184), window.innerWidth - 16);
-      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+      const minWidth = Math.min(rect.width, window.innerWidth - 16);
+      const preferredLeft = align === "end" ? rect.right - minWidth : rect.left;
+      const left = Math.max(8, Math.min(preferredLeft, window.innerWidth - minWidth - 8));
       const top = openAbove
         ? Math.max(8, rect.top - maxHeight - 6)
         : Math.min(rect.bottom + 6, window.innerHeight - maxHeight - 8);
-      setPopupPosition({ left, maxHeight, top, width });
+      setPopupPosition({ left, maxHeight, minWidth, top });
     }
 
     updatePosition();
@@ -244,7 +247,22 @@ export function Select({
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [open, options.length]);
+  }, [align, open, options.length]);
+
+  useEffect(() => {
+    if (!open || !popupPosition) return;
+    const trigger = triggerRef.current;
+    const popup = popupRef.current;
+    if (!trigger || !popup) return;
+
+    const width = popup.getBoundingClientRect().width;
+    const triggerRect = trigger.getBoundingClientRect();
+    const preferredLeft = align === "end" ? triggerRect.right - width : triggerRect.left;
+    const left = Math.max(8, Math.min(preferredLeft, window.innerWidth - width - 8));
+    if (Math.abs(left - popupPosition.left) > 1) {
+      setPopupPosition((current) => (current ? { ...current, left } : current));
+    }
+  }, [align, open, popupPosition]);
 
   useEffect(() => {
     if (open && activeIndex >= 0) {
@@ -266,8 +284,8 @@ export function Select({
             style={{
               left: popupPosition.left,
               maxHeight: popupPosition.maxHeight,
+              minWidth: popupPosition.minWidth,
               top: popupPosition.top,
-              width: popupPosition.width,
             }}
           >
             {options.map((option, index) => (

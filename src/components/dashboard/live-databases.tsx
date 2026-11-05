@@ -156,7 +156,7 @@ export function LiveDatabasesScreen({ page = "list" }: { page?: "list" | "new" }
             title="Create a database"
             detail={`Lowercase letters, numbers, and underscores; max ${TENANT_NAME_MAX_LENGTH} characters.`}
           >
-            <form className={styles.form} onSubmit={createDatabase}>
+            <form className={styles.form} method="post" onSubmit={createDatabase}>
               <label htmlFor="database-name">Database name</label>
               <div className={styles.formRow}>
                 <input

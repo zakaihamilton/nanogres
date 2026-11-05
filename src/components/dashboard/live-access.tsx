@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Select } from "@/components/ui/select";
 import { ConnectionModal } from "@/components/ui/connection-modal";
 import { nanogresToast } from "@/components/ui/toast";
+import { Tooltip } from "@/components/ui/tooltip";
 import { generateSecurePassword } from "@/lib/generate-password";
 import { Icon } from "./icons";
 import {
@@ -125,7 +126,7 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
             ) : databaseError && !userDatabases.length ? (
               <Empty>Nanogres could not load databases. Use Try again above to retry.</Empty>
             ) : userDatabases.length ? (
-              <form className={styles.formGrid} onSubmit={createRole}>
+              <form className={styles.formGrid} method="post" onSubmit={createRole}>
                 <div className={styles.field}>
                   <label htmlFor="role-name">Role name</label>
                   <input
@@ -273,17 +274,20 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
                         </td>
                         <td>{role.validUntil ? formatDate(role.validUntil) : "Never"}</td>
                         <td>
-                          <button
-                            className={styles.rowAction}
-                            disabled={!role.connectionDatabase}
-                            onClick={() => setConnectRole(role)}
-                            type="button"
-                            title={
+                          <Tooltip
+                            label={
                               !role.connectionDatabase ? "Role has no database access" : undefined
                             }
                           >
-                            Connect snippet
-                          </button>
+                            <button
+                              className={styles.rowAction}
+                              disabled={!role.connectionDatabase}
+                              onClick={() => setConnectRole(role)}
+                              type="button"
+                            >
+                              Connect snippet
+                            </button>
+                          </Tooltip>
                         </td>
                       </tr>
                     ))}

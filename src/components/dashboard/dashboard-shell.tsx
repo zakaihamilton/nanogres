@@ -71,6 +71,7 @@ function getBreadcrumbs(pathname: string): { label: string; href?: string }[] {
     crumbs.push({ label: "BACKUPS", href: "/backups" });
     if (parts[1] === "new") crumbs.push({ label: "NEW BACKUP" });
     if (parts[1] === "restore") crumbs.push({ label: "RESTORE" });
+    if (parts[1] === "transfers") crumbs.push({ label: "TRANSFERS" });
   } else if (parts[0] === "activity") {
     crumbs.push({ label: "ACTIVITY" });
   } else if (parts[0] === "workspaces") {
@@ -152,7 +153,7 @@ export function DashboardShell({
                 : undefined
             }
           >
-            <Image alt="" className={styles.brandMark} src="/icon.svg" width={32} height={32} />
+            <Image alt="" className={styles.brandMark} src="/icon.png" width={32} height={32} />
             <span className={styles.brandName}>nanogres</span>
           </Link>
 
@@ -172,11 +173,6 @@ export function DashboardShell({
                 const active = isActive(pathname, item, activePath);
                 return (
                   <Link
-                    aria-label={
-                      previewMode && item.href === "/databases"
-                        ? `Databases, ${databaseNames.length} managed databases`
-                        : undefined
-                    }
                     aria-current={active ? "page" : undefined}
                     aria-disabled={(previewMode && !onPreviewNavigate) || undefined}
                     className={`${styles.navItem} ${active ? styles.navItemActive : ""}`}
@@ -262,7 +258,6 @@ export function DashboardShell({
                 className={styles.searchTrigger}
                 onClick={() => setPaletteOpen(true)}
                 type="button"
-                aria-label="Open command palette (Cmd+K)"
               >
                 <Icon name="search" size={14} />
                 <span>Commands</span>

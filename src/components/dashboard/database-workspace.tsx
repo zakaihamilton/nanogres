@@ -13,6 +13,7 @@ import { Icon } from "./icons";
 import { formatBytes } from "./storage-capacity";
 import { ConnectionModal } from "@/components/ui/connection-modal";
 import { nanogresToast } from "@/components/ui/toast";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   type Database,
   apiRequest,
@@ -250,16 +251,17 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
           </div>
         </div>
         <div className={liveStyles.actionGroup}>
-          <button
-            className={liveStyles.actionSecondaryButton}
-            disabled={!db}
-            onClick={() => setConnectModalOpen(true)}
-            type="button"
-            title={!db ? "Database is unavailable" : undefined}
-          >
-            <Icon name="terminal" size={14} />
-            Connect
-          </button>
+          <Tooltip label={!db ? "Database is unavailable" : undefined}>
+            <button
+              className={liveStyles.actionSecondaryButton}
+              disabled={!db}
+              onClick={() => setConnectModalOpen(true)}
+              type="button"
+            >
+              <Icon name="terminal" size={14} />
+              Connect
+            </button>
+          </Tooltip>
           <Link
             className={liveStyles.actionSecondaryButton}
             href={`/sql?db=${encodeURIComponent(databaseName)}`}
@@ -596,24 +598,26 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
                         </td>
                         <td>
                           <div style={{ display: "inline-flex", gap: 6 }}>
-                            <button
-                              className={liveStyles.rowAction}
-                              onClick={() => void handleTerminateQuery(q.pid, "cancel")}
-                              style={{ color: "var(--amber)" }}
-                              title="Cancel current query"
-                              type="button"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              className={liveStyles.rowAction}
-                              onClick={() => void handleTerminateQuery(q.pid, "terminate")}
-                              style={{ color: "var(--red)" }}
-                              title="Terminate backend connection"
-                              type="button"
-                            >
-                              Kill
-                            </button>
+                            <Tooltip label="Cancel current query">
+                              <button
+                                className={liveStyles.rowAction}
+                                onClick={() => void handleTerminateQuery(q.pid, "cancel")}
+                                style={{ color: "var(--amber)" }}
+                                type="button"
+                              >
+                                Cancel
+                              </button>
+                            </Tooltip>
+                            <Tooltip label="Terminate backend connection">
+                              <button
+                                className={liveStyles.rowAction}
+                                onClick={() => void handleTerminateQuery(q.pid, "terminate")}
+                                style={{ color: "var(--red)" }}
+                                type="button"
+                              >
+                                Kill
+                              </button>
+                            </Tooltip>
                           </div>
                         </td>
                       </tr>

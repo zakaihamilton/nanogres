@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
+import { Tooltip } from "@/components/ui/tooltip";
 import { PanelFrame } from "./panel-frame";
 import { formatBytes, type DatabaseStorage, type StorageDisk } from "./storage-capacity";
 import styles from "./live-screens.module.css";
@@ -291,13 +292,14 @@ export function DatabaseTable({
           {databases.map((database) => (
             <tr key={database.name}>
               <td>
-                <Link
-                  className={styles.databaseName}
-                  href={`/databases/${encodeURIComponent(database.name)}`}
-                  title="Open database workspace"
-                >
-                  {database.name}
-                </Link>
+                <Tooltip label="Open database workspace">
+                  <Link
+                    className={styles.databaseName}
+                    href={`/databases/${encodeURIComponent(database.name)}`}
+                  >
+                    {database.name}
+                  </Link>
+                </Tooltip>
                 {database.systemDatabase ? (
                   <small className={styles.systemTag}>system</small>
                 ) : null}

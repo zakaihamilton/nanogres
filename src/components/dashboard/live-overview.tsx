@@ -6,6 +6,7 @@ import { Icon } from "./icons";
 import { formatBytes, StorageCapacity } from "./storage-capacity";
 import { ConnectionGauge, StorageDonut } from "@/components/ui/svg-charts";
 import { ConnectionModal } from "@/components/ui/connection-modal";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useTelemetryStream } from "@/lib/use-stream";
 import {
   type Database,
@@ -81,26 +82,30 @@ export function LiveOverviewScreen() {
         action={
           <div className={styles.actionGroup}>
             {status ? (
-              <span
-                className={`${styles.livePill} ${isLive ? "" : styles.livePillOffline}`}
-                title={
+              <Tooltip
+                label={
                   isLive ? "Live real-time Server-Sent Events connected" : "Polling every 6 seconds"
                 }
               >
-                <span className={styles.pulsingDot} />
-                {isLive ? "LIVE STREAM" : "POLLING"}
-              </span>
+                <span className={`${styles.livePill} ${isLive ? "" : styles.livePillOffline}`}>
+                  <span className={styles.pulsingDot} />
+                  {isLive ? "LIVE STREAM" : "POLLING"}
+                </span>
+              </Tooltip>
             ) : null}
-            <button
-              className={styles.actionSecondaryButton}
-              disabled={databases.length === 0}
-              onClick={() => setConnectModalOpen(true)}
-              type="button"
-              title={databases.length === 0 ? "Create an organization database first" : undefined}
+            <Tooltip
+              label={databases.length === 0 ? "Create an organization database first" : undefined}
             >
-              <Icon name="terminal" size={14} />
-              Connect
-            </button>
+              <button
+                className={styles.actionSecondaryButton}
+                disabled={databases.length === 0}
+                onClick={() => setConnectModalOpen(true)}
+                type="button"
+              >
+                <Icon name="terminal" size={14} />
+                Connect
+              </button>
+            </Tooltip>
             <Link className={styles.actionSecondaryButton} href="/sql">
               <Icon name="sql" size={14} />
               SQL Editor

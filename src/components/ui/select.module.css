@@ -84,6 +84,8 @@
   border-radius: 11px;
   background: var(--surface-raised);
   box-shadow: var(--shadow-soft);
+  width: max-content;
+  max-width: calc(100vw - 16px);
 }
 
 .option {

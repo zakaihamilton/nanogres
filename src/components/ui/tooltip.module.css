@@ -1,25 +1,45 @@
 .tooltip {
   position: relative;
   display: inline-flex;
+  min-width: 0;
 }
 
 .label {
   position: absolute;
-  z-index: 10;
-  right: 0;
+  z-index: 1200;
+  left: 50%;
   bottom: calc(100% + 8px);
+  transform: translate(-50%, 4px);
   width: max-content;
-  max-width: 220px;
-  padding: 6px 9px;
-  border-radius: 6px;
+  max-width: min(260px, calc(100vw - 24px));
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--surface) 15%, transparent);
+  border-radius: 8px;
   background: var(--ink);
   color: var(--surface);
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.45;
+  white-space: normal;
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 18%);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    visibility 120ms ease;
 }
 
 .tooltip:hover .label,
 .tooltip:focus-within .label {
   opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .label {
+    transition: none;
+  }
 }

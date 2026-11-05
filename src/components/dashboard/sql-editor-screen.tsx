@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { CodeEditor } from "@/components/ui/code-editor";
+import { Select } from "@/components/ui/select";
 import { nanogresToast } from "@/components/ui/toast";
+import { Tooltip } from "@/components/ui/tooltip";
 import { apiRequest, useDatabases, Button, ErrorNotice } from "./live-shared";
 import styles from "./sql-editor-screen.module.css";
 
@@ -236,11 +238,12 @@ export function SqlEditorScreen() {
             }}
           >
             Database:
-            <select
+            <Select
+              align="end"
               aria-label="Select target database"
               className={styles.selectDb}
               disabled={dbsLoading}
-              onChange={(e) => setSelectedDb(e.target.value)}
+              onChange={setSelectedDb}
               value={selectedDb}
             >
               {selectedDb && !databases.some((database) => database.name === selectedDb) ? (
@@ -256,7 +259,7 @@ export function SqlEditorScreen() {
                   {db.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         </div>
       </div>
@@ -272,32 +275,30 @@ export function SqlEditorScreen() {
           >
             <span>{tab.title}</span>
             {tabs.length > 1 ? (
-              <span
-                className={styles.tabClose}
-                onClick={(e) => handleCloseTab(tab.id, e)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    handleCloseTab(tab.id, e as unknown as React.MouseEvent);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                title="Close tab"
-              >
-                ×
-              </span>
+              <Tooltip label="Close tab">
+                <span
+                  className={styles.tabClose}
+                  onClick={(e) => handleCloseTab(tab.id, e)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleCloseTab(tab.id, e as unknown as React.MouseEvent);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                >
+                  ×
+                </span>
+              </Tooltip>
             ) : null}
           </button>
         ))}
-        <button
-          className={styles.addTabBtn}
-          onClick={handleAddTab}
-          title="New query tab"
-          type="button"
-        >
-          + New Tab
-        </button>
+        <Tooltip label="New query tab">
+          <button className={styles.addTabBtn} onClick={handleAddTab} type="button">
+            + New Tab
+          </button>
+        </Tooltip>
       </div>
 
       {/* Code Editor */}
@@ -312,27 +313,28 @@ export function SqlEditorScreen() {
       {/* Guardrails and action bar */}
       <div className={styles.guardrailsBar}>
         <div className={styles.guardrailsLeft}>
-          <label className={styles.guardrailToggle} title="Executes inside a read-only transaction">
-            <input
-              checked={readOnly}
-              className={styles.guardrailCheckbox}
-              onChange={(e) => setReadOnly(e.target.checked)}
-              type="checkbox"
-            />
-            Read-Only Safety
-          </label>
-          <label
-            className={styles.guardrailToggle}
-            title="Appends LIMIT 100 to unbounded SELECT queries"
-          >
-            <input
-              checked={defaultLimit}
-              className={styles.guardrailCheckbox}
-              onChange={(e) => setDefaultLimit(e.target.checked)}
-              type="checkbox"
-            />
-            Limit 100
-          </label>
+          <Tooltip label="Executes inside a read-only transaction">
+            <label className={styles.guardrailToggle}>
+              <input
+                checked={readOnly}
+                className={styles.guardrailCheckbox}
+                onChange={(e) => setReadOnly(e.target.checked)}
+                type="checkbox"
+              />
+              Read-Only Safety
+            </label>
+          </Tooltip>
+          <Tooltip label="Appends LIMIT 100 to unbounded SELECT queries">
+            <label className={styles.guardrailToggle}>
+              <input
+                checked={defaultLimit}
+                className={styles.guardrailCheckbox}
+                onChange={(e) => setDefaultLimit(e.target.checked)}
+                type="checkbox"
+              />
+              Limit 100
+            </label>
+          </Tooltip>
           <label
             style={{
               display: "inline-flex",
@@ -343,15 +345,16 @@ export function SqlEditorScreen() {
             }}
           >
             Timeout:
-            <select
-              onChange={(e) => setTimeoutSeconds(Number(e.target.value))}
-              style={{ padding: "3px 6px", borderRadius: 4, border: "1px solid var(--line)" }}
-              value={timeoutSeconds}
+            <Select
+              aria-label="Query timeout"
+              className={styles.timeoutSelect}
+              onChange={(value) => setTimeoutSeconds(Number(value))}
+              value={String(timeoutSeconds)}
             >
-              <option value={5}>5s</option>
-              <option value={15}>15s</option>
-              <option value={30}>30s</option>
-            </select>
+              <option value="5">5s</option>
+              <option value="15">15s</option>
+              <option value="30">30s</option>
+            </Select>
           </label>
         </div>
 

@@ -1,9 +1,10 @@
 .page {
   min-height: 100svh;
-  padding: clamp(28px, 6vw, 72px) clamp(18px, 7vw, 100px);
+  padding: clamp(26px, 5vw, 64px) clamp(18px, 6vw, 88px);
   background:
-    radial-gradient(ellipse at 18% 16%, var(--surface-green), transparent 36%),
-    radial-gradient(ellipse at 90% 90%, var(--blue-pale), transparent 28%), var(--canvas);
+    radial-gradient(ellipse at 12% 8%, color-mix(in srgb, var(--surface-green) 78%, transparent), transparent 35%),
+    radial-gradient(ellipse at 92% 94%, color-mix(in srgb, var(--blue-pale) 76%, transparent), transparent 32%),
+    var(--canvas);
 }
 
 .themeControl {
@@ -15,34 +16,34 @@
 
 .layout {
   display: grid;
-  width: min(100%, 1190px);
-  min-height: calc(100svh - 144px);
+  width: min(100%, 1200px);
+  min-height: calc(100svh - 128px);
   align-items: center;
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
-  gap: clamp(38px, 7vw, 104px);
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
+  gap: clamp(48px, 7vw, 104px);
   margin: 0 auto;
 }
 
 .intro {
   display: grid;
-  gap: clamp(27px, 4vh, 42px);
+  gap: clamp(28px, 4.5vh, 44px);
 }
 
 .brand {
   display: inline-flex;
   width: fit-content;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   color: var(--ink);
-  font-size: 20px;
-  font-weight: 760;
+  font-size: 21px;
+  font-weight: 740;
   letter-spacing: -0.055em;
 }
 
 .brandMark {
   display: grid;
-  width: 31px;
-  height: 31px;
+  width: 34px;
+  height: 34px;
   align-content: center;
   justify-items: center;
   gap: 2px;
@@ -80,24 +81,24 @@
   max-width: 660px;
   margin: 0;
   color: var(--ink);
-  font-size: clamp(38px, 5.4vw, 67px);
-  font-weight: 650;
-  letter-spacing: -0.068em;
-  line-height: 1.02;
+  font-size: clamp(40px, 5.2vw, 66px);
+  font-weight: 660;
+  letter-spacing: -0.064em;
+  line-height: 1.04;
 }
 
 .introDescription {
   max-width: 570px;
-  margin: 19px 0 0;
+  margin: 21px 0 0;
   color: var(--ink-soft);
-  font-size: clamp(14px, 1.45vw, 17px);
-  line-height: 1.7;
+  font-size: clamp(14px, 1.4vw, 16px);
+  line-height: 1.72;
 }
 
 .featureList {
   display: grid;
-  gap: 13px;
-  margin: 29px 0 0;
+  gap: 15px;
+  margin: 32px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -105,7 +106,7 @@
 .featureList li {
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 14px;
 }
 
 .featureIcon,
@@ -118,11 +119,11 @@
 }
 
 .featureIcon {
-  width: 37px;
-  height: 37px;
+  width: 40px;
+  height: 40px;
   border: 1px solid var(--line);
-  border-radius: 11px;
-  background: color-mix(in srgb, var(--surface) 84%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
 }
 
 .featureIcon svg {
@@ -151,11 +152,13 @@
 }
 
 .architectureCard {
-  padding: 17px 19px 15px;
-  border: 1px solid var(--line);
-  border-radius: 15px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  box-shadow: var(--shadow-soft);
+  padding: 19px 20px 17px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 17px;
+  background:
+    radial-gradient(ellipse at 95% 0%, rgb(108 197 158 / 18%), transparent 47%),
+    linear-gradient(135deg, #10291f, #174a38 62%, #1b5b43);
+  box-shadow: 0 18px 40px rgb(16 49 35 / 18%);
 }
 
 .architectureHeading {
@@ -163,17 +166,17 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: var(--ink);
+  color: #f1f7f3;
   font-size: 11px;
   font-weight: 680;
 }
 
 .privateLabel {
   padding: 5px 7px;
-  border: 1px solid var(--green-pale);
+  border: 1px solid rgb(193 236 213 / 23%);
   border-radius: 6px;
-  background: var(--surface-green);
-  color: var(--green-strong);
+  background: rgb(193 236 213 / 10%);
+  color: #c6efd7;
   font-size: 8px;
   font-weight: 760;
   letter-spacing: 0.08em;
@@ -183,24 +186,24 @@
   display: grid;
   align-items: center;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 9px;
-  margin: 17px 0 12px;
+  gap: 10px;
+  margin: 18px 0 13px;
 }
 
 .architectureNode {
   display: grid;
   min-width: 0;
-  min-height: 59px;
+  min-height: 62px;
   align-content: center;
   gap: 5px;
   padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--surface-muted);
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 7%);
 }
 
 .architectureNode small {
-  color: var(--ink-muted);
+  color: rgb(229 243 235 / 66%);
   font-size: 8px;
   font-weight: 720;
   letter-spacing: 0.08em;
@@ -209,7 +212,7 @@
 
 .architectureNode strong {
   overflow: hidden;
-  color: var(--ink);
+  color: #f4faf6;
   font-size: 10px;
   font-weight: 680;
   text-overflow: ellipsis;
@@ -217,50 +220,44 @@
 }
 
 .architectureNodeAccent {
-  border-color: var(--green-pale);
-  background: var(--surface-green);
+  border-color: rgb(166 232 192 / 35%);
+  background: rgb(143 219 177 / 15%);
 }
 
 .architectureNodeAccent small,
 .architectureNodeAccent strong {
-  color: var(--green-strong);
+  color: #c6efd7;
 }
 
 .architectureArrow {
-  color: var(--green);
+  color: #b4e7cb;
   font-size: 14px;
 }
 
 .architectureCard > p {
   margin: 0;
-  color: var(--ink-muted);
+  color: rgb(229 243 235 / 76%);
   font-size: 10px;
   line-height: 1.5;
 }
 
-.footer {
-  margin: 0;
-  color: var(--ink-muted);
-  font-size: 10px;
-}
-
 .card {
   width: 100%;
-  padding: 32px;
+  padding: clamp(30px, 3.2vw, 40px);
   border: 1px solid var(--line);
-  border-radius: 20px;
-  background: var(--surface);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--surface) 97%, transparent);
   box-shadow:
-    0 24px 64px rgb(22 45 34 / 8%),
-    0 3px 10px rgb(22 45 34 / 3%);
+    0 28px 80px rgb(22 45 34 / 10%),
+    0 4px 12px rgb(22 45 34 / 4%);
 }
 
 .loginIcon {
-  width: 46px;
-  height: 46px;
-  margin-bottom: 23px;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 21px;
   border: 1px solid var(--green-pale);
-  border-radius: 13px;
+  border-radius: 14px;
   background: var(--surface-green);
 }
 
@@ -279,14 +276,14 @@
 .card h2 {
   margin: 0;
   color: var(--ink);
-  font-size: clamp(27px, 4vw, 34px);
-  font-weight: 650;
-  letter-spacing: -0.055em;
+  font-size: clamp(28px, 3.5vw, 34px);
+  font-weight: 660;
+  letter-spacing: -0.05em;
   line-height: 1.12;
 }
 
 .description {
-  margin: 10px 0 23px;
+  margin: 11px 0 25px;
   color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.65;
@@ -305,33 +302,38 @@
 
 .credentialsForm {
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .field {
   display: grid;
-  gap: 7px;
+  gap: 8px;
 }
 
 .fieldLabel {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 650;
 }
 
 .input {
   width: 100%;
-  min-height: 46px;
-  padding: 0 12px;
+  min-height: 50px;
+  padding: 0 14px;
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
-  background: var(--surface-muted);
+  border-radius: 10px;
+  background: var(--surface);
   color: var(--ink);
   font: inherit;
   font-size: 13px;
   transition:
     border-color 150ms ease,
     box-shadow 150ms ease;
+}
+
+.input::placeholder {
+  color: var(--ink-muted);
+  opacity: 0.75;
 }
 
 .input:hover {
@@ -367,14 +369,14 @@
 .signInButton {
   display: flex;
   width: 100%;
-  min-height: 48px;
+  min-height: 50px;
   align-items: center;
   justify-content: center;
   gap: 10px;
   border: 1px solid var(--green);
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--green);
-  color: var(--surface);
+  color: var(--on-green);
   cursor: pointer;
   font-size: 13px;
   font-weight: 690;
@@ -430,12 +432,12 @@
 .singleSignOnButton {
   display: flex;
   width: 100%;
-  min-height: 46px;
+  min-height: 50px;
   align-items: center;
   justify-content: center;
   gap: 10px;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--surface);
   color: var(--ink-soft);
   font-size: 12px;
@@ -467,22 +469,24 @@
   color: var(--ink-muted);
   font-size: 11px;
   line-height: 1.5;
-  text-align: center;
+  text-align: left;
 }
 
 .securityNote {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  margin-top: 24px;
-  padding-top: 19px;
-  border-top: 1px solid var(--line);
+  gap: 11px;
+  margin-top: 22px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-muted);
 }
 
 .securityIcon {
-  width: 29px;
-  height: 29px;
-  border-radius: 8px;
+  width: 31px;
+  height: 31px;
+  border-radius: 9px;
   background: var(--surface-green);
 }
 
@@ -509,13 +513,6 @@
   color: var(--ink-muted);
   font-size: 10px;
   line-height: 1.5;
-}
-
-.signInFootnote {
-  margin: 15px 0 0;
-  color: var(--ink-muted);
-  font-size: 10px;
-  text-align: center;
 }
 
 @media (width <= 960px) {

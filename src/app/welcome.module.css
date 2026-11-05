@@ -635,11 +635,11 @@
 
 .sectionEyebrow {
   color: var(--green);
-  font-size: 11px;
+  font-size: clamp(13px, 1.1vw, 15px);
   font-weight: 750;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .sectionTitle {
@@ -838,7 +838,7 @@
   padding-top: 28px;
   border-top: 1px solid var(--line);
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: 14px;
   flex-wrap: wrap;
 }
 
@@ -850,11 +850,6 @@
   color: var(--ink);
 }
 
-.footerInfo {
-  color: var(--ink-muted);
-  font-size: 11.5px;
-}
-
 .footerLinks {
   display: flex;
   align-items: center;
@@ -864,7 +859,7 @@
 .footerLink {
   color: var(--ink-soft);
   text-decoration: none;
-  font-size: 12px;
+  font-size: 13px;
   padding: 4px 8px;
   border-radius: 6px;
   transition:

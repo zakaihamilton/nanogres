@@ -33,7 +33,8 @@ async function handle(request: NextRequest, context: RouteParams): Promise<Respo
 
   let body: BodyInit | undefined;
   if (request.method === "POST") {
-    const maxPostSize = segments[0] === "query" ? 65536 : 8192;
+    const maxPostSize =
+      segments[0] === "query" ? 65536 : segments[0] === "transfers" ? 16384 : 8192;
     const length = Number(request.headers.get("content-length") ?? 0);
     if (length > maxPostSize)
       return Response.json({ error: "Request body is too large." }, { status: 413 });

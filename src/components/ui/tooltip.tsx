@@ -1,11 +1,24 @@
-import type { ReactNode } from "react";
+import { cloneElement, isValidElement, useId, type ReactNode } from "react";
 import styles from "./tooltip.module.css";
 
-export function Tooltip({ children, label }: { children: ReactNode; label: string }) {
+type TooltipTargetProps = {
+  "aria-describedby"?: string;
+};
+
+export function Tooltip({ children, label }: { children: ReactNode; label?: string }) {
+  const tooltipId = useId();
+  if (!label) return <>{children}</>;
+
+  const target = isValidElement<TooltipTargetProps>(children)
+    ? cloneElement(children, {
+        "aria-describedby": [children.props["aria-describedby"], tooltipId].filter(Boolean).join(" "),
+      })
+    : children;
+
   return (
     <span className={styles.tooltip}>
-      {children}
-      <span aria-hidden="true" className={styles.label}>
+      {target}
+      <span className={styles.label} id={tooltipId} role="tooltip">
         {label}
       </span>
     </span>

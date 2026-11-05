@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, type ChangeEvent, type KeyboardEvent, type ReactNode } from "react";
+import { Tooltip } from "@/components/ui/tooltip";
 import styles from "./code-editor.module.css";
 
 const SQL_KEYWORDS = new Set([
@@ -206,22 +207,16 @@ export function CodeEditor({
           <span className={styles.shortcutHint}>⌘ + Enter to execute</span>
         </div>
         <div className={styles.toolbarRight}>
-          <button
-            className={styles.toolButton}
-            onClick={handleFormat}
-            title="Format SQL keywords"
-            type="button"
-          >
-            Format
-          </button>
-          <button
-            className={styles.toolButton}
-            onClick={handleClear}
-            title="Clear editor"
-            type="button"
-          >
-            Clear
-          </button>
+          <Tooltip label="Format SQL keywords">
+            <button className={styles.toolButton} onClick={handleFormat} type="button">
+              Format
+            </button>
+          </Tooltip>
+          <Tooltip label="Clear editor">
+            <button className={styles.toolButton} onClick={handleClear} type="button">
+              Clear
+            </button>
+          </Tooltip>
         </div>
       </div>
       <div className={styles.editorArea} style={{ minHeight }}>

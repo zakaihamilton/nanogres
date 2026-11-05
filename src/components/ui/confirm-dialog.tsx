@@ -7,10 +7,14 @@ export function ConfirmDialog({
   message,
   onCancel,
   onConfirm,
+  title = "Confirm restore",
+  confirmLabel = "Restore",
 }: {
   message: string;
   onCancel: () => void;
   onConfirm: () => void;
+  title?: string;
+  confirmLabel?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -34,14 +38,14 @@ export function ConfirmDialog({
         onCancel();
       }}
     >
-      <h2 id="confirm-title">Confirm restore</h2>
+      <h2 id="confirm-title">{title}</h2>
       <p id="confirm-message">{message}</p>
       <div className={styles.actions}>
         <button type="button" ref={cancelRef} onClick={onCancel}>
           Cancel
         </button>
         <button type="button" className={styles.confirm} onClick={onConfirm}>
-          Restore
+          {confirmLabel}
         </button>
       </div>
     </dialog>

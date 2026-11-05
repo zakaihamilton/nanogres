@@ -121,6 +121,14 @@ can also download a backup to your computer and restore a trusted `.dump` or `.b
 new database. Restore uploads are transferred in chunks; incomplete uploads are removed after 24
 hours. Restores never overwrite an existing database.
 
+The Backups area can also import or export a complete PostgreSQL database through a one-time
+connection string, including with hosted providers such as Neon. Imports create a new Nanogres
+database or replace an existing one after staging; exports require an empty external database by
+default, with a confirmed replace option that keeps a temporary rollback copy. The VPS connects
+directly to the provider, so its outbound network must be allowed by that provider. TLS hostname
+verification is required. Connection credentials are discarded after the job and are never saved as
+profiles. Database roles and grants are not included in transfers.
+
 The scheduled copies share the VPS disk with PostgreSQL. Download a second copy to protect against
 loss of that server or disk. A PostgreSQL dump can contain executable SQL from its source, so restore
 only files from sources you trust.

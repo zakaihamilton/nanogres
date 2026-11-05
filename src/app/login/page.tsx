@@ -67,7 +67,7 @@ export default async function LoginPage({
       <div className={styles.layout}>
         <section aria-labelledby="welcome-title" className={styles.intro}>
           <div className={styles.brand}>
-            <Image alt="" className={styles.brandMark} src="/icon.svg" width={32} height={32} />
+            <Image alt="" className={styles.brandMark} src="/icon.png" width={32} height={32} />
             <span>nanogres</span>
           </div>
 
@@ -144,7 +144,6 @@ export default async function LoginPage({
               tokens.
             </p>
           </div>
-          <p className={styles.footer}>Built for personal projects and small teams.</p>
         </section>
 
         <section aria-labelledby="login-title" className={styles.card}>
@@ -152,9 +151,9 @@ export default async function LoginPage({
             <FeatureIcon kind="database" />
           </div>
           <p className={styles.loginEyebrow}>WORKSPACE ACCESS</p>
-          <h2 id="login-title">Welcome back.</h2>
+          <h2 id="login-title">Sign in to Nanogres</h2>
           <p className={styles.description}>
-            Use your Perminister email or username and password, or continue with single sign-on.
+            Use your Perminister account to access your workspace.
           </p>
 
           {message ? (
@@ -180,6 +179,7 @@ export default async function LoginPage({
                     className={styles.input}
                     maxLength={254}
                     name="identifier"
+                    placeholder="you@example.com"
                     required
                     spellCheck={false}
                     type="text"
@@ -192,6 +192,7 @@ export default async function LoginPage({
                     className={styles.input}
                     maxLength={1024}
                     name="password"
+                    placeholder="Enter your password"
                     required
                     type="password"
                   />
@@ -240,9 +241,6 @@ export default async function LoginPage({
               </small>
             </span>
           </div>
-          <p className={styles.signInFootnote}>
-            Your password is checked by Perminister and is never stored by Nanogres.
-          </p>
         </section>
       </div>
     </main>

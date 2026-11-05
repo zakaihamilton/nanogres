@@ -452,6 +452,9 @@ export function LiveBackupsScreen({
             <Link className={`${styles.button} ${styles.secondary}`} href="/backups/restore">
               Restore from file
             </Link>
+            <Link className={`${styles.button} ${styles.secondary}`} href="/backups/transfers">
+              Import / export database
+            </Link>
           </div>
           <div className={styles.backupSummary}>
             <div>

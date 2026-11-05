@@ -68,6 +68,7 @@ function resetApiState() {
       },
     ],
     backups: [],
+    transfers: [],
     events: [],
     uploads: new Map(),
     options: { failReads: false, failNextUploadChunk: false, offsiteBackup: null },
@@ -352,6 +353,7 @@ async function apiHandler(request, response) {
       roleNames: apiState.roles.map((item) => item.name),
       backupCount: apiState.backups.length,
       uploadCount: apiState.uploads.size,
+      transfers: apiState.transfers,
     });
     return;
   }
@@ -391,6 +393,46 @@ async function apiHandler(request, response) {
   }
   if (request.method === "GET" && pathname === "/v1/backups") {
     sendJson(response, 200, { backups: apiState.backups });
+    return;
+  }
+  if (request.method === "GET" && pathname === "/v1/transfers") {
+    sendJson(response, 200, { transfers: apiState.transfers });
+    return;
+  }
+  const transferMatch = pathname.match(/^\/v1\/transfers\/([a-f0-9]{32})$/);
+  if (request.method === "GET" && transferMatch) {
+    const transfer = apiState.transfers.find((item) => item.transferId === transferMatch[1]);
+    return transfer
+      ? sendJson(response, 200, { transfer })
+      : sendJson(response, 404, { error: "Transfer not found." });
+  }
+  if (request.method === "POST" && pathname === "/v1/transfers") {
+    const body = await readJson(request);
+    const transfer = {
+      transferId: randomBytes(16).toString("hex"),
+      direction: body.direction,
+      status: "queued",
+      canCancel: true,
+      phase: "queued",
+      message: "Waiting to start",
+      sourceDatabase: body.sourceDatabase ?? "external PostgreSQL",
+      targetDatabase: body.targetDatabase ?? "external PostgreSQL",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      completedAt: null,
+    };
+    apiState.transfers.unshift(transfer);
+    sendJson(response, 202, { transfer });
+    return;
+  }
+  if (request.method === "DELETE" && transferMatch) {
+    const transfer = apiState.transfers.find((item) => item.transferId === transferMatch[1]);
+    if (!transfer) return sendJson(response, 404, { error: "Transfer not found." });
+    transfer.status = "cancelled";
+    transfer.canCancel = false;
+    transfer.phase = "cancelled";
+    transfer.message = "Transfer cancelled";
+    sendJson(response, 200, { transfer });
     return;
   }
   if (request.method === "GET" && pathname === "/v1/activity") {
