@@ -149,9 +149,6 @@ export function LiveDatabasesScreen({ page = "list" }: { page?: "list" | "new" }
 
       {page === "new" ? (
         <>
-          <Link className={styles.backLink} href="/databases">
-            ← Back to databases
-          </Link>
           <Panel
             title="Create a database"
             detail={`Lowercase letters, numbers, and underscores; max ${TENANT_NAME_MAX_LENGTH} characters.`}

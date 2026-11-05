@@ -31,18 +31,16 @@ const screens = [
   { value: "activity", label: "Activity" },
 ];
 
-function previewPath(screen: string): string {
-  if (screen === "databases" || screen === "database-new" || screen === "delete-confirmation") {
-    return "/databases";
-  }
-  if (screen === "access" || screen === "access-new") return "/access";
-  if (
-    screen === "backups" ||
-    screen === "backups-new" ||
-    screen === "backups-restore" ||
-    screen === "backups-restore-existing"
-  )
-    return "/backups";
+function previewPath(screen: string, deleteDatabase: string): string {
+  if (screen === "database-new") return "/databases/new";
+  if (screen === "delete-confirmation") return `/databases/${encodeURIComponent(deleteDatabase)}`;
+  if (screen === "databases") return "/databases";
+  if (screen === "access-new") return "/access/new";
+  if (screen === "access") return "/access";
+  if (screen === "backups-new") return "/backups/new";
+  if (screen === "backups-restore") return "/backups/restore";
+  if (screen === "backups-restore-existing") return "/backups/restore/preview.dump";
+  if (screen === "backups") return "/backups";
   if (screen === "activity") return "/activity";
   return "/";
 }
@@ -266,12 +264,21 @@ export default function PreviewClient() {
       "/access/new": "access-new",
       "/backups": "backups",
       "/backups/new": "backups-new",
+      "/backups/restore": "backups-restore",
+      "/backups/transfers": "backups",
       "/activity": "activity",
     };
+    const mappedPath =
+      screenByPath[pathOrScreen] ??
+      (pathOrScreen.startsWith("/databases/")
+        ? "databases"
+        : pathOrScreen.startsWith("/backups/restore/")
+          ? "backups-restore-existing"
+          : undefined);
     const validScreen = screens.some((option) => option.value === pathOrScreen)
       ? pathOrScreen
       : "overview";
-    setScreen(screenByPath[pathOrScreen] ?? validScreen);
+    setScreen(mappedPath ?? validScreen);
     setPreviewNotice(null);
   }
 
@@ -304,7 +311,7 @@ export default function PreviewClient() {
       </PreviewToolbar>
       <DashboardShell
         account={{ name: "Avery Morgan", email: "avery@example.test" }}
-        activePath={previewPath(screen)}
+        activePath={previewPath(screen, deleteDatabase)}
         currentOrganization={{ id: "org-main", name: "Acme Production Org" }}
         currentWorkspace={{ id: "production-cluster", name: "Production Cluster" }}
         onPreviewNavigate={navigate}

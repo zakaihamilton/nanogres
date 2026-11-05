@@ -1087,41 +1087,6 @@
   box-shadow: none;
 }
 
-.backLink {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  margin-bottom: 12px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  color: var(--ink-soft);
-  font-size: 12.5px;
-  font-weight: 550;
-  text-decoration: none;
-  cursor: pointer;
-  transition:
-    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
-    background-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1),
-    color 0.15s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.backLink:hover {
-  background: var(--surface-muted);
-  border-color: var(--line-strong);
-  color: var(--ink);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 5px rgb(0 0 0 / 5%);
-}
-
-.backLink:active {
-  transform: translateY(0) scale(0.97);
-  box-shadow: none;
-}
-
 .filterChip {
   display: inline-flex;
   align-items: center;

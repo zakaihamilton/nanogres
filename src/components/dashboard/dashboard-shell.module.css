@@ -5,6 +5,18 @@
   grid-template-columns: 254px minmax(0, 1fr);
   background: var(--canvas);
   overflow-x: clip;
+  transition: grid-template-columns 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.frameSidebarHidden {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+.frameSidebarHidden .sidebar {
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateX(-10px);
 }
 
 .skipLink {
@@ -34,11 +46,16 @@
   top: 0;
   z-index: 50;
   display: flex;
+  min-width: 0;
   height: 100vh;
   flex-direction: column;
   padding: 25px 16px 17px;
   border-right: 1px solid var(--line);
   background: var(--surface);
+  overflow: visible;
+  transition:
+    opacity 180ms ease,
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .brand {
@@ -324,6 +341,43 @@
   background: color-mix(in srgb, var(--surface) 88%, transparent);
 }
 
+.topbarStart {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 13px;
+}
+
+.sidebarToggle {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.sidebarToggle:hover {
+  border-color: var(--line);
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.sidebarToggle:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
 .breadcrumbs,
 .topbarActions {
   display: flex;
@@ -334,12 +388,16 @@
   min-width: 0;
   flex: 1 1 auto;
   gap: 9px;
-  overflow: hidden;
+  overflow: visible;
   color: var(--ink-muted);
   font-size: 10px;
   font-weight: 730;
   letter-spacing: 0.09em;
   white-space: nowrap;
+}
+
+.breadcrumbs > span {
+  min-width: 0;
 }
 
 .breadcrumbs strong {
@@ -350,8 +408,7 @@
   white-space: nowrap;
 }
 
-.breadcrumbs > .crumbLink,
-.breadcrumbs > span > .crumbLink,
+.breadcrumbs a.crumbLink,
 .breadcrumbs > span > strong {
   min-width: 0;
   overflow: hidden;
@@ -360,23 +417,37 @@
 }
 
 .crumbLink {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   color: var(--ink-muted);
   text-decoration: none;
   font-size: 10px;
   font-weight: 730;
   letter-spacing: 0.09em;
   transition:
-    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.15s ease,
+    border-color 0.15s ease,
     color 0.15s ease;
 }
 
 .crumbLink:hover {
+  border-color: var(--line);
+  background: var(--surface-muted);
   color: var(--ink);
-  transform: translateY(-1px);
+}
+
+.crumbLink:focus-visible {
+  border-color: var(--green);
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
 }
 
 .crumbLink:active {
-  transform: translateY(0) scale(0.97);
+  background: var(--surface-raised);
 }
 
 .crumbSep {
@@ -470,9 +541,22 @@
     position: static;
     width: 100%;
     height: auto;
+    max-height: 500px;
     padding: 13px 16px 10px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+    transition:
+      max-height 240ms cubic-bezier(0.22, 1, 0.36, 1),
+      padding 240ms ease,
+      border-color 240ms ease,
+      opacity 180ms ease,
+      transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .frameSidebarHidden .sidebar {
+    max-height: 0;
+    padding-block: 0;
+    border-bottom-color: transparent;
   }
 
   .brand {
@@ -549,5 +633,12 @@
 @media (width <= 389px) {
   .navigation {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame,
+  .sidebar {
+    transition: none;
   }
 }

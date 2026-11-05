@@ -685,13 +685,6 @@ export function DatabasesScreen({
       ) : null}
       {previewPage === "new" ? (
         <>
-          <button
-            className={styles.secondaryButton}
-            type="button"
-            onClick={() => onPreviewNavigate?.("databases")}
-          >
-            ← Back to databases
-          </button>
           <Panel
             detail={`Lowercase letters, numbers, and underscores; max ${TENANT_NAME_MAX_LENGTH} characters.`}
             title="Create a database"
@@ -754,13 +747,6 @@ export function AccessScreen({
       </div>
       {previewPage === "new" ? (
         <>
-          <button
-            className={styles.secondaryButton}
-            type="button"
-            onClick={() => onPreviewNavigate?.("access")}
-          >
-            ← Back to login roles
-          </button>
           <Panel
             title="Create a database role"
             detail="Passwords are never shown again after creation."
@@ -853,13 +839,6 @@ export function BackupsScreen({
         </>
       ) : previewPage === "new" ? (
         <>
-          <button
-            className={styles.secondaryButton}
-            type="button"
-            onClick={() => onPreviewNavigate?.("backups")}
-          >
-            ← Back to backups
-          </button>
           <Panel
             title="Create a backup now"
             detail="Create a PostgreSQL dump and save a copy to your device."
@@ -886,13 +865,6 @@ export function BackupsScreen({
         </>
       ) : previewPage === "restore-existing" ? (
         <>
-          <button
-            className={styles.secondaryButton}
-            type="button"
-            onClick={() => onPreviewNavigate?.("backups")}
-          >
-            ← Back to backups
-          </button>
           <Panel title="Restore a backup" detail="Restore this recovery point into a new database.">
             <p>
               Backup: <strong>{previewBackup} backup</strong>
@@ -918,13 +890,6 @@ export function BackupsScreen({
         </>
       ) : (
         <>
-          <button
-            className={styles.secondaryButton}
-            type="button"
-            onClick={() => onPreviewNavigate?.("backups")}
-          >
-            ← Back to backups
-          </button>
           <Panel
             detail="Upload a trusted custom-format dump and restore it into a fresh database."
             title="Restore from a file"

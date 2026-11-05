@@ -5,13 +5,13 @@
 }
 
 .label {
-  position: absolute;
+  position: fixed;
   z-index: 1200;
-  left: 50%;
-  bottom: calc(100% + 8px);
   transform: translate(-50%, 4px);
   width: max-content;
   max-width: min(260px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
   padding: 7px 10px;
   border: 1px solid color-mix(in srgb, var(--surface) 15%, transparent);
   border-radius: 8px;

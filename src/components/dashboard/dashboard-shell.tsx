@@ -4,7 +4,7 @@ import Image from "next/image";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, type MouseEvent, type ReactNode } from "react";
 import { Tooltip } from "@/components/ui/tooltip";
 import { ThemeControl } from "@/components/theme/theme-control";
 import { ToastProvider } from "@/components/ui/toast";
@@ -103,10 +103,17 @@ export function DashboardShell({
 }) {
   const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(true);
   const [databaseNames, setDatabaseNames] = useState<string[]>(() =>
     previewMode ? ["app_main", "event_store", "sandbox"] : [],
   );
   const breadcrumbs = getBreadcrumbs(activePath ?? pathname);
+
+  function handleBreadcrumbNavigate(event: MouseEvent<HTMLAnchorElement>, href: string) {
+    if (!previewMode || !onPreviewNavigate) return;
+    event.preventDefault();
+    onPreviewNavigate?.(href);
+  }
 
   useEffect(() => {
     if (previewMode) return;
@@ -135,11 +142,17 @@ export function DashboardShell({
 
   return (
     <ToastProvider>
-      <div className={styles.frame}>
+      <div className={`${styles.frame} ${sidebarVisible ? "" : styles.frameSidebarHidden}`}>
         <a className={styles.skipLink} href="#main-content">
           Skip to main content
         </a>
-        <aside aria-label="Main navigation" className={styles.sidebar}>
+        <aside
+          aria-hidden={!sidebarVisible}
+          aria-label="Main navigation"
+          className={styles.sidebar}
+          id="dashboard-sidebar"
+          inert={!sidebarVisible}
+        >
           <Link
             aria-label="Nanogres overview"
             className={styles.brand}
@@ -235,25 +248,56 @@ export function DashboardShell({
 
         <div className={styles.mainPanel}>
           <header className={styles.topbar}>
-            <div className={styles.breadcrumbs}>
-              <Link className={styles.crumbLink} href="/overview">
-                {currentWorkspace?.name ? currentWorkspace.name.toUpperCase() : "WORKSPACE"}
-              </Link>
-              {breadcrumbs.map((crumb, idx) => (
-                <span key={idx} style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
-                  <span aria-hidden="true" className={styles.crumbSep}>
-                    /
+            <div className={styles.topbarStart}>
+              <Tooltip
+                label={sidebarVisible ? "Collapse sidebar" : "Expand sidebar"}
+                placement="bottom"
+              >
+                <button
+                  aria-controls="dashboard-sidebar"
+                  aria-expanded={sidebarVisible}
+                  aria-label={
+                    sidebarVisible ? "Collapse navigation sidebar" : "Expand navigation sidebar"
+                  }
+                  className={styles.sidebarToggle}
+                  onClick={() => setSidebarVisible((visible) => !visible)}
+                  type="button"
+                >
+                  <Icon name={sidebarVisible ? "sidebarCollapse" : "sidebarExpand"} size={18} />
+                </button>
+              </Tooltip>
+              <div className={styles.breadcrumbs}>
+                <Tooltip label="Go to overview" placement="bottom">
+                  <Link
+                    className={styles.crumbLink}
+                    href="/overview"
+                    onClick={(event) => handleBreadcrumbNavigate(event, "/overview")}
+                  >
+                    {currentWorkspace?.name ? currentWorkspace.name.toUpperCase() : "WORKSPACE"}
+                  </Link>
+                </Tooltip>
+                {breadcrumbs.map((crumb, idx) => (
+                  <span key={idx} style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
+                    <span aria-hidden="true" className={styles.crumbSep}>
+                      /
+                    </span>
+                    {crumb.href && idx < breadcrumbs.length - 1 ? (
+                      <Tooltip label={`Go to ${crumb.label.toLowerCase()}`} placement="bottom">
+                        <Link
+                          className={styles.crumbLink}
+                          href={crumb.href}
+                          onClick={(event) => handleBreadcrumbNavigate(event, crumb.href!)}
+                        >
+                          {crumb.label}
+                        </Link>
+                      </Tooltip>
+                    ) : (
+                      <strong>{crumb.label}</strong>
+                    )}
                   </span>
-                  {crumb.href && idx < breadcrumbs.length - 1 ? (
-                    <Link className={styles.crumbLink} href={crumb.href}>
-                      {crumb.label}
-                    </Link>
-                  ) : (
-                    <strong>{crumb.label}</strong>
-                  )}
-                </span>
-              ))}
-              {previewMode ? <span className={styles.previewTag}>UI PREVIEW</span> : null}
+                ))}
+                {previewMode ? <span className={styles.previewTag}>UI PREVIEW</span> : null}
+              </div>
             </div>
             <div className={styles.topbarActions}>
               <button
