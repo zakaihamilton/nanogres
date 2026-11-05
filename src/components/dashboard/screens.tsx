@@ -782,7 +782,7 @@ export function BackupsScreen({
       />
       {previewPage === "list" ? (
         <>
-          <div>
+          <div className={styles.backupPageActions}>
             <button
               className={styles.primaryButton}
               type="button"
@@ -866,26 +866,32 @@ export function BackupsScreen({
       ) : previewPage === "restore-existing" ? (
         <>
           <Panel title="Restore a backup" detail="Restore this recovery point into a new database.">
-            <p>
-              Backup: <strong>{previewBackup} backup</strong>
-            </p>
-            <div className={styles.previewField}>
-              <label htmlFor="preview-existing-name">New database name</label>
-              <input
-                id="preview-existing-name"
-                defaultValue={`${previewBackup}_restore`}
-                maxLength={TENANT_NAME_MAX_LENGTH}
-                minLength={1}
-                pattern={TENANT_NAME_PATTERN}
-              />
-              <small>
-                Existing databases are never replaced. Max {TENANT_NAME_MAX_LENGTH} characters.
-              </small>
+            <div className={styles.restoreExistingForm}>
+              <p className={styles.restoreExistingSummary}>
+                Backup: <strong>{previewBackup} backup</strong>
+              </p>
+              <div className={styles.previewField}>
+                <label htmlFor="preview-existing-name">New database name</label>
+                <input
+                  id="preview-existing-name"
+                  defaultValue={`${previewBackup}_restore`}
+                  maxLength={TENANT_NAME_MAX_LENGTH}
+                  minLength={1}
+                  pattern={TENANT_NAME_PATTERN}
+                />
+                <small>
+                  Existing databases are never replaced. Max {TENANT_NAME_MAX_LENGTH} characters.
+                </small>
+              </div>
+              <div className={styles.restoreExistingActions}>
+                <small className={styles.previewActionHint}>
+                  Preview only. No database will be restored.
+                </small>
+                <button className={styles.primaryButton} disabled type="button">
+                  Restore
+                </button>
+              </div>
             </div>
-            <button className={styles.primaryButton} disabled type="button">
-              Restore
-            </button>
-            <p>Preview only. No database will be restored.</p>
           </Panel>
         </>
       ) : (

@@ -330,7 +330,7 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
           </div>
 
           <Panel title="Quick Query & Actions" detail="Execute operations on this database">
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", padding: "8px 0" }}>
+            <div className={styles.quickActions}>
               <Button
                 onClick={() => router.push(`/sql?db=${encodeURIComponent(databaseName)}`)}
                 variant="primary"

@@ -1,6 +1,6 @@
 .screen {
   display: grid;
-  gap: 22px;
+  gap: 20px;
 }
 
 .pageHeading {
@@ -8,7 +8,6 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 20px;
-  margin-bottom: 2px;
 }
 
 .eyebrow {
@@ -878,6 +877,12 @@
   gap: 12px;
 }
 
+.backupPageActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .backupSummary > div {
   display: flex;
   min-height: 73px;
@@ -962,6 +967,7 @@
   font-size: 11px;
   font-weight: 650;
   opacity: 0.75;
+  white-space: nowrap;
 }
 
 .previewFormActions button:not(:disabled),
@@ -993,6 +999,29 @@
   align-items: end;
   gap: 15px;
   padding: 17px;
+}
+
+.restoreExistingForm {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+  padding: 17px;
+}
+
+.restoreExistingSummary {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.restoreExistingActions {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .restorePreviewForm input[type="file"] {
@@ -1085,7 +1114,8 @@
   .detailGrid,
   .backupSummary,
   .previewFormGrid,
-  .restorePreviewForm {
+  .restorePreviewForm,
+  .restoreExistingForm {
     grid-template-columns: 1fr;
   }
 

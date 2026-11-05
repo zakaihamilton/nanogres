@@ -532,6 +532,12 @@
   gap: 9px;
 }
 
+.formRow .button,
+.inlineForm .button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .form input,
 .formGrid input,
 .formGrid [data-select-trigger],
@@ -557,6 +563,15 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 15px;
+}
+
+.restoreBackupSummary {
+  align-self: start;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .field small {

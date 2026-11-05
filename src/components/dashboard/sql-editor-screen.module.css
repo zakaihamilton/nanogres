@@ -159,6 +159,12 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.actionButtons > button {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 /* Results panel */
