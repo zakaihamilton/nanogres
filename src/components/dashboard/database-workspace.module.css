@@ -55,6 +55,13 @@
   overflow-x: auto;
 }
 
+.quickActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 17px;
+}
+
 .tabBtn {
   display: inline-flex;
   align-items: center;

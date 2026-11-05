@@ -532,6 +532,12 @@
   gap: 9px;
 }
 
+.formRow .button,
+.inlineForm .button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .form input,
 .formGrid input,
 .formGrid [data-select-trigger],
