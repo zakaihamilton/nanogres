@@ -149,7 +149,9 @@ export function LiveOverviewScreen() {
                 <h3>Disk & Storage Allocation</h3>
                 <div className={styles.telemetryCardMeta}>
                   <span>Workspace root filesystem</span>
-                  <SectionInfo label={`Shows organization database file sizes and free space on the workspace filesystem. The ${formatBytes(status.databaseQuotaReserveBytes ?? 1024 ** 3)} growth reserve is taken from available disk, not extra physical storage; it can overlap the free-space value, so the chart segments are not additive.`} />
+                  <SectionInfo
+                    label={`Shows organization database file sizes and free space on the workspace filesystem. The ${formatBytes(status.databaseQuotaReserveBytes ?? 1024 ** 3)} growth reserve is taken from available disk, not extra physical storage; it can overlap the free-space value, so the chart segments are not additive.`}
+                  />
                 </div>
               </div>
               <div className={styles.telemetryCardBody}>
