@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Select } from "@/components/ui/select";
@@ -179,11 +178,6 @@ export function LiveTransfersScreen() {
         description="Move a complete PostgreSQL database directly between Nanogres and an existing connection."
         eyebrow="RECOVERY"
         title="Database transfers"
-        action={
-          <Link className={styles.backLink} href="/backups">
-            ← Back to backups
-          </Link>
-        }
       />
       <ErrorNotice error={error} />
       {message ? <Notice tone="info">{message}</Notice> : null}

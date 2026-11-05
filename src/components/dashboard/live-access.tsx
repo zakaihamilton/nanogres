@@ -114,9 +114,6 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
       </Notice>
       {page === "new" ? (
         <>
-          <Link className={styles.backLink} href="/access">
-            ← Back to login roles
-          </Link>
           <Panel
             title="Create a database role"
             detail="Passwords are sent over HTTPS, stored by Postgres as SCRAM hashes, and never displayed again."

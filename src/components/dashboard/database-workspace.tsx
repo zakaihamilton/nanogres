@@ -237,10 +237,6 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
       <div className={styles.headerWrap}>
         <div>
           <div className={styles.dbEyebrow}>
-            <Link className={styles.backLink} href="/databases">
-              ← Databases Fleet
-            </Link>
-            <span>/</span>
             <span>WORKSPACE</span>
           </div>
           <div className={styles.titleArea}>

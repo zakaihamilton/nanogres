@@ -604,9 +604,6 @@ export function LiveBackupsScreen({
         </>
       ) : page === "new" ? (
         <>
-          <Link className={styles.backLink} href="/backups">
-            ← Back to backups
-          </Link>
           <Panel
             title="Create a backup now"
             detail="Create a compressed PostgreSQL dump and save a copy to your device."
@@ -647,9 +644,6 @@ export function LiveBackupsScreen({
         </>
       ) : page === "restore-existing" ? (
         <>
-          <Link className={styles.backLink} href="/backups">
-            ← Back to backups
-          </Link>
           <Panel title="Restore a backup" detail="Restore this recovery point into a new database.">
             {backupsQuery.loading && !backupsQuery.data ? (
               <Loading />
@@ -686,9 +680,6 @@ export function LiveBackupsScreen({
                   </small>
                 </div>
                 <div className={styles.formActions}>
-                  <Link className={styles.secondary} href="/backups">
-                    Cancel
-                  </Link>
                   <Button disabled={transferBusy || Boolean(message)} type="submit">
                     {restoring === restoreBackup.filename ? "Restoring…" : "Restore"}
                   </Button>
@@ -699,9 +690,6 @@ export function LiveBackupsScreen({
         </>
       ) : (
         <>
-          <Link className={styles.backLink} href="/backups">
-            ← Back to backups
-          </Link>
           <Panel
             title="Restore from a file"
             detail="Import a trusted custom-format PostgreSQL dump into a new database."
