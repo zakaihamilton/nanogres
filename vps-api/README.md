@@ -92,9 +92,9 @@ The timer creates custom-format `pg_dump` files daily near 02:00 UTC and retains
 Each daily backup batch and each manual backup queues a copy to the private S3-compatible storage
 bucket `nanogres-backups`. The uploader verifies that all retained local dump files exist remotely
 with matching sizes. Objects are grouped under `nanogres/YYYY/MM/DD/`, followed by the original
-backup path. Existing remote objects are copied into the matching date folders during migration;
-their original keys remain in Spaces. The dashboard considers a successful copy fresh for 36 hours
-and shows a warning after a newer failed attempt or when the latest success is older. Its status
+backup path. Existing objects were copied into their matching date folders, verified, and their old
+keys removed. The dashboard considers a successful copy fresh for 36 hours and shows a warning
+after a newer failed attempt or when the latest success is older. Its status
 response includes freshness (`not-configured`, `pending`, `fresh`, `stale`, or `error`) and age in
 seconds without exposing credentials. An optional alert service checks freshness hourly, sends one
 alert when copies become stale or an upload fails, reports local scheduled-backup job failures, and
