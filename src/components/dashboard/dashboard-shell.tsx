@@ -166,7 +166,7 @@ export function DashboardShell({
                 : undefined
             }
           >
-            <Image alt="" className={styles.brandMark} src="/icon.png" width={32} height={32} />
+            <Image alt="" className={styles.brandMark} src="/brand-icon.png" width={32} height={32} />
             <span className={styles.brandName}>nanogres</span>
           </Link>
 

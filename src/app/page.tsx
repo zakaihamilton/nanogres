@@ -27,7 +27,7 @@ export default function WelcomePage() {
     <main className={styles.page}>
       <header className={styles.header}>
         <Link aria-label="Nanogres home" className={styles.brand} href="/">
-          <Image alt="" height={34} src="/icon.png" width={34} />
+          <Image alt="" height={34} src="/brand-icon.png" width={34} />
           <span>nanogres</span>
         </Link>
         <nav aria-label="Main navigation" className={styles.navPills}>
@@ -432,7 +432,7 @@ export default function WelcomePage() {
       {/* Footer */}
       <footer className={styles.footer}>
         <div className={styles.footerBrand}>
-          <Image alt="" height={20} src="/icon.png" width={20} />
+          <Image alt="" height={20} src="/brand-icon.png" width={20} />
         </div>
         <div className={styles.footerLinks}>
           <a className={styles.footerLink} href="#overview">
