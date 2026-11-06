@@ -17,7 +17,7 @@ BACKUP_DIR = Path(os.environ.get("NANOGRES_BACKUP_DIR", "/var/backups/nanogres")
 STATE_DIR = Path(os.environ.get("NANOGRES_STATE_DIR", "/var/lib/nanogres"))
 STATUS_FILE = STATE_DIR / "offsite-backup-status.json"
 REMOTE = os.environ.get("NANOGRES_S3_REMOTE", "spaces:nanogres-backups/nanogres")
-PATTERN = re.compile(r"^[a-z][a-z0-9_]*__[0-9]{8}T[0-9]{12}Z\.dump$")
+PATTERN = re.compile(r"^[a-z][a-z0-9_]*__([0-9]{8})T[0-9]{12}Z\.dump$")
 
 
 def write_status(value: dict[str, object]) -> None:
@@ -83,6 +83,20 @@ def run_rclone(operation: str, arguments: list[str]) -> subprocess.CompletedProc
         raise
 
 
+def group_backups_by_date(backups: list[Path]) -> dict[str, list[Path]]:
+    groups: dict[str, list[Path]] = {}
+    for backup in backups:
+        match = PATTERN.fullmatch(backup.name)
+        if not match:
+            continue
+        try:
+            date_folder = datetime.strptime(match.group(1), "%Y%m%d").strftime("%Y/%m/%d")
+        except ValueError as error:
+            raise RuntimeError("A retained backup has an invalid date in its filename.") from error
+        groups.setdefault(date_folder, []).append(backup)
+    return {date: sorted(paths) for date, paths in sorted(groups.items())}
+
+
 def upload() -> None:
     (STATE_DIR / "offsite-backup.request").unlink(missing_ok=True)
     started = datetime.now(timezone.utc).isoformat()
@@ -104,41 +118,54 @@ def upload() -> None:
         "lastError": None,
     }
     try:
+        backup_groups = group_backups_by_date(backups)
         if not os.environ.get("RCLONE_CONFIG_SPACES_ACCESS_KEY_ID") or not os.environ.get("RCLONE_CONFIG_SPACES_SECRET_ACCESS_KEY"):
             raise RuntimeError("The Spaces credentials are incomplete.")
-        run_rclone(
-            "copy",
-            [
-                "copy",
-                str(BACKUP_DIR),
-                REMOTE,
-                "--include",
-                "*.dump",
-                "--no-traverse",
-                "--checkers",
-                "2",
-                "--transfers",
-                "1",
-                "--retries",
-                "3",
-                "--low-level-retries",
-                "10",
-            ],
-        )
-        run_rclone(
-            "verification",
-            [
-                "check",
-                str(BACKUP_DIR),
-                REMOTE,
-                "--one-way",
-                "--size-only",
-                "--include",
-                "*.dump",
-                "--checkers",
-                "2",
-            ],
-        )
+        for date_folder, dated_backups in backup_groups.items():
+            fd, temporary = tempfile.mkstemp(prefix=".offsite-backup-files.")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    for backup in dated_backups:
+                        handle.write(f"{backup.relative_to(BACKUP_DIR).as_posix()}\n")
+                date_remote = f"{REMOTE.rstrip('/')}/{date_folder}"
+                run_rclone(
+                    f"copy into {date_folder}",
+                    [
+                        "copy",
+                        str(BACKUP_DIR),
+                        date_remote,
+                        "--files-from-raw",
+                        temporary,
+                        "--s3-no-check-bucket",
+                        "--no-traverse",
+                        "--checkers",
+                        "2",
+                        "--transfers",
+                        "1",
+                        "--retries",
+                        "3",
+                        "--low-level-retries",
+                        "10",
+                    ],
+                )
+                run_rclone(
+                    f"verification for {date_folder}",
+                    [
+                        "check",
+                        str(BACKUP_DIR),
+                        date_remote,
+                        "--files-from-raw",
+                        temporary,
+                        "--s3-no-check-bucket",
+                        "--one-way",
+                        "--size-only",
+                        "--no-traverse",
+                        "--checkers",
+                        "2",
+                    ],
+                )
+            finally:
+                Path(temporary).unlink(missing_ok=True)
         base.update(
             {
                 "lastSuccessAt": datetime.now(timezone.utc).isoformat(),

@@ -829,7 +829,7 @@ export function BackupsScreen({
           </div>
           <div className={styles.previewNotice} role="status">
             The latest off-site copy was verified today. Older S3 copies remain available after
-            local 14-day retention.
+            local 14-day retention. New copies are organized under YYYY/MM/DD folders.
           </div>
           <Panel detail="3 retained files" title="Backup history">
             <BackupTable

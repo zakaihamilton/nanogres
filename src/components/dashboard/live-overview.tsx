@@ -270,6 +270,11 @@ export function LiveOverviewScreen() {
             tone={offsiteFreshness === "stale" || offsiteFreshness === "error" ? "warning" : "info"}
           >
             <span>{offsiteNotice}</span>
+            {offsite?.configured ? (
+              <span>
+                Off-site objects use date folders: <code>YYYY/MM/DD/&lt;backup path&gt;</code>.
+              </span>
+            ) : null}
             <SectionInfo label="Off-site backup status reflects verified successful uploads. A copy is stale after 36 hours without a verified success. Off-site storage is separate from local backups, which follow the workspace retention period shown in System health." />
           </Notice>
         </>

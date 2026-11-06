@@ -505,11 +505,20 @@ export function LiveBackupsScreen({
             </Notice>
           ) : offsite?.configured ? (
             <Notice tone={offsite.lastError ? "error" : "info"}>
-              {offsite.lastError
-                ? "The latest off-site upload needs attention. The local backup snapshot remains available; check the off-site service log."
-                : offsite.lastSuccessAt
-                  ? `${offsite.backupCount} retained backup${offsite.backupCount === 1 ? "" : "s"} stored in Spaces (${formatBytes(offsite.storedBytes)}). Last successful upload: ${formatDate(offsite.lastSuccessAt)}. Remote copies are never removed automatically.`
-                  : "Spaces is configured. The first off-site copy will run after the next backup cycle."}
+              {offsite.lastError ? (
+                "The latest off-site upload needs attention. The local backup snapshot remains available; check the off-site service log."
+              ) : offsite.lastSuccessAt ? (
+                <>
+                  {offsite.backupCount} retained backup{offsite.backupCount === 1 ? "" : "s"} stored
+                  in Spaces ({formatBytes(offsite.storedBytes)}). Last successful upload:{" "}
+                  {formatDate(offsite.lastSuccessAt)}. Objects use date folders in the format{" "}
+                      <code>YYYY/MM/DD/&lt;backup path&gt;</code>. Existing flat-path objects were
+                      copied into date folders and remain at their original keys. Remote copies are
+                      never removed automatically.
+                </>
+              ) : (
+                "Spaces is configured. The first off-site copy will run after the next backup cycle."
+              )}
             </Notice>
           ) : (
             <Notice tone="info">
