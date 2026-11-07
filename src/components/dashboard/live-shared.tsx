@@ -37,6 +37,8 @@ export type Role = {
   canCreateRole: boolean;
   validUntil: string | null;
   systemRole: boolean;
+  migrationRole: boolean;
+  assumeRole: string | null;
 };
 
 export type ActivityEvent = {

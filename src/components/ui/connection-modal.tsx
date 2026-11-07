@@ -14,11 +14,27 @@ const connectionTabs: Array<[Tab, string]> = [
   ["env", ".env"],
 ];
 
+function configuredPort(value: string | undefined, fallback: number): number {
+  const port = Number(value);
+  return Number.isInteger(port) && port > 0 && port <= 65535 ? port : fallback;
+}
+
+const defaultConnectionHost =
+  process.env.NEXT_PUBLIC_NANOGRES_DB_HOST || "nanogres.duckdns.org";
+const defaultRuntimePort = configuredPort(process.env.NEXT_PUBLIC_NANOGRES_DB_PORT, 6432);
+const defaultMigrationPort = configuredPort(
+  process.env.NEXT_PUBLIC_NANOGRES_DB_MIGRATION_PORT,
+  6433,
+);
+const connectionSslMode = "verify-full";
+
 export function ConnectionModal({
   database,
-  host = "127.0.0.1",
-  port = 5432,
+  host,
+  port,
   user = "your_role",
+  migrationRole = false,
+  assumeRole,
   isOpen,
   onClose,
 }: {
@@ -26,6 +42,8 @@ export function ConnectionModal({
   host?: string;
   port?: number;
   user?: string;
+  migrationRole?: boolean;
+  assumeRole?: string;
   isOpen: boolean;
   onClose: () => void;
 }) {
@@ -52,18 +70,32 @@ export function ConnectionModal({
 
   if (!isOpen) return null;
 
-  const uri = `postgresql://${user}:[PASSWORD]@${host}:${port}/${database}?sslmode=prefer`;
-  const psql = `psql "postgresql://${user}:[PASSWORD]@${host}:${port}/${database}"`;
+  const connectionHost = host ?? defaultConnectionHost;
+  const connectionPort =
+    port ?? (migrationRole ? defaultMigrationPort : defaultRuntimePort);
+  const safeAssumeRole = assumeRole?.replaceAll('"', '""');
+  const roleSql = safeAssumeRole ? `SET ROLE "${safeAssumeRole}"` : "";
+  const uri = `postgresql://${user}:[PASSWORD]@${connectionHost}:${connectionPort}/${database}?sslmode=${connectionSslMode}`;
+  const psql = roleSql
+    ? `psql "${uri}" <<'SQL'
+${roleSql};
+-- Replace this comment with migration SQL.
+SQL`
+    : `psql "${uri}"`;
   const node = `import { Pool } from "pg";
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: process.env.${migrationRole ? "MIGRATION_DATABASE_URL" : "DATABASE_URL"},
 });
 
 const client = await pool.connect();
-const res = await client.query("SELECT NOW()");
-console.log(res.rows[0]);
-client.release();`;
+try {
+  ${roleSql ? `await client.query(${JSON.stringify(roleSql)});\n  ` : ""}const res = await client.query("SELECT NOW()");
+  console.log(res.rows[0]);
+} finally {
+  client.release();
+  await pool.end();
+}`;
 
   const python = `import psycopg2
 
@@ -71,11 +103,12 @@ conn = psycopg2.connect(
     dbname="${database}",
     user="${user}",
     password="[PASSWORD]",
-    host="${host}",
-    port=${port}
+    host="${connectionHost}",
+    port=${connectionPort},
+    sslmode="${connectionSslMode}",
 )
 with conn.cursor() as cur:
-    cur.execute("SELECT NOW()")
+    ${roleSql ? `cur.execute(${JSON.stringify(roleSql)})\n    ` : ""}cur.execute("SELECT NOW()")
     print(cur.fetchone())
 conn.close()`;
 
@@ -84,7 +117,6 @@ conn.close()`;
 import (
     "context"
     "fmt"
-    "os"
     "github.com/jackc/pgx/v5"
 )
 
@@ -95,14 +127,17 @@ func main() {
     }
     defer conn.Close(context.Background())
 
-    var now string
+    ${roleSql ? `if _, err := conn.Exec(context.Background(), ${JSON.stringify(roleSql)}); err != nil {\n        panic(err)\n    }\n\n    ` : ""}var now string
     err = conn.QueryRow(context.Background(), "SELECT NOW()").Scan(&now)
     fmt.Println(now)
 }`;
 
-  const env = `DATABASE_URL="${uri}"
-PGHOST="${host}"
-PGPORT="${port}"
+  const env = migrationRole && safeAssumeRole
+    ? `MIGRATION_DATABASE_URL="${uri}"
+MIGRATION_DATABASE_ROLE="${safeAssumeRole}"`
+    : `DATABASE_URL="${uri}"
+PGHOST="${connectionHost}"
+PGPORT="${connectionPort}"
 PGDATABASE="${database}"
 PGUSER="${user}"
 PGPASSWORD="[YOUR_PASSWORD]"`;
@@ -217,9 +252,19 @@ PGPASSWORD="[YOUR_PASSWORD]"`;
           </div>
 
           <p className={styles.note}>
-            Use a login role created for this organization&apos;s database in Nanogres Access.
-            Replace <code>[PASSWORD]</code> with that role&apos;s password. PostgreSQL stays private
-            on the VPS; connect through your approved network or tunnel.
+            Use the login role created in Nanogres Access and replace <code>[PASSWORD]</code> with
+            its password. These snippets use the public PgBouncer endpoint over TLS; PostgreSQL
+            itself stays bound to loopback on the VPS.
+            {migrationRole ? (
+              <>
+                {" "}
+                Migrations use the session-pooling port; the snippets apply{" "}
+                <code>{roleSql || "SET ROLE the database owner role"}</code> before DDL. For the
+                psql tab, replace the comment with your migration SQL.
+              </>
+            ) : (
+              <> Runtime roles use the transaction-pooling port.</>
+            )}
           </p>
         </div>
       </dialog>

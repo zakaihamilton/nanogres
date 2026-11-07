@@ -16,8 +16,8 @@ server and a guarded place to handle routine database work.
 - **Manage database storage.** See the space used by your organization's databases, set an individual
   maximum for a user database or leave it on Auto, and monitor remaining room alongside overall VPS
   disk usage.
-- **Keep project access organized.** Create database-scoped read-only and read-write roles, with
-  workspace permissions checked on the server for each action.
+- **Keep project access organized.** Create database-scoped read-only, read-write, and schema-migration
+  roles, with workspace permissions checked on the server for each action.
 - **Make and move backups.** Schedule daily backups, download a custom-format dump, or restore a
   trusted `.dump` or `.backup` file into a new database.
 - **Review the interface safely.** Open synthetic-data screens, including the getting-started state,
@@ -38,7 +38,8 @@ The browser talks only to the dashboard. Vercel server functions check your Perm
 workspace permission, then call the same VPS API over HTTPS with the selected organization's scope.
 The API keeps each organization's database names, roles, backups, queries, and activity separate
 inside the shared PostgreSQL cluster. The VPS API token and Postgres credentials stay out of
-browser code. PostgreSQL remains on the VPS and is not exposed as a public database port.
+browser code. App connections reach two TLS-only PgBouncer ports; the PostgreSQL server itself
+remains bound to loopback and is not exposed directly.
 
 ## Connect your VPS
 
@@ -46,24 +47,25 @@ Use a stable HTTPS origin for the Perminister app client and the VPS API. The de
 this project is `https://nanogres.duckdns.org:8443`; Nginx uses port 8443 so an existing TURN service
 can continue using its ports.
 
-1. **Install the API on the VPS.** As root, run [`vps-api/install-vps.sh`](vps-api/install-vps.sh).
-   The service binds to `127.0.0.1:8765`, creates a random bearer token in
-   `/etc/nanogres/api.env`, and enables the daily backup timer. It stages, but does not enable, the
-   public HTTPS proxy or firewall rule.
-2. **Enable the HTTPS proxy.** Confirm that `nanogres.duckdns.org` resolves to the VPS and that a
-   trusted certificate is installed. Review [`vps-api/nginx-nanogres.conf`](vps-api/nginx-nanogres.conf),
-   enable the Nginx site, validate the configuration, and reload Nginx. Then allow inbound TCP 8443
-   in the VPS firewall. Keep PostgreSQL bound to loopback. The detailed installation notes are in
-   [`vps-api/install-vps.md`](vps-api/install-vps.md).
+1. **Install Nanogres on the VPS.** As root, run [`vps-api/install-vps.sh`](vps-api/install-vps.sh).
+   The API binds to `127.0.0.1:8765`, creates a random bearer token, and enables the backup timers.
+   The installer uses the official PostgreSQL APT repository for a patched PgBouncer release. Its
+   external listeners remain disabled until the TLS certificate is installed.
+2. **Enable the HTTPS proxy and pooler.** Confirm that `nanogres.duckdns.org` resolves to the VPS,
+   issue its trusted certificate, then rerun the installer. It enables the TLS PgBouncer listeners
+   on ports 6432 and 6433. Review [`vps-api/nginx-nanogres.conf`](vps-api/nginx-nanogres.conf),
+   enable the Nginx site, validate the configuration, and reload Nginx. Allow inbound TCP 8443,
+   6432, and 6433 in the VPS and provider firewalls. Keep PostgreSQL bound to loopback. See
+   [`vps-api/install-vps.md`](vps-api/install-vps.md) for the detailed steps.
 3. **Configure Perminister.** Set the Nanogres product ID, grant each allowed organization access
    to its workspaces, and create an app client for the production dashboard origin. Its callback is
    `<dashboard-origin>/auth/perminister/callback`. Keep public registration disabled for this
    private dashboard.
-4. **Set Vercel Production variables.** Set `NANOGRES_API_URL` to the shared VPS HTTPS API origin and
-   copy the token from `/etc/nanogres/api.env` into `NANOGRES_API_TOKEN`. Workspace choices come
-   from the signed-in Perminister session. The API scopes database access by organization, so every
-   organization uses the same API URL and token. Keep the token server-only and never use a
-   `NEXT_PUBLIC_` prefix.
+4. **Set Vercel Production variables.** Set `NANOGRES_API_URL` and `NANOGRES_API_TOKEN` for the
+   management API. Set the public connection settings `NEXT_PUBLIC_NANOGRES_DB_HOST`,
+   `NEXT_PUBLIC_NANOGRES_DB_PORT` (6432), and
+   `NEXT_PUBLIC_NANOGRES_DB_MIGRATION_PORT` (6433) for connection snippets. These public values
+   are included at build time and contain no secrets.
 5. **Deploy and sign in.** Deploy the app and sign in through Perminister. The dashboard lists only
    workspaces granted to the signed-in account; all workspaces in the same organization use that
    organization's databases.

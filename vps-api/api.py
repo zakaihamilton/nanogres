@@ -1375,6 +1375,7 @@ def request_offsite_backup() -> None:
 
 def list_roles(organization_id: object) -> list[dict[str, object]]:
     prefix = organization_prefix(organization_id)
+    internal_role = organization_query_role(organization_id)
     rows = json_query(
         f"""
         SELECT COALESCE(json_agg(row_to_json(items) ORDER BY items.name), '[]'::json)::text
@@ -1385,6 +1386,14 @@ def list_roles(organization_id: object) -> list[dict[str, object]]:
                  r.rolcreaterole AS "canCreateRole",
                  r.rolvaliduntil AS "validUntil",
                  r.rolname = 'postgres' AS "systemRole",
+                 EXISTS (
+                   SELECT 1 FROM pg_auth_members m
+                   WHERE m.member = r.oid
+                     AND m.roleid = (
+                       SELECT oid FROM pg_roles
+                       WHERE rolname = {quote_literal(internal_role)}
+                     )
+                 ) AS "migrationRole",
                  (
                    SELECT COALESCE(
                      json_agg(substr(d.datname, {len(prefix) + 1}) ORDER BY d.datname),
@@ -1401,7 +1410,6 @@ def list_roles(organization_id: object) -> list[dict[str, object]]:
     )
     if not isinstance(rows, list):
         return []
-    internal_role = organization_query_role(organization_id)
     result = []
     for row in rows:
         if not isinstance(row, dict):
@@ -1424,6 +1432,8 @@ def list_roles(organization_id: object) -> list[dict[str, object]]:
                 "loginName": physical_name,
                 "database": logical_databases[0] if logical_databases else None,
                 "connectionDatabase": physical_databases[0] if physical_databases else None,
+                "migrationRole": row.get("migrationRole") is True,
+                "assumeRole": internal_role if row.get("migrationRole") is True else None,
                 "databases": logical_databases,
             }
         )
@@ -3041,8 +3051,8 @@ class Handler(BaseHTTPRequestHandler):
             or any(ord(character) < 32 or ord(character) == 127 for character in password)
         ):
             raise ApiError(400, "Password must contain 16 to 256 printable characters.")
-        if access not in {"readwrite", "readonly"}:
-            raise ApiError(400, "Choose readwrite or readonly access.")
+        if access not in {"readwrite", "readonly", "migration"}:
+            raise ApiError(400, "Choose readwrite, readonly, or migration access.")
         if logical_name in {"postgres", "nanogres_api", "nanogres_internal_query"}:
             raise ApiError(400, "That role name is reserved.")
         if run_sql(
@@ -3051,23 +3061,40 @@ class Handler(BaseHTTPRequestHandler):
         ) == "t":
             raise ApiError(409, "A role with that name already exists.")
         query_role = ensure_organization_query_role(organization_id)
-        table_privileges = "SELECT, INSERT, UPDATE, DELETE" if access == "readwrite" else "SELECT"
+        is_migration_role = access == "migration"
+        inheritance = "NOINHERIT" if is_migration_role else "INHERIT"
         statements = [
             "BEGIN",
             "SET LOCAL password_encryption = 'scram-sha-256'",
-            f"CREATE ROLE {quote_identifier(name)} LOGIN PASSWORD {quote_literal(password)}",
+            (
+                f"CREATE ROLE {quote_identifier(name)} LOGIN {inheritance} "
+                "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS "
+                f"PASSWORD {quote_literal(password)}"
+            ),
             f"GRANT CONNECT ON DATABASE {quote_identifier(database)} TO {quote_identifier(name)}",
-            f"GRANT USAGE ON SCHEMA public TO {quote_identifier(name)}",
-            f"GRANT {table_privileges} ON ALL TABLES IN SCHEMA public TO {quote_identifier(name)}",
-            f"ALTER DEFAULT PRIVILEGES FOR ROLE {quote_identifier(query_role)} IN SCHEMA public GRANT {table_privileges} ON TABLES TO {quote_identifier(name)}",
         ]
-        if access == "readwrite":
+        if is_migration_role:
+            statements.append(
+                f"GRANT {quote_identifier(query_role)} TO {quote_identifier(name)}"
+            )
+        else:
+            table_privileges = (
+                "SELECT, INSERT, UPDATE, DELETE" if access == "readwrite" else "SELECT"
+            )
             statements.extend(
                 [
-                    f"GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO {quote_identifier(name)}",
-                    f"ALTER DEFAULT PRIVILEGES FOR ROLE {quote_identifier(query_role)} IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {quote_identifier(name)}",
+                    f"GRANT USAGE ON SCHEMA public TO {quote_identifier(name)}",
+                    f"GRANT {table_privileges} ON ALL TABLES IN SCHEMA public TO {quote_identifier(name)}",
+                    f"ALTER DEFAULT PRIVILEGES FOR ROLE {quote_identifier(query_role)} IN SCHEMA public GRANT {table_privileges} ON TABLES TO {quote_identifier(name)}",
                 ]
             )
+            if access == "readwrite":
+                statements.extend(
+                    [
+                        f"GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO {quote_identifier(name)}",
+                        f"ALTER DEFAULT PRIVILEGES FOR ROLE {quote_identifier(query_role)} IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {quote_identifier(name)}",
+                    ]
+                )
         statements.append("COMMIT")
         run_sql("; ".join(statements), database)
         record_event(
@@ -3085,6 +3112,8 @@ class Handler(BaseHTTPRequestHandler):
                     "database": logical_database,
                     "connectionDatabase": database,
                     "access": access,
+                    "migrationRole": is_migration_role,
+                    "assumeRole": query_role if is_migration_role else None,
                 }
             },
         )

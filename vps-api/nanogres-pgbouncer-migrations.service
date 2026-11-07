@@ -1,0 +1,26 @@
+[Unit]
+Description=Nanogres PgBouncer migration session pool
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=postgres
+Group=postgres
+RuntimeDirectory=nanogres-pgbouncer-migrations
+RuntimeDirectoryMode=0750
+UMask=0027
+ExecStart=/usr/bin/env pgbouncer --foreground /etc/nanogres/pgbouncer-migrations.ini
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=2s
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
