@@ -1639,6 +1639,149 @@ def inspect_user_query(sql: str) -> list[str]:
     return words
 
 
+def parse_database_rename(sql: str, words: list[str]) -> tuple[str, str] | None:
+    """Parse the SQL editor's supported, organization-scoped database rename form."""
+    if words[:2] != ["ALTER", "DATABASE"]:
+        return None
+
+    tokens: list[tuple[str, str]] = []
+    index = 0
+    while index < len(sql):
+        char = sql[index]
+        if char.isspace():
+            index += 1
+            continue
+        if sql.startswith("--", index):
+            newline = sql.find("\n", index + 2)
+            index = len(sql) if newline < 0 else newline + 1
+            continue
+        if sql.startswith("/*", index):
+            depth = 1
+            index += 2
+            while index < len(sql) and depth:
+                if sql.startswith("/*", index):
+                    depth += 1
+                    index += 2
+                elif sql.startswith("*/", index):
+                    depth -= 1
+                    index += 2
+                else:
+                    index += 1
+            if depth:
+                raise ApiError(400, "Query contains an unterminated comment.")
+            continue
+        if char == '"':
+            index += 1
+            identifier: list[str] = []
+            while index < len(sql):
+                if sql[index] == '"':
+                    if index + 1 < len(sql) and sql[index + 1] == '"':
+                        identifier.append('"')
+                        index += 2
+                    else:
+                        index += 1
+                        break
+                else:
+                    identifier.append(sql[index])
+                    index += 1
+            tokens.append(("identifier", "".join(identifier)))
+            continue
+        if char.isascii() and (char.isalpha() or char == "_"):
+            match = re.match(r"[A-Za-z_][A-Za-z_0-9$]*", sql[index:])
+            assert match is not None
+            value = match.group(0)
+            tokens.append(("word", value.lower()))
+            index += len(value)
+            continue
+        if char == ";":
+            tokens.append(("punctuation", char))
+            index += 1
+            continue
+        tokens.append(("other", char))
+        index += 1
+
+    if tokens and tokens[-1] == ("punctuation", ";"):
+        tokens.pop()
+
+    expected_keywords = {0: "alter", 1: "database", 3: "rename", 4: "to"}
+    if (
+        len(tokens) != 6
+        or any(tokens[position] != ("word", keyword) for position, keyword in expected_keywords.items())
+        or tokens[2][0] not in {"word", "identifier"}
+        or tokens[5][0] not in {"word", "identifier"}
+    ):
+        raise ApiError(400, "SQL editor supports ALTER DATABASE <name> RENAME TO <name> only.")
+
+    old_name = tokens[2][1]
+    new_name = tokens[5][1]
+    if not TENANT_NAME_PATTERN.fullmatch(old_name) or not TENANT_NAME_PATTERN.fullmatch(new_name):
+        raise ApiError(400, "Database names must use lowercase letters, numbers, and underscores.")
+    return old_name, new_name
+
+
+def rename_organization_database(
+    organization_id: object,
+    old_logical_name: str,
+    new_logical_name: str,
+    actor: str | None = None,
+) -> None:
+    old_name = organization_database_name(organization_id, old_logical_name)
+    new_name = organization_database_name(organization_id, new_logical_name)
+    if old_name == new_name:
+        raise ApiError(400, "Choose a different name for the database.")
+
+    with backup_lock:
+        with quota_policy_lock:
+            if run_sql(
+                f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(old_name)})"
+            ) != "t":
+                raise ApiError(404, "Database to rename was not found in your organization.")
+            if run_sql(
+                f"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = {quote_literal(new_name)})"
+            ) == "t":
+                raise ApiError(409, "A database with the new name already exists.")
+            active_sessions = run_sql(
+                "SELECT count(*) FROM pg_stat_activity "
+                f"WHERE datname = {quote_literal(old_name)} AND pid <> pg_backend_pid()"
+            )
+            if active_sessions != "0":
+                raise ApiError(409, "Close active connections to the database before renaming it.")
+
+            quota_policy = read_quota_policy()
+            quota_policy_changed = old_name in quota_policy or new_name in quota_policy
+            old_quota = quota_policy.pop(old_name, None)
+            quota_policy.pop(new_name, None)
+            if old_quota is not None:
+                quota_policy[new_name] = old_quota
+
+            run_sql(f"ALTER DATABASE {quote_identifier(old_name)} RENAME TO {quote_identifier(new_name)}")
+            try:
+                if quota_policy_changed:
+                    write_quota_policy(quota_policy)
+            except OSError as error:
+                try:
+                    run_sql(f"ALTER DATABASE {quote_identifier(new_name)} RENAME TO {quote_identifier(old_name)}")
+                except ApiError as rollback_error:
+                    raise ApiError(
+                        503,
+                        "The database was renamed, but its storage settings could not be updated. Contact Nanogres support.",
+                    ) from rollback_error
+                raise ApiError(503, "Could not update database storage settings; the rename was rolled back.") from error
+
+            try:
+                request_quota_reconcile(new_name)
+            except ApiError:
+                # The periodic reconciler will pick up the renamed database.
+                pass
+
+    record_event(
+        "database.renamed",
+        f"Database {old_logical_name} renamed to {new_logical_name}.",
+        actor,
+        organization_id,
+    )
+
+
 def complete_csv_prefix(output: str) -> str:
     """Keep only complete CSV records when output was cut at the byte limit."""
     in_quotes = False
@@ -1664,6 +1807,7 @@ def run_user_query(
     read_only: bool = False,
     timeout_seconds: int = 15,
     max_rows: int = 100,
+    actor: str | None = None,
 ) -> dict[str, object]:
     database = require_organization_database(organization_id, database)
     if not sql or not sql.strip():
@@ -1672,6 +1816,7 @@ def run_user_query(
     words = inspect_user_query(sql)
     if words[0] == "COPY":
         raise ApiError(400, "COPY commands are not supported in the SQL editor.")
+    database_rename = parse_database_rename(sql, words)
 
     timeout_seconds = min(60, max(1, int(timeout_seconds)))
     max_rows = min(1000, max(1, int(max_rows)))
@@ -1685,6 +1830,20 @@ def run_user_query(
         full_sql = f"BEGIN READ ONLY;\n{sql}"
     else:
         full_sql = sql
+
+    if database_rename is not None:
+        old_logical_name, new_logical_name = database_rename
+        start_time = time.perf_counter()
+        rename_organization_database(organization_id, old_logical_name, new_logical_name, actor)
+        return {
+            "columns": ["status"],
+            "rows": [[f"Database {old_logical_name} renamed to {new_logical_name}."]],
+            "rowCount": 1,
+            "durationMs": round((time.perf_counter() - start_time) * 1000, 2),
+            "commandTag": "ALTER DATABASE",
+            "truncated": False,
+            "renamedDatabase": {"from": old_logical_name, "to": new_logical_name},
+        }
 
     max_output_bytes = 4 * 1024 * 1024
     command = [
@@ -2834,6 +2993,7 @@ class Handler(BaseHTTPRequestHandler):
                     read_only=read_only,
                     timeout_seconds=timeout,
                     max_rows=max_rows,
+                    actor=actor,
                 )
                 record_event("query.executed", f"Query executed on {db}.", actor, organization_id)
                 self._json(200, result)

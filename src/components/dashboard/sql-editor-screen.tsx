@@ -22,6 +22,7 @@ type QueryResult = {
   durationMs: number;
   commandTag?: string;
   truncated?: boolean;
+  renamedDatabase?: { from: string; to: string };
 };
 
 const DEFAULT_TABS: TabState[] = [
@@ -44,7 +45,7 @@ export function SqlEditorScreen() {
   const initialDb = searchParams.get("db") || "";
   const initialQuery = searchParams.get("q");
 
-  const { databases, loading: dbsLoading } = useDatabases();
+  const { databases, loading: dbsLoading, refresh: refreshDatabases } = useDatabases();
   const [selectedDbChoice, setSelectedDb] = useState(initialDb);
   const selectedDb = databases.some((database) => database.name === selectedDbChoice)
     ? selectedDbChoice
@@ -155,6 +156,10 @@ export function SqlEditorScreen() {
           }),
         });
         setResult(res);
+        if (res.renamedDatabase) {
+          setSelectedDb(res.renamedDatabase.to);
+          await refreshDatabases();
+        }
         nanogresToast.success(`Executed in ${res.durationMs}ms (${res.rowCount} rows)`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Query execution failed";
@@ -164,7 +169,7 @@ export function SqlEditorScreen() {
         setExecuting(false);
       }
     },
-    [currentTab, defaultLimit, readOnly, timeoutSeconds, selectedDb],
+    [currentTab, defaultLimit, readOnly, refreshDatabases, timeoutSeconds, selectedDb],
   );
 
   const handleExplain = (analyze = false) => {
@@ -219,7 +224,10 @@ export function SqlEditorScreen() {
       <div className={styles.headerBar}>
         <div className={styles.titleArea}>
           <h1>SQL Editor</h1>
-          <p>Execute queries, inspect results, and analyze plans on an organization database.</p>
+          <p>
+            Execute queries, inspect results, and analyze plans. Rename a database with{" "}
+            <code>ALTER DATABASE old_name RENAME TO new_name</code>.
+          </p>
         </div>
         <div className={styles.controlsBar}>
           <label
