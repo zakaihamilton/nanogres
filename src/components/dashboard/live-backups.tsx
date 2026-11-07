@@ -511,9 +511,7 @@ export function LiveBackupsScreen({
                 <>
                   {offsite.backupCount} retained backup{offsite.backupCount === 1 ? "" : "s"} stored
                   in Spaces ({formatBytes(offsite.storedBytes)}). Last successful upload:{" "}
-                  {formatDate(offsite.lastSuccessAt)}. Objects use date folders in the format{" "}
-                  <code>YYYY/MM/DD/&lt;backup path&gt;</code>. Existing flat-path objects were moved
-                  into their matching date folders. Future remote copies are not removed
+                  {formatDate(offsite.lastSuccessAt)}. Future remote copies are not removed
                   automatically when local retention expires.
                 </>
               ) : (
