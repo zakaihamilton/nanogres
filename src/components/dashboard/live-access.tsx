@@ -42,7 +42,7 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
   const selectedDatabase = database || userDatabases[0]?.name || "";
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const [access, setAccess] = useState<"readwrite" | "readonly">("readwrite");
+  const [access, setAccess] = useState<"readwrite" | "readonly" | "migration">("readwrite");
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -95,7 +95,7 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
             </Link>
           ) : undefined
         }
-        description="Create least-privilege Postgres login roles for individual databases."
+        description="Create database-scoped read-only, read-write, or schema-migration login roles."
         eyebrow="SECURITY"
         title={page === "new" ? "Create a database role" : "Access & roles"}
       />
@@ -157,16 +157,19 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
                   <label htmlFor="role-access">Access level</label>
                   <Select
                     id="role-access"
-                    onChange={(val) => setAccess(val as "readwrite" | "readonly")}
+                    onChange={(val) => setAccess(val as "readwrite" | "readonly" | "migration")}
                     value={access}
                   >
                     <option value="readwrite">Read and write</option>
                     <option value="readonly">Read-only</option>
+                    <option value="migration">Schema migration</option>
                   </Select>
                   <small>
                     {access === "readwrite"
                       ? "Can query, insert, update, and delete in this database's public schema."
-                      : "Can query existing tables in this database's public schema."}
+                      : access === "readonly"
+                        ? "Can query existing tables in this database's public schema."
+                        : "Uses the session-pooling endpoint and can assume the database owner role to run migrations."}
                   </small>
                 </div>
                 <div className={styles.field}>
@@ -257,17 +260,21 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
                           <span className={styles.databaseName}>{role.name}</span>
                           {role.systemRole ? (
                             <small className={styles.systemTag}>system</small>
+                          ) : role.migrationRole ? (
+                            <small className={styles.systemTag}>migration</small>
                           ) : null}
                         </td>
                         <td>
                           {role.superuser
                             ? "Superuser"
-                            : [
-                                role.canCreateDatabase ? "Create database" : "",
-                                role.canCreateRole ? "Create roles" : "",
-                              ]
-                                .filter(Boolean)
-                                .join(" · ") || "Database grants"}
+                            : role.migrationRole
+                              ? "Schema migrations"
+                              : [
+                                  role.canCreateDatabase ? "Create database" : "",
+                                  role.canCreateRole ? "Create roles" : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ") || "Database grants"}
                         </td>
                         <td>{role.validUntil ? formatDate(role.validUntil) : "Never"}</td>
                         <td>
@@ -307,6 +314,8 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
         isOpen={Boolean(connectRole?.connectionDatabase)}
         onClose={() => setConnectRole(null)}
         user={connectRole?.loginName ?? "your_role"}
+        migrationRole={connectRole?.migrationRole ?? false}
+        assumeRole={connectRole?.assumeRole ?? undefined}
       />
     </div>
   );
