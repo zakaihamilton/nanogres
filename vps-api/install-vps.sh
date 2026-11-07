@@ -169,8 +169,11 @@ systemctl daemon-reload
 if [ -s /etc/letsencrypt/live/nanogres.duckdns.org/fullchain.pem ] && [ -s /etc/letsencrypt/live/nanogres.duckdns.org/privkey.pem ]; then
   systemctl disable --now pgbouncer.service >/dev/null 2>&1 || true
   /usr/local/sbin/nanogres-pgbouncer-tls-sync
-  systemctl enable --now nanogres-pgbouncer-runtime.service
-  systemctl enable --now nanogres-pgbouncer-migrations.service
+  for service in nanogres-pgbouncer-runtime.service nanogres-pgbouncer-migrations.service; do
+    systemctl enable "$service"
+    systemctl reset-failed "$service" >/dev/null 2>&1 || true
+    systemctl restart "$service"
+  done
 else
   systemctl disable --now nanogres-pgbouncer-runtime.service >/dev/null 2>&1 || true
   systemctl disable --now nanogres-pgbouncer-migrations.service >/dev/null 2>&1 || true
