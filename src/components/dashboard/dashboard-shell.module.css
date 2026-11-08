@@ -101,6 +101,7 @@
   display: grid;
   min-width: 0;
   gap: 3px;
+  flex: 1;
 }
 
 .profileText strong {
@@ -254,9 +255,6 @@
   font-weight: 750;
 }
 
-.profileText {
-  flex: 1;
-}
 
 .signOut,
 .previewUserMark {

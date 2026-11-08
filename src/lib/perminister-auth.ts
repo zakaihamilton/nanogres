@@ -318,7 +318,7 @@ export async function revokePerministerSession(
   }
 }
 
-export type NanogresRole = "admin" | "viewer" | "manager";
+type NanogresRole = "admin" | "viewer" | "manager";
 
 export type NanogresOrganizationChoice = {
   organizationId: string;

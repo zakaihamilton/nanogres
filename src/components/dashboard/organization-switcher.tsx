@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { Icon } from "./icons";
@@ -23,6 +24,7 @@ export function OrganizationSwitcher({
   organizations?: OrganizationItem[];
   preview?: boolean;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -87,7 +89,7 @@ export function OrganizationSwitcher({
         setError(message);
         return;
       }
-      window.location.assign("/overview");
+      router.push("/overview");
     } catch {
       setError("The organization could not be selected. Try again.");
     }
