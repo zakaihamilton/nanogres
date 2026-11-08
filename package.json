@@ -17,7 +17,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "health": "repnix check",
+    "health": "repnix check --details",
     "health:audit": "repnix audit",
     "health:plan": "repnix setup --plan --format json",
     "health:dead-code": "knip",
