@@ -316,7 +316,7 @@ export function FirstRunCard({ error }: { error: string | null }) {
           >
             Open the setup guide <span aria-hidden="true">↗</span>
           </a>
-        )}
+        ) : null}
         {error && !needsDatabaseAccess ? (
           <details className={styles.connectionDetails}>
             <summary>Connection details</summary>
