@@ -451,6 +451,13 @@ export function LiveBackupsScreen({
                 ? "Restore a backup"
                 : "Backups"
         }
+        action={
+          page === "list" ? undefined : (
+            <Link className={`${styles.button} ${styles.secondary}`} href="/backups">
+              Back to backups
+            </Link>
+          )
+        }
       />
       <ErrorNotice error={databaseError} onRetry={() => void refreshDatabases()} />
       <ErrorNotice error={backupsQuery.error} onRetry={() => void backupsQuery.refresh()} />
