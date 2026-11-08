@@ -6,6 +6,7 @@ import {
   useRef,
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -28,6 +29,26 @@ import styles from "./database-details.module.css";
 import liveStyles from "./live-screens.module.css";
 
 type Tab = "overview" | "schema" | "queries" | "backups";
+
+function DatabaseTabPanel({
+  tab,
+  children,
+}: {
+  tab: "schema" | "queries" | "backups";
+  children: ReactNode;
+}) {
+  return (
+    <div
+      aria-labelledby={`database-tab-${tab}`}
+      id="database-panel"
+      role="tabpanel"
+      style={{ display: "flex", flexDirection: "column", gap: 14 }}
+      tabIndex={0}
+    >
+      {children}
+    </div>
+  );
+}
 const tabOrder: Tab[] = ["overview", "schema", "queries", "backups"];
 
 type ColumnMeta = {
@@ -350,13 +371,7 @@ export function DatabaseDetails({ databaseName }: { databaseName: string }) {
 
       {/* Tab 2: Schema & Tables */}
       {activeTab === "schema" ? (
-        <div
-          aria-labelledby="database-tab-schema"
-          id="database-panel"
-          role="tabpanel"
-          style={{ display: "flex", flexDirection: "column", gap: 14 }}
-          tabIndex={0}
-        >
+        <DatabaseTabPanel tab="schema">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
               Inspect tables, columns, indexes, and run DDL operations.
@@ -509,18 +524,12 @@ export function DatabaseDetails({ databaseName }: { databaseName: string }) {
               ) : null}
             </div>
           )}
-        </div>
+        </DatabaseTabPanel>
       ) : null}
 
       {/* Tab 3: Live Queries */}
       {activeTab === "queries" ? (
-        <div
-          aria-labelledby="database-tab-queries"
-          id="database-panel"
-          role="tabpanel"
-          style={{ display: "flex", flexDirection: "column", gap: 14 }}
-          tabIndex={0}
-        >
+        <DatabaseTabPanel tab="queries">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 13, color: "var(--ink-soft)" }}>
@@ -623,18 +632,12 @@ export function DatabaseDetails({ databaseName }: { databaseName: string }) {
               </table>
             </div>
           )}
-        </div>
+        </DatabaseTabPanel>
       ) : null}
 
       {/* Tab 4: Backups */}
       {activeTab === "backups" ? (
-        <div
-          aria-labelledby="database-tab-backups"
-          id="database-panel"
-          role="tabpanel"
-          style={{ display: "flex", flexDirection: "column", gap: 14 }}
-          tabIndex={0}
-        >
+        <DatabaseTabPanel tab="backups">
           <Notice tone="info">
             Backups specific to database “{databaseName}”. You can create a new dump or browse all
             snapshots in the main Backups tab.
@@ -650,7 +653,7 @@ export function DatabaseDetails({ databaseName }: { databaseName: string }) {
               Go to Full Backups Manager →
             </Link>
           </div>
-        </div>
+        </DatabaseTabPanel>
       ) : null}
 
       {/* Create Table Modal Dialog */}

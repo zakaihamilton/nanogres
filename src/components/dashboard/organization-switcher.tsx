@@ -13,6 +13,20 @@ export type OrganizationItem = {
   role: string;
 };
 
+function OrganizationSummary({ name, detail }: { name: string; detail: string }) {
+  return (
+    <>
+      <span className={styles.iconWrap}>
+        <Icon name="server" size={16} />
+      </span>
+      <span className={styles.textGroup}>
+        <strong className={styles.organizationName}>{name}</strong>
+        <small className={styles.productLabel}>{detail}</small>
+      </span>
+    </>
+  );
+}
+
 export function OrganizationSwitcher({
   currentOrganizationId,
   currentOrganizationName,
@@ -50,13 +64,10 @@ export function OrganizationSwitcher({
   if (!fallbackId) {
     return (
       <div aria-label="No organization access" className={styles.trigger}>
-        <span className={styles.iconWrap}>
-          <Icon name="server" size={16} />
-        </span>
-        <span className={styles.textGroup}>
-          <strong className={styles.organizationName}>No organization access</strong>
-          <small className={styles.productLabel}>Ask a Perminister admin for access</small>
-        </span>
+        <OrganizationSummary
+          detail="Ask a Perminister admin for access"
+          name="No organization access"
+        />
       </div>
     );
   }
@@ -113,13 +124,7 @@ export function OrganizationSwitcher({
         onKeyDown={handleKeyDown}
         type="button"
       >
-        <span className={styles.iconWrap}>
-          <Icon name="server" size={16} />
-        </span>
-        <span className={styles.textGroup}>
-          <strong className={styles.organizationName}>{fallbackName}</strong>
-          <small className={styles.productLabel}>Organization databases</small>
-        </span>
+        <OrganizationSummary detail="Organization databases" name={fallbackName} />
         <svg
           aria-hidden="true"
           className={`${styles.chevron} ${open ? styles.chevronOpen : ""}`}
