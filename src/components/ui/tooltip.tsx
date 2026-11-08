@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import styles from "./tooltip.module.css";
+import { listenToWindowPositionChanges } from "./window-position-events";
 
 type TooltipTargetProps = {
   "aria-describedby"?: string;
@@ -58,12 +59,7 @@ export function Tooltip({
     };
 
     updatePosition();
-    window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
-    return () => {
-      window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
-    };
+    return listenToWindowPositionChanges(updatePosition);
   }, [isOpen, placement, label]);
 
   if (!label) return <>{children}</>;
