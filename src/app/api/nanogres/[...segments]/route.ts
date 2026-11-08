@@ -98,7 +98,7 @@ async function handle(request: NextRequest, context: RouteParams): Promise<Respo
       : request.method === "POST"
         ? "application/json"
         : undefined;
-  const upstream = await callNanogresApi(upstreamPath, auth.session, auth.workspace, {
+  const upstream = await callNanogresApi(upstreamPath, auth.session, auth.organization, {
     method: request.method,
     ...(body === undefined
       ? {}

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DatabaseWorkspace } from "@/components/dashboard/database-workspace";
+import { DatabaseDetails } from "@/components/dashboard/database-details";
 
 type PageProps = { params: Promise<{ name: string }> };
 
@@ -12,5 +12,5 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function DatabasePage({ params }: PageProps) {
   const { name } = await params;
-  return <DatabaseWorkspace databaseName={decodeURIComponent(name)} />;
+  return <DatabaseDetails databaseName={decodeURIComponent(name)} />;
 }

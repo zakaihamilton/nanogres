@@ -24,7 +24,7 @@ import {
   Loading,
   Empty,
 } from "./live-shared";
-import styles from "./database-workspace.module.css";
+import styles from "./database-details.module.css";
 import liveStyles from "./live-screens.module.css";
 
 type Tab = "overview" | "schema" | "queries" | "backups";
@@ -80,7 +80,7 @@ type ActiveQuery = {
   query: string;
 };
 
-export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
+export function DatabaseDetails({ databaseName }: { databaseName: string }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
@@ -233,11 +233,11 @@ export function DatabaseWorkspace({ databaseName }: { databaseName: string }) {
   }
 
   return (
-    <div className={styles.workspaceScreen}>
+    <div className={styles.databaseScreen}>
       <div className={styles.headerWrap}>
         <div>
           <div className={styles.dbEyebrow}>
-            <span>WORKSPACE</span>
+            <span>DATABASE</span>
           </div>
           <div className={styles.titleArea}>
             <h1>

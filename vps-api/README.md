@@ -31,7 +31,7 @@ organization ID into an internal prefix and stores each organization's databases
 backups, activity, and temporary restores in that scope. Organization database and role names use
 lowercase letters, digits, and underscores and can be up to 37 characters; the dashboard displays
 logical names while connection snippets use the internal PostgreSQL names. The shared `postgres`
-system database is hidden from organization workspaces. New databases are owned by a restricted
+system database is hidden from organization database catalogs. New databases are owned by a restricted
 organization query role, and `CONNECT` is revoked from `PUBLIC` so one organization's login roles
 cannot connect to another organization's databases.
 

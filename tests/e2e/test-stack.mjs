@@ -15,7 +15,6 @@ const apiToken = "nanogres-e2e-api-token-not-for-production";
 const organizationId = "e2e-organization";
 const organizationPrefix = `n${createHash("sha256").update(organizationId).digest("hex").slice(0, 24)}_`;
 const productId = "nanogres";
-const workspaceId = "e2e-workspace";
 const chunkSizeBytes = 16;
 const syntheticDump = Buffer.from("Nanogres isolated browser-test dump fixture.".padEnd(64, "."));
 
@@ -134,9 +133,9 @@ function identityPayload() {
         permissions: [],
         resourceRoles: [
           {
-            scope: { kind: "workspace", organizationId, productId, workspaceId },
+            scope: { kind: "product", organizationId, productId },
             role: "admin",
-            actions: ["nanogres:workspace:read", "nanogres:members:manage"],
+            actions: ["nanogres:database:read", "nanogres:database:manage"],
           },
         ],
       },
@@ -253,33 +252,18 @@ async function identityHandler(request, response) {
     response.end();
     return;
   }
-  if (url.pathname === "/api/auth/consumer/workspaces" && request.method === "POST") {
-    if (!hasClientHeaders(request) || !hasSession(request)) {
-      sendJson(response, 401, { error: "Test session is invalid." });
-      return;
-    }
-    const body = await readJson(request);
-    if (body.organizationId !== organizationId || body.workspaceId !== workspaceId) {
-      sendJson(response, 400, { error: "Unexpected test workspace." });
-      return;
-    }
-    identityState.bootstrapRequired = false;
-    response.writeHead(204);
-    response.end();
-    return;
-  }
   if (url.pathname === "/api/authorize" && request.method === "POST") {
     if (!hasClientHeaders(request) || !hasSession(request)) {
       sendJson(response, 401, { authorized: false });
       return;
     }
     const body = await readJson(request);
-    const correctWorkspace =
+    const correctOrganization =
       body.organizationId === organizationId &&
       body.productId === productId &&
-      body.resourceKind === "workspace" &&
-      body.resourceId === workspaceId;
-    if (!correctWorkspace) {
+      body.resourceKind === "product" &&
+      body.resourceId === undefined;
+    if (!correctOrganization) {
       sendJson(response, 403, { authorized: false });
       return;
     }

@@ -313,29 +313,17 @@ export default function PreviewClient() {
         account={{ name: "Avery Morgan", email: "avery@example.test" }}
         activePath={previewPath(screen, deleteDatabase)}
         currentOrganization={{ id: "org-main", name: "Acme Production Org" }}
-        currentWorkspace={{ id: "production-cluster", name: "Production Cluster" }}
         onPreviewNavigate={navigate}
         previewMode
-        workspaces={[
+        organizations={[
           {
-            id: "production-cluster",
-            name: "Production Cluster",
             organizationId: "org-main",
             organizationName: "Acme Production Org",
-            role: "admin",
+            role: "manager",
           },
           {
-            id: "staging-cluster",
-            name: "Staging Cluster",
-            organizationId: "org-main",
-            organizationName: "Acme Production Org",
-            role: "admin",
-          },
-          {
-            id: "analytics-db",
-            name: "Analytics DB",
-            organizationId: "org-main",
-            organizationName: "Acme Production Org",
+            organizationId: "org-staging",
+            organizationName: "Acme Staging Org",
             role: "viewer",
           },
         ]}

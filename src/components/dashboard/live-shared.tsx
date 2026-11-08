@@ -97,7 +97,7 @@ export async function apiRequest<T extends ApiPayload>(
     throw new Error(message);
   }
   if (typeof payload !== "object" || payload === null)
-    throw new Error("The workspace service returned an invalid response.");
+    throw new Error("The Nanogres server returned an invalid response.");
   return payload as T;
 }
 
@@ -297,7 +297,7 @@ export function DatabaseTable({
           {databases.map((database) => (
             <tr key={database.name}>
               <td>
-                <Tooltip label="Open database workspace">
+                <Tooltip label="Open database details">
                   <Link
                     className={styles.databaseName}
                     href={`/databases/${encodeURIComponent(database.name)}`}
@@ -473,57 +473,22 @@ export function DeleteDatabaseDialog({
 
 export function ErrorNotice({ error, onRetry }: { error: string | null; onRetry?: () => void }) {
   if (!error) return null;
-  const canBootstrap = error === "Perminister denied this action.";
+  const permissionDenied =
+    error === "Perminister denied this action." ||
+    error.includes("no Nanogres database access");
   return (
-    <>
-      <Notice>
-        <span>{error}</span>
-        {onRetry && !canBootstrap ? (
-          <Button onClick={onRetry} variant="secondary">
-            Try again
-          </Button>
-        ) : null}
-      </Notice>
-      {canBootstrap ? <WorkspaceBootstrap /> : null}
-    </>
-  );
-}
-
-export function WorkspaceBootstrap() {
-  const [state, setState] = useState<"idle" | "saving" | "error">("idle");
-  const [message, setMessage] = useState<string | null>(null);
-  async function initialize() {
-    setState("saving");
-    setMessage(null);
-    try {
-      const response = await fetch("/api/setup/workspace", {
-        method: "POST",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      });
-      const payload = await response.json();
-      if (!response.ok)
-        throw new Error(
-          typeof payload.error === "string" ? payload.error : "Could not initialize workspace.",
-        );
-      window.location.reload();
-    } catch (cause) {
-      setState("error");
-      setMessage(cause instanceof Error ? cause.message : "Could not initialize workspace.");
-    }
-  }
-  return (
-    <div className={styles.bootstrap}>
-      <p>
-        Your current account can initialize its Nanogres workspace. Perminister will grant the
-        signed-in account workspace admin access.
-      </p>
-      <Button disabled={state === "saving"} onClick={() => void initialize()}>
-        {state === "saving" ? "Initializing…" : "Initialize workspace access"}
-      </Button>
-      {message ? <small role="alert">{message}</small> : null}
-    </div>
+    <Notice>
+      <span>
+        {permissionDenied
+          ? "Perminister denied this action. Ask an organization admin to grant Nanogres database access at organization scope."
+          : error}
+      </span>
+      {onRetry ? (
+        <Button onClick={onRetry} variant="secondary">
+          Try again
+        </Button>
+      ) : null}
+    </Notice>
   );
 }
 

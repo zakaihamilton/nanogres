@@ -16,7 +16,7 @@ export async function GET(): Promise<Response> {
   if (auth instanceof Response) return auth;
 
   try {
-    const upstream = await callNanogresApi("/v1/events/stream", auth.session, auth.workspace, {
+    const upstream = await callNanogresApi("/v1/events/stream", auth.session, auth.organization, {
       method: "GET",
       headers: {
         Accept: "text/event-stream",

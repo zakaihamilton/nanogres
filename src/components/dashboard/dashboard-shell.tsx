@@ -10,7 +10,10 @@ import { ThemeControl } from "@/components/theme/theme-control";
 import { ToastProvider } from "@/components/ui/toast";
 import { CommandPalette } from "@/components/ui/command-palette";
 import { Icon, type IconName } from "./icons";
-import { WorkspaceSwitcher, type WorkspaceItem } from "./workspace-switcher";
+import {
+  OrganizationSwitcher,
+  type OrganizationItem,
+} from "./organization-switcher";
 import styles from "./dashboard-shell.module.css";
 
 type AccountView = {
@@ -74,8 +77,8 @@ function getBreadcrumbs(pathname: string): { label: string; href?: string }[] {
     if (parts[1] === "transfers") crumbs.push({ label: "TRANSFERS" });
   } else if (parts[0] === "activity") {
     crumbs.push({ label: "ACTIVITY" });
-  } else if (parts[0] === "workspaces") {
-    crumbs.push({ label: "WORKSPACES" });
+  } else if (parts[0] === "organizations") {
+    crumbs.push({ label: "ORGANIZATIONS" });
   } else {
     crumbs.push({ label: parts[0].toUpperCase() });
   }
@@ -84,18 +87,16 @@ function getBreadcrumbs(pathname: string): { label: string; href?: string }[] {
 
 export function DashboardShell({
   account,
-  currentWorkspace,
   currentOrganization,
-  workspaces,
+  organizations,
   children,
   previewMode = false,
   activePath,
   onPreviewNavigate,
 }: {
   account: AccountView;
-  currentWorkspace?: { id: string; name: string };
   currentOrganization?: { id: string; name: string };
-  workspaces?: WorkspaceItem[];
+  organizations?: OrganizationItem[];
   children: ReactNode;
   previewMode?: boolean;
   activePath?: string;
@@ -170,12 +171,11 @@ export function DashboardShell({
             <span className={styles.brandName}>nanogres</span>
           </Link>
 
-          <WorkspaceSwitcher
-            currentWorkspaceId={currentWorkspace?.id}
-            currentWorkspaceName={currentWorkspace?.name}
+          <OrganizationSwitcher
+            currentOrganizationId={currentOrganization?.id}
             currentOrganizationName={currentOrganization?.name}
             preview={previewMode}
-            workspaces={workspaces}
+            organizations={organizations}
           />
 
           <p className={styles.sectionLabel}>Manage</p>
@@ -273,7 +273,9 @@ export function DashboardShell({
                     href="/overview"
                     onClick={(event) => handleBreadcrumbNavigate(event, "/overview")}
                   >
-                    {currentWorkspace?.name ? currentWorkspace.name.toUpperCase() : "WORKSPACE"}
+                    {currentOrganization?.name
+                      ? currentOrganization.name.toUpperCase()
+                      : "ORGANIZATION"}
                   </Link>
                 </Tooltip>
                 {breadcrumbs.map((crumb, idx) => (

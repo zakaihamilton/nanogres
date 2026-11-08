@@ -1,7 +1,7 @@
 <div align="center">
   <img src="src/app/icon.svg" alt="Nanogres icon" width="72" height="72" />
   <h1>Nanogres</h1>
-  <p><strong>A private workspace for the Postgres server behind your projects.</strong></p>
+  <p><strong>A private control panel for the PostgreSQL databases assigned to your organizations.</strong></p>
   <p>Manage databases, roles, backups, and recovery from one small control panel.</p>
 </div>
 
@@ -16,8 +16,9 @@ server and a guarded place to handle routine database work.
 - **Manage database storage.** See the space used by your organization's databases, set an individual
   maximum for a user database or leave it on Auto, and monitor remaining room alongside overall VPS
   disk usage.
-- **Keep project access organized.** Create database-scoped read-only, read-write, and schema-migration
-  roles, with workspace permissions checked on the server for each action.
+- **Keep database access organized.** Each Perminister organization has one database catalog.
+  Create database-scoped read-only, read-write, and schema-migration roles; Perminister checks
+  organization-level Nanogres permissions on the server for each action.
 - **Make and move backups.** Schedule daily backups, download a custom-format dump, or restore a
   trusted `.dump` or `.backup` file into a new database.
 - **Review the interface safely.** Open synthetic-data screens, including the getting-started state,
@@ -35,8 +36,8 @@ flowchart LR
 ```
 
 The browser talks only to the dashboard. Vercel server functions check your Perminister session and
-workspace permission, then call the same VPS API over HTTPS with the selected organization's scope.
-The API keeps each organization's database names, roles, backups, queries, and activity separate
+organization-level database permission, then call the VPS API over HTTPS with that organization's
+scope. The API keeps each organization's database names, roles, backups, queries, and activity separate
 inside the shared PostgreSQL cluster. The VPS API token and Postgres credentials stay out of
 browser code. App connections reach two TLS-only PgBouncer ports; the PostgreSQL server itself
 remains bound to loopback and is not exposed directly.
@@ -57,18 +58,23 @@ can continue using its ports.
    enable the Nginx site, validate the configuration, and reload Nginx. Allow inbound TCP 8443,
    6432, and 6433 in the VPS and provider firewalls. Keep PostgreSQL bound to loopback. See
    [`vps-api/install-vps.md`](vps-api/install-vps.md) for the detailed steps.
-3. **Configure Perminister.** Set the Nanogres product ID, grant each allowed organization access
-   to its workspaces, and create an app client for the production dashboard origin. Its callback is
-   `<dashboard-origin>/auth/perminister/callback`. Keep public registration disabled for this
-   private dashboard.
+3. **Configure Perminister.** Set up the Nanogres product in each allowed organization and grant
+   organization-scope access with `nanogres:database:read`. Add `nanogres:database:manage` for
+   people who can create, change, or delete databases and backups. Create an app client for the
+   production dashboard origin. Its callback is `<dashboard-origin>/auth/perminister/callback`.
+   Keep public registration disabled for this private dashboard.
 4. **Set Vercel Production variables.** Set `NANOGRES_API_URL` and `NANOGRES_API_TOKEN` for the
    management API. Set the public connection settings `NEXT_PUBLIC_NANOGRES_DB_HOST`,
    `NEXT_PUBLIC_NANOGRES_DB_PORT` (6432), and
    `NEXT_PUBLIC_NANOGRES_DB_MIGRATION_PORT` (6433) for connection snippets. These public values
    are included at build time and contain no secrets.
 5. **Deploy and sign in.** Deploy the app and sign in through Perminister. The dashboard lists only
-   workspaces granted to the signed-in account; all workspaces in the same organization use that
-   organization's databases.
+   organizations granted to the signed-in account. Every member with access to an organization sees
+   that organization's database catalog; the organization is Nanogres's database access boundary.
+
+Existing Nanogres workspace-scoped grants remain accepted during migration. Each such grant already
+reached the entire organization's database catalog through the VPS API, so Nanogres maps it to that
+organization until you replace it with the product-scope database actions above.
 
 See [`vps-api/README.md`](vps-api/README.md) for the API routes, backup format, and retention
 behavior.
@@ -105,7 +111,7 @@ Nanogres does not store the password. Password recovery opens Perminister's reco
 | `PERMINISTER_URL`               | Perminister service base URL; defaults to `https://www.perminister.com`. |
 | `PERMINISTER_APP_CLIENT_ID`     | Nanogres app client ID.                                                  |
 | `PERMINISTER_APP_CLIENT_SECRET` | Server-side app client secret.                                           |
-| `PERMINISTER_PRODUCT_ID`        | Product ID used for workspace authorization.                             |
+| `PERMINISTER_PRODUCT_ID`        | Product ID used for organization database authorization; defaults to `nanogres`. |
 | `NANOGRES_APP_ORIGIN`           | Exact origin used for sign-in callbacks and cookies.                     |
 | `NANOGRES_API_URL`              | HTTPS origin for the VPS management API.                                 |
 | `NANOGRES_API_TOKEN`            | Bearer token generated by the VPS installer.                             |

@@ -2,8 +2,8 @@ export function actionFor(method: string, segments: string[]): string | null {
   const [resource, identifier, subResource] = segments;
   const productId = process.env.PERMINISTER_PRODUCT_ID?.trim().toLowerCase();
   if (!productId) return null;
-  const read = `${productId}:workspace:read`;
-  const manage = `${productId}:members:manage`;
+  const read = `${productId}:database:read`;
+  const manage = `${productId}:database:manage`;
 
   if (method === "GET") {
     if (["overview", "databases", "roles", "backups", "transfers", "activity"].includes(resource)) {
