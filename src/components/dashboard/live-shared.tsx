@@ -474,8 +474,7 @@ export function DeleteDatabaseDialog({
 export function ErrorNotice({ error, onRetry }: { error: string | null; onRetry?: () => void }) {
   if (!error) return null;
   const permissionDenied =
-    error === "Perminister denied this action." ||
-    error.includes("no Nanogres database access");
+    error === "Perminister denied this action." || error.includes("no Nanogres database access");
   return (
     <Notice>
       <span>

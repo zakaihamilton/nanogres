@@ -67,7 +67,13 @@ export default async function LoginPage({
       <div className={styles.layout}>
         <section aria-labelledby="welcome-title" className={styles.intro}>
           <div className={styles.brand}>
-            <Image alt="" className={styles.brandMark} src="/brand-icon.png" width={32} height={32} />
+            <Image
+              alt=""
+              className={styles.brandMark}
+              src="/brand-icon.png"
+              width={32}
+              height={32}
+            />
             <span>nanogres</span>
           </div>
 
@@ -153,7 +159,8 @@ export default async function LoginPage({
           <p className={styles.loginEyebrow}>ORGANIZATION DATABASE ACCESS</p>
           <h2 id="login-title">Sign in to Nanogres</h2>
           <p className={styles.description}>
-            Use your Perminister account to access the PostgreSQL databases assigned to your organization.
+            Use your Perminister account to access the PostgreSQL databases assigned to your
+            organization.
           </p>
 
           {message ? (

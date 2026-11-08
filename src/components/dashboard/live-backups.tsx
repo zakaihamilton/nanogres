@@ -520,8 +520,8 @@ export function LiveBackupsScreen({
             </Notice>
           ) : (
             <Notice tone="info">
-              Off-site storage is not configured yet. Local backup snapshots remain on the VPS
-              for 14 days.
+              Off-site storage is not configured yet. Local backup snapshots remain on the VPS for
+              14 days.
             </Notice>
           )}
           {rawBackups ? (

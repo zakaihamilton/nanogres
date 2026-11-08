@@ -397,8 +397,8 @@ export default function WelcomePage() {
             </div>
             <h4>System Storage Visibility</h4>
             <p>
-              Monitor VPS disk usage, table space growth, and backup retention room without
-              leaving the web dashboard.
+              Monitor VPS disk usage, table space growth, and backup retention room without leaving
+              the web dashboard.
             </p>
           </div>
 

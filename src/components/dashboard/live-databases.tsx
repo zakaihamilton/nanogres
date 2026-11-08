@@ -243,8 +243,8 @@ export function LiveDatabasesScreen({ page = "list" }: { page?: "list" | "new" }
             )}
           </Panel>
           <Notice tone="info">
-            Click any database name to open its details (Schema &amp; Tables, Live Queries,
-            Quotas, and Backups).
+            Click any database name to open its details (Schema &amp; Tables, Live Queries, Quotas,
+            and Backups).
           </Notice>
         </>
       )}

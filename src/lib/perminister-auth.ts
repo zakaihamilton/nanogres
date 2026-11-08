@@ -370,9 +370,7 @@ function getAccessibleOrganizations(session: CurrentSession): NanogresOrganizati
               grant.scope.productId.toLowerCase() === targetProductId &&
               grant.actions.includes(`${targetProductId}:workspace:read`),
           )
-          .map((grant) =>
-            grant.scope.kind === "workspace" ? grant.scope.workspaceId.trim() : "",
-          )
+          .map((grant) => (grant.scope.kind === "workspace" ? grant.scope.workspaceId.trim() : ""))
           .filter(Boolean),
       ),
     ];
@@ -397,9 +395,7 @@ function getAccessibleOrganizations(session: CurrentSession): NanogresOrganizati
     });
   }
 
-  return choices.sort(
-    (left, right) => left.organizationName.localeCompare(right.organizationName),
-  );
+  return choices.sort((left, right) => left.organizationName.localeCompare(right.organizationName));
 }
 
 export function nanogresOrganizations(session: CurrentSession): NanogresOrganizationChoice[] {

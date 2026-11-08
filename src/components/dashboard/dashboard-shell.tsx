@@ -10,10 +10,7 @@ import { ThemeControl } from "@/components/theme/theme-control";
 import { ToastProvider } from "@/components/ui/toast";
 import { CommandPalette } from "@/components/ui/command-palette";
 import { Icon, type IconName } from "./icons";
-import {
-  OrganizationSwitcher,
-  type OrganizationItem,
-} from "./organization-switcher";
+import { OrganizationSwitcher, type OrganizationItem } from "./organization-switcher";
 import styles from "./dashboard-shell.module.css";
 
 type AccountView = {
@@ -167,7 +164,13 @@ export function DashboardShell({
                 : undefined
             }
           >
-            <Image alt="" className={styles.brandMark} src="/brand-icon.png" width={32} height={32} />
+            <Image
+              alt=""
+              className={styles.brandMark}
+              src="/brand-icon.png"
+              width={32}
+              height={32}
+            />
             <span className={styles.brandName}>nanogres</span>
           </Link>
 

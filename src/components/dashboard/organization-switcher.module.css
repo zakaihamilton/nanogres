@@ -89,7 +89,9 @@
   border: 1px solid var(--line-strong);
   border-radius: 11px;
   background: var(--surface);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 16%), 0 4px 10px rgb(0 0 0 / 8%);
+  box-shadow:
+    0 12px 32px rgb(0 0 0 / 16%),
+    0 4px 10px rgb(0 0 0 / 8%);
 }
 
 .menuHeader {

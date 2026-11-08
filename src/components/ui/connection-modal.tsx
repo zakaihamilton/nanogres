@@ -19,8 +19,7 @@ function configuredPort(value: string | undefined, fallback: number): number {
   return Number.isInteger(port) && port > 0 && port <= 65535 ? port : fallback;
 }
 
-const defaultConnectionHost =
-  process.env.NEXT_PUBLIC_NANOGRES_DB_HOST || "nanogres.duckdns.org";
+const defaultConnectionHost = process.env.NEXT_PUBLIC_NANOGRES_DB_HOST || "nanogres.duckdns.org";
 const defaultRuntimePort = configuredPort(process.env.NEXT_PUBLIC_NANOGRES_DB_PORT, 6432);
 const defaultMigrationPort = configuredPort(
   process.env.NEXT_PUBLIC_NANOGRES_DB_MIGRATION_PORT,
@@ -71,8 +70,7 @@ export function ConnectionModal({
   if (!isOpen) return null;
 
   const connectionHost = host ?? defaultConnectionHost;
-  const connectionPort =
-    port ?? (migrationRole ? defaultMigrationPort : defaultRuntimePort);
+  const connectionPort = port ?? (migrationRole ? defaultMigrationPort : defaultRuntimePort);
   const safeAssumeRole = assumeRole?.replaceAll('"', '""');
   const roleSql = safeAssumeRole ? `SET ROLE "${safeAssumeRole}"` : "";
   const uri = `postgresql://${user}:[PASSWORD]@${connectionHost}:${connectionPort}/${database}?sslmode=${connectionSslMode}`;
@@ -132,10 +130,11 @@ func main() {
     fmt.Println(now)
 }`;
 
-  const env = migrationRole && safeAssumeRole
-    ? `MIGRATION_DATABASE_URL="${uri}"
+  const env =
+    migrationRole && safeAssumeRole
+      ? `MIGRATION_DATABASE_URL="${uri}"
 MIGRATION_DATABASE_ROLE="${safeAssumeRole}"`
-    : `DATABASE_URL="${uri}"
+      : `DATABASE_URL="${uri}"
 PGHOST="${connectionHost}"
 PGPORT="${connectionPort}"
 PGDATABASE="${database}"

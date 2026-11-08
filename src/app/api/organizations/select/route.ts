@@ -26,8 +26,11 @@ export async function POST(request: NextRequest): Promise<Response> {
     return Response.json({ error: "Provide an organizationId." }, { status: 400 });
   }
   const organizationId =
-    typeof body === "object" && body !== null && !Array.isArray(body) &&
-    "organizationId" in body && typeof body.organizationId === "string"
+    typeof body === "object" &&
+    body !== null &&
+    !Array.isArray(body) &&
+    "organizationId" in body &&
+    typeof body.organizationId === "string"
       ? body.organizationId.trim().toLowerCase()
       : "";
   if (!organizationId) {

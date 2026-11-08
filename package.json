@@ -16,7 +16,7 @@
     "test:e2e": "playwright test",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --write README.md src/app/api/organizations/select/route.ts src/app/login/page.tsx src/app/page.tsx src/components/dashboard/dashboard-shell.tsx src/components/dashboard/live-backups.tsx src/components/dashboard/live-databases.tsx src/components/dashboard/live-shared.tsx src/components/dashboard/organization-switcher.module.css src/components/ui/connection-modal.tsx src/lib/perminister-auth.ts tests/e2e/app.spec.mjs && git --no-pager diff -- README.md src/app/api/organizations/select/route.ts src/app/login/page.tsx src/app/page.tsx src/components/dashboard/dashboard-shell.tsx src/components/dashboard/live-backups.tsx src/components/dashboard/live-databases.tsx src/components/dashboard/live-shared.tsx src/components/dashboard/organization-switcher.module.css src/components/ui/connection-modal.tsx src/lib/perminister-auth.ts tests/e2e/app.spec.mjs",
+    "format:check": "prettier --check .",
     "health": "repnix check --details",
     "health:audit": "repnix audit",
     "health:plan": "repnix setup --plan --format json",

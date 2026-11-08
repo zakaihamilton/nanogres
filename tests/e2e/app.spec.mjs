@@ -9,7 +9,11 @@ const apiControl = "http://127.0.0.1:4312/__test__";
 const syntheticUpload = Buffer.from("trusted isolated browser-test fixture".padEnd(41, "!"));
 const previewScreens = [
   ["overview", "Your Postgres, in one place.", "Overview"],
-  ["getting-started", "Connect the VPS server to see your organization databases.", "Getting started"],
+  [
+    "getting-started",
+    "Connect the VPS server to see your organization databases.",
+    "Getting started",
+  ],
   ["databases", "Databases", "Databases"],
   ["database-new", "Create a database", "Create database"],
   ["delete-confirmation", "Delete database?", "Delete confirmation"],
@@ -105,19 +109,14 @@ test("keyboard users can skip navigation and land on the live page content", asy
   await expect(page.locator("#main-content")).toBeFocused();
 });
 
-test("the first-run card explains organization-scoped access", async ({
-  page,
-  request,
-}) => {
+test("the first-run card explains organization-scoped access", async ({ page, request }) => {
   await resetTestServices(request);
   await request.post(`${identityControl}/configure`, { data: { bootstrapRequired: true } });
   await signIn(page);
   await expect(
     page.getByRole("heading", { name: "Ask your Perminister admin for Nanogres database access." }),
   ).toBeVisible();
-  await expect(
-    page.getByText(/nanogres:database:read.*nanogres:database:manage/i),
-  ).toBeVisible();
+  await expect(page.getByText(/nanogres:database:read.*nanogres:database:manage/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /initialize/i })).toHaveCount(0);
   await expect(page.getByRole("cell", { name: "app_main" })).toHaveCount(0);
   const cookie = (await page.context().cookies()).find((item) => item.name === "nanogres_session");
