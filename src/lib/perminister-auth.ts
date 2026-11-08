@@ -4,9 +4,9 @@ import { cookies } from "next/headers";
 import { noStoreErrorResponse } from "@/lib/api-response";
 
 export const SESSION_COOKIE = "nanogres_session";
-export const WORKSPACE_COOKIE = "nanogres_workspace_id";
+export const LEGACY_WORKSPACE_COOKIE = "nanogres_workspace_id";
 export const ORGANIZATION_COOKIE = "nanogres_organization_id";
-export const WORKSPACE_NAMES_COOKIE = "nanogres_workspace_names";
+export const LEGACY_WORKSPACE_NAMES_COOKIE = "nanogres_workspace_names";
 export const OAUTH_STATE_COOKIE = "nanogres_oauth_state";
 export const OAUTH_VERIFIER_COOKIE = "nanogres_oauth_verifier";
 export const OAUTH_COOKIE_MAX_AGE = 10 * 60;
@@ -318,106 +318,93 @@ export async function revokePerministerSession(
   }
 }
 
-export async function registerPerministerWorkspace(
-  config: PerministerConfig,
-  session: CurrentSession,
-  organizationId: string,
-  workspaceId: string,
-): Promise<Response> {
-  return fetch(`${config.baseUrl}/api/auth/consumer/workspaces`, {
-    method: "POST",
-    headers: {
-      ...clientHeaders(config, session.token),
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ organizationId, workspaceId }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(6_000),
-  });
-}
-
 type NanogresRole = "admin" | "viewer" | "manager";
 
-export type NanogresWorkspaceChoice = {
-  id: string;
-  name: string;
+export type NanogresOrganizationChoice = {
   organizationId: string;
   organizationName: string;
   role: NanogresRole;
+  /** Old workspace grant IDs remain readable while accounts move to product-scope grants. */
+  legacyWorkspaceIds: string[];
 };
 
-export type NanogresWorkspaceContext = {
+export type NanogresOrganizationContext = {
   config: PerministerConfig;
   organizationId: string;
   organizationName: string;
   productId: string;
-  workspaceId: string;
-  workspaceName: string;
-  availableWorkspaces: NanogresWorkspaceChoice[];
+  availableOrganizations: NanogresOrganizationChoice[];
+  legacyWorkspaceIds: string[];
   role: NanogresRole;
 };
 
-function getAccessibleWorkspaces(
-  session: CurrentSession,
-  filterOrganizationId?: string,
-  customNames?: Record<string, string>,
-): NanogresWorkspaceChoice[] {
+const DATABASE_READ_ACTION = "database:read";
+const DATABASE_MANAGE_ACTION = "database:manage";
+
+function getAccessibleOrganizations(session: CurrentSession): NanogresOrganizationChoice[] {
   const targetProductId = (process.env.PERMINISTER_PRODUCT_ID ?? "nanogres").trim().toLowerCase();
-
-  const choices: NanogresWorkspaceChoice[] = [];
-  const seen = new Set<string>();
-
+  const choices: NanogresOrganizationChoice[] = [];
   for (const org of session.organizations) {
     if (org.productId.toLowerCase() !== targetProductId) continue;
-    if (
-      filterOrganizationId &&
-      org.organizationId.toLowerCase() !== filterOrganizationId.toLowerCase()
-    ) {
-      continue;
-    }
+    const organizationId = org.organizationId.toLowerCase();
+    const roles = org.resourceRoles ?? [];
+    const productRoles = roles.filter(
+      (grant) =>
+        grant.scope.kind === "product" &&
+        grant.scope.organizationId.toLowerCase() === organizationId &&
+        grant.scope.productId.toLowerCase() === targetProductId,
+    );
+    const hasDatabaseRead = productRoles.some((grant) =>
+      grant.actions.includes(`${targetProductId}:${DATABASE_READ_ACTION}`),
+    );
+    const hasDatabaseManage = productRoles.some((grant) =>
+      grant.actions.includes(`${targetProductId}:${DATABASE_MANAGE_ACTION}`),
+    );
+    const legacyWorkspaceIds = [
+      ...new Set(
+        roles
+          .filter(
+            (grant) =>
+              grant.scope.kind === "workspace" &&
+              grant.scope.organizationId.toLowerCase() === organizationId &&
+              grant.scope.productId.toLowerCase() === targetProductId &&
+              grant.actions.includes(`${targetProductId}:workspace:read`),
+          )
+          .map((grant) => (grant.scope.kind === "workspace" ? grant.scope.workspaceId.trim() : ""))
+          .filter(Boolean),
+      ),
+    ];
+    const hasLegacyRead = legacyWorkspaceIds.length > 0;
+    if (!hasDatabaseRead && !hasLegacyRead) continue;
 
-    // Workspace choices come from the current Perminister grants.
-    if (Array.isArray(org.resourceRoles)) {
-      for (const r of org.resourceRoles) {
-        if (
-          r.scope.kind === "workspace" &&
-          r.scope.organizationId.toLowerCase() === org.organizationId.toLowerCase() &&
-          r.scope.productId.toLowerCase() === targetProductId &&
-          r.actions.includes(`${targetProductId}:workspace:read`) &&
-          typeof r.scope.workspaceId === "string" &&
-          r.scope.workspaceId.trim().length > 0
-        ) {
-          const wsId = r.scope.workspaceId.trim();
-          const key = `${org.organizationId}:${wsId}`.toLowerCase();
-          if (!seen.has(key)) {
-            seen.add(key);
-            const role: NanogresRole =
-              r.role === "admin" || r.actions.includes(`${targetProductId}:members:manage`)
-                ? "admin"
-                : r.role === "manager"
-                  ? "manager"
-                  : "viewer";
-            const displayName =
-              customNames?.[wsId] || customNames?.[wsId.toLowerCase()] || org.organizationName;
-            choices.push({
-              id: wsId,
-              name: displayName,
-              organizationId: org.organizationId,
-              organizationName: org.organizationName,
-              role,
-            });
-          }
-        }
-      }
-    }
+    choices.push({
+      organizationId,
+      organizationName: org.organizationName,
+      role: hasDatabaseManage
+        ? "manager"
+        : roles.some(
+              (grant) =>
+                grant.scope.kind === "workspace" &&
+                grant.scope.organizationId.toLowerCase() === organizationId &&
+                grant.scope.productId.toLowerCase() === targetProductId &&
+                grant.actions.includes(`${targetProductId}:members:manage`),
+            )
+          ? "manager"
+          : "viewer",
+      legacyWorkspaceIds,
+    });
   }
 
-  return choices;
+  return choices.sort((left, right) => left.organizationName.localeCompare(right.organizationName));
 }
 
-export async function getNanogresWorkspaceContext(
+export function nanogresOrganizations(session: CurrentSession): NanogresOrganizationChoice[] {
+  return getAccessibleOrganizations(session);
+}
+
+export async function getNanogresOrganizationContext(
   session: CurrentSession,
-): Promise<NanogresWorkspaceContext | Response> {
+): Promise<NanogresOrganizationContext | Response> {
   const config = getPerministerConfig();
   const productId = (process.env.PERMINISTER_PRODUCT_ID ?? "nanogres").trim().toLowerCase();
   if (!config) {
@@ -427,68 +414,41 @@ export async function getNanogresWorkspaceContext(
     );
   }
 
-  // Find all organizations matching productId
-  const orgs = session.organizations.filter((org) => org.productId.toLowerCase() === productId);
-  if (orgs.length === 0) {
+  const accessibleOrganizations = getAccessibleOrganizations(session);
+  if (accessibleOrganizations.length === 0) {
     return Response.json(
-      { error: "Your Perminister account has no access to this Nanogres workspace." },
+      { error: "Your Perminister account has no Nanogres database access." },
       { status: 403, headers: { "Cache-Control": "no-store" } },
     );
   }
 
   const cookieJar = await cookies();
-  const cookieWorkspaceId = cookieJar.get(WORKSPACE_COOKIE)?.value?.trim().toLowerCase();
   const cookieOrgId = cookieJar.get(ORGANIZATION_COOKIE)?.value?.trim().toLowerCase();
-  const rawNames = cookieJar.get(WORKSPACE_NAMES_COOKIE)?.value;
-  let customNames: Record<string, string> = {};
-  if (rawNames) {
-    try {
-      customNames = JSON.parse(rawNames) as Record<string, string>;
-    } catch {
-      // ignore
-    }
-  }
-
-  const accessibleWorkspaces = getAccessibleWorkspaces(session, undefined, customNames);
-
-  // If a cookie workspace is set, check if it matches an accessible workspace
-  let selectedWorkspace = cookieWorkspaceId
-    ? accessibleWorkspaces.find(
-        (w) =>
-          w.id.toLowerCase() === cookieWorkspaceId &&
-          (!cookieOrgId || w.organizationId.toLowerCase() === cookieOrgId),
-      )
-    : undefined;
-
-  // Fallback to the first accessible workspace
-  if (!selectedWorkspace && accessibleWorkspaces.length > 0) {
-    selectedWorkspace = accessibleWorkspaces[0];
-  }
-
-  // A selected workspace must always come from a Perminister grant.
-  if (!selectedWorkspace) {
+  const selectedOrganization =
+    accessibleOrganizations.find((organization) => organization.organizationId === cookieOrgId) ??
+    accessibleOrganizations[0];
+  if (!selectedOrganization) {
     return Response.json(
-      { error: "Your Perminister account has no access to a Nanogres workspace." },
+      { error: "Your Perminister account has no Nanogres database access." },
       { status: 403, headers: { "Cache-Control": "no-store" } },
     );
   }
 
   return {
     config,
-    organizationId: selectedWorkspace.organizationId,
-    organizationName: selectedWorkspace.organizationName,
+    organizationId: selectedOrganization.organizationId,
+    organizationName: selectedOrganization.organizationName,
     productId,
-    workspaceId: selectedWorkspace.id,
-    workspaceName: selectedWorkspace.name,
-    availableWorkspaces: accessibleWorkspaces,
-    role: selectedWorkspace.role,
+    availableOrganizations: accessibleOrganizations,
+    legacyWorkspaceIds: selectedOrganization.legacyWorkspaceIds,
+    role: selectedOrganization.role,
   };
 }
 
 export async function authorizeNanogresAction(action: string): Promise<
   | {
       session: CurrentSession;
-      workspace: { organizationId: string; workspaceId: string };
+      organization: { organizationId: string };
     }
   | Response
 > {
@@ -500,41 +460,67 @@ export async function authorizeNanogresAction(action: string): Promise<
     );
   }
 
-  const context = await getNanogresWorkspaceContext(session);
+  const context = await getNanogresOrganizationContext(session);
   if (context instanceof Response) return context;
-  const { config, organizationId, productId, workspaceId } = context;
+  const { config, organizationId, productId, legacyWorkspaceIds } = context;
 
   try {
-    const response = await fetch(`${config.baseUrl}/api/authorize`, {
-      method: "POST",
-      headers: {
-        ...clientHeaders(config, session.token),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        organizationId,
-        productId,
-        resourceKind: "workspace",
-        resourceId: workspaceId,
-        action,
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(6_000),
-    });
-    if (response.ok) {
+    const authorize = (
+      resourceKind: "product" | "workspace",
+      resourceId?: string,
+      requestAction = action,
+    ) =>
+      fetch(`${config.baseUrl}/api/authorize`, {
+        method: "POST",
+        headers: {
+          ...clientHeaders(config, session.token),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          organizationId,
+          productId,
+          resourceKind,
+          ...(resourceId ? { resourceId } : {}),
+          action: requestAction,
+        }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(6_000),
+      });
+
+    const isAuthorized = async (response: Response) => {
+      if (!response.ok) return false;
       const decision: unknown = await response.json();
-      if (
+      return (
         typeof decision === "object" &&
         decision !== null &&
         (decision as Record<string, unknown>).authorized === true
-      ) {
-        return { session, workspace: { organizationId, workspaceId } };
+      );
+    };
+
+    const productResponse = await authorize("product");
+    if (productResponse.status >= 500) {
+      return noStoreErrorResponse("Perminister is temporarily unavailable.", 503);
+    }
+    if (await isAuthorized(productResponse)) {
+      return { session, organization: { organizationId } };
+    }
+
+    // Existing accounts may still hold workspace grants. Keep them usable during migration;
+    // new Nanogres grants are checked at the organization/product scope above.
+    const legacyAction = action.endsWith(`:${DATABASE_MANAGE_ACTION}`)
+      ? `${productId}:members:manage`
+      : `${productId}:workspace:read`;
+    for (const legacyWorkspaceId of legacyWorkspaceIds) {
+      const response = await authorize("workspace", legacyWorkspaceId, legacyAction);
+      if (await isAuthorized(response)) {
+        return { session, organization: { organizationId } };
+      }
+      if (response.status >= 500) {
+        return noStoreErrorResponse("Perminister is temporarily unavailable.", 503);
       }
     }
-    if (response.status === 403 || response.status === 401) {
-      return noStoreErrorResponse("Perminister denied this action.", 403);
-    }
-    return noStoreErrorResponse("Perminister is temporarily unavailable.", 503);
+
+    return noStoreErrorResponse("Perminister denied this action.", 403);
   } catch {
     return noStoreErrorResponse("Perminister is temporarily unavailable.", 503);
   }

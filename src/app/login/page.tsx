@@ -67,7 +67,13 @@ export default async function LoginPage({
       <div className={styles.layout}>
         <section aria-labelledby="welcome-title" className={styles.intro}>
           <div className={styles.brand}>
-            <Image alt="" className={styles.brandMark} src="/brand-icon.png" width={32} height={32} />
+            <Image
+              alt=""
+              className={styles.brandMark}
+              src="/brand-icon.png"
+              width={32}
+              height={32}
+            />
             <span>nanogres</span>
           </div>
 
@@ -116,7 +122,7 @@ export default async function LoginPage({
               <span className={styles.privateLabel}>SERVER-SIDE ACCESS</span>
             </div>
             <div
-              aria-label="Your browser connects to the Nanogres server, which manages Postgres in your workspace."
+              aria-label="Your browser connects to the Nanogres server, which manages databases for your Perminister organization."
               className={styles.architectureFlow}
               role="img"
             >
@@ -135,12 +141,12 @@ export default async function LoginPage({
                 →
               </span>
               <span className={styles.architectureNode}>
-                <small>WORKSPACE</small>
+                <small>ORGANIZATION</small>
                 <strong>Postgres</strong>
               </span>
             </div>
             <p>
-              Postgres stays protected in your workspace. The browser never receives internal API
+              Postgres stays protected on your server. The browser never receives internal API
               tokens.
             </p>
           </div>
@@ -150,10 +156,11 @@ export default async function LoginPage({
           <div className={styles.loginIcon}>
             <FeatureIcon kind="database" />
           </div>
-          <p className={styles.loginEyebrow}>WORKSPACE ACCESS</p>
+          <p className={styles.loginEyebrow}>ORGANIZATION DATABASE ACCESS</p>
           <h2 id="login-title">Sign in to Nanogres</h2>
           <p className={styles.description}>
-            Use your Perminister account to access your workspace.
+            Use your Perminister account to access the PostgreSQL databases assigned to your
+            organization.
           </p>
 
           {message ? (
@@ -236,8 +243,8 @@ export default async function LoginPage({
             <span>
               <strong>Your session stays private</strong>
               <small>
-                Perminister verifies your credentials. Nanogres checks workspace permissions on the
-                server.
+                Perminister verifies your credentials. Nanogres checks organization database
+                permissions on the server.
               </small>
             </span>
           </div>

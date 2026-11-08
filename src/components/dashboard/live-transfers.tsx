@@ -33,6 +33,37 @@ type TransferJob = {
 
 type Direction = "import" | "export";
 
+function ConnectionStringField({
+  label,
+  description,
+  value,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className={styles.field}>
+      <label htmlFor="external-connection">{label}</label>
+      <input
+        autoCapitalize="off"
+        autoComplete="off"
+        id="external-connection"
+        name="external-connection"
+        placeholder="postgresql://user:password@host:5432/database?sslmode=require"
+        required
+        spellCheck={false}
+        type="password"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <small>{description}</small>
+    </div>
+  );
+}
+
 function active(job: TransferJob): boolean {
   return job.status === "queued" || job.status === "running" || job.status === "cancelling";
 }
@@ -247,24 +278,12 @@ export function LiveTransfersScreen() {
                   </Select>
                 )}
               </div>
-              <div className={styles.field}>
-                <label htmlFor="external-connection">Source PostgreSQL connection string</label>
-                <input
-                  autoCapitalize="off"
-                  autoComplete="off"
-                  id="external-connection"
-                  name="external-connection"
-                  placeholder="postgresql://user:password@host:5432/database?sslmode=require"
-                  required
-                  spellCheck={false}
-                  type="password"
-                  value={connectionString}
-                  onChange={(event) => setConnectionString(event.target.value)}
-                />
-                <small>
-                  Use a direct database connection. TLS certificate verification is required.
-                </small>
-              </div>
+              <ConnectionStringField
+                description="Use a direct database connection. TLS certificate verification is required."
+                label="Source PostgreSQL connection string"
+                onChange={setConnectionString}
+                value={connectionString}
+              />
             </>
           ) : (
             <>
@@ -297,26 +316,12 @@ export function LiveTransfersScreen() {
                   <option value="replace">Replace destination contents</option>
                 </Select>
               </div>
-              <div className={styles.field}>
-                <label htmlFor="external-connection">
-                  Destination PostgreSQL connection string
-                </label>
-                <input
-                  autoCapitalize="off"
-                  autoComplete="off"
-                  id="external-connection"
-                  name="external-connection"
-                  placeholder="postgresql://user:password@host:5432/database?sslmode=require"
-                  required
-                  spellCheck={false}
-                  type="password"
-                  value={connectionString}
-                  onChange={(event) => setConnectionString(event.target.value)}
-                />
-                <small>
-                  For replace, Nanogres first saves a temporary rollback copy on the VPS.
-                </small>
-              </div>
+              <ConnectionStringField
+                description="For replace, Nanogres first saves a temporary rollback copy on the VPS."
+                label="Destination PostgreSQL connection string"
+                onChange={setConnectionString}
+                value={connectionString}
+              />
             </>
           )}
           <div className={styles.formActions}>

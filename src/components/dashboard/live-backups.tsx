@@ -493,7 +493,7 @@ export function LiveBackupsScreen({
                     ? offsite.lastSuccessAt
                       ? "Local disk + S3 Storage"
                       : "S3 upload pending"
-                    : "Local workspace disk"}
+                    : "Local VPS disk"}
               </strong>
             </div>
           </div>
@@ -520,8 +520,8 @@ export function LiveBackupsScreen({
             </Notice>
           ) : (
             <Notice tone="info">
-              Off-site storage is not configured yet. Local backup snapshots remain in the workspace
-              for 14 days.
+              Off-site storage is not configured yet. Local backup snapshots remain on the VPS for
+              14 days.
             </Notice>
           )}
           {rawBackups ? (

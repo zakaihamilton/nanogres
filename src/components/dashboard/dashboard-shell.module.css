@@ -97,37 +97,13 @@
   letter-spacing: -0.055em;
 }
 
-.workspaceCard {
-  display: flex;
-  min-height: 55px;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  background: var(--surface);
-  box-shadow: var(--shadow-soft);
-}
-
-.workspaceIcon {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-  place-items: center;
-  border-radius: 9px;
-  background: var(--surface-green);
-  color: var(--green);
-}
-
-.workspaceText,
 .profileText {
   display: grid;
   min-width: 0;
   gap: 3px;
+  flex: 1;
 }
 
-.workspaceText strong,
 .profileText strong {
   overflow: hidden;
   color: var(--ink);
@@ -137,7 +113,6 @@
   white-space: nowrap;
 }
 
-.workspaceText small,
 .profileText small {
   overflow: hidden;
   color: var(--ink-muted);
@@ -278,10 +253,6 @@
   color: var(--green-strong);
   font-size: 10px;
   font-weight: 750;
-}
-
-.profileText {
-  flex: 1;
 }
 
 .signOut,
@@ -569,7 +540,6 @@
     height: 25px;
   }
 
-  .workspaceCard,
   .sectionLabel,
   .sidebarSpacer,
   .sidebarStatus {

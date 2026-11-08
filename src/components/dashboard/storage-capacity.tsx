@@ -156,7 +156,7 @@ export function StorageCapacity({
       <div className={styles.diskSummary}>
         <div className={styles.summaryHeading}>
           <div>
-            <strong>Workspace storage volume</strong>
+            <strong>VPS storage volume</strong>
             <span>
               {formatBytes(disk.usedBytes)} used of {formatBytes(disk.totalBytes)}
             </span>
@@ -167,7 +167,7 @@ export function StorageCapacity({
           </div>
         </div>
         <div
-          aria-label={`Workspace disk ${formatBytes(disk.usedBytes)} used of ${formatBytes(disk.totalBytes)}`}
+          aria-label={`VPS disk ${formatBytes(disk.usedBytes)} used of ${formatBytes(disk.totalBytes)}`}
           aria-valuemax={100}
           aria-valuemin={0}
           aria-valuenow={Math.round(diskUsedPercent)}

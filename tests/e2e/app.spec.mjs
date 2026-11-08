@@ -9,7 +9,11 @@ const apiControl = "http://127.0.0.1:4312/__test__";
 const syntheticUpload = Buffer.from("trusted isolated browser-test fixture".padEnd(41, "!"));
 const previewScreens = [
   ["overview", "Your Postgres, in one place.", "Overview"],
-  ["getting-started", "Connect your workspace to see your Postgres databases.", "Getting started"],
+  [
+    "getting-started",
+    "Connect the VPS server to see your organization databases.",
+    "Getting started",
+  ],
   ["databases", "Databases", "Databases"],
   ["database-new", "Create a database", "Create database"],
   ["delete-confirmation", "Delete database?", "Delete confirmation"],
@@ -37,7 +41,7 @@ async function chooseDropdown(page, label, optionLabel) {
 
 async function signIn(page) {
   await page.goto("/");
-  await page.getByRole("link", { name: "Open Workspace" }).first().click();
+  await page.getByRole("link", { name: "Open Dashboard" }).first().click();
   await page.getByRole("link", { name: "Continue with Perminister" }).click();
   await page.getByRole("button", { name: "Continue as test admin" }).click();
   await expect(page).toHaveURL(/\/overview$/);
@@ -77,7 +81,7 @@ test("welcome, sign-in route, and protected dashboard entry are discoverable", a
       name: "A simpler, friendlier way to manage Postgres databases.",
     }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "Open Workspace" }).first().click();
+  await page.getByRole("link", { name: "Open Dashboard" }).first().click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("heading", { name: "Sign in to Nanogres" })).toBeVisible();
 
@@ -105,21 +109,16 @@ test("keyboard users can skip navigation and land on the live page content", asy
   await expect(page.locator("#main-content")).toBeFocused();
 });
 
-test("the workspace first-run card completes the scoped access bootstrap", async ({
-  page,
-  request,
-}) => {
+test("the first-run card explains organization-scoped access", async ({ page, request }) => {
   await resetTestServices(request);
   await request.post(`${identityControl}/configure`, { data: { bootstrapRequired: true } });
   await signIn(page);
   await expect(
-    page.getByRole("heading", { name: "Grant your account access to this workspace." }),
+    page.getByRole("heading", { name: "Ask your Perminister admin for Nanogres database access." }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Initialize workspace access" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Grant your account access to this workspace." }),
-  ).toBeHidden();
-  await expect(page.getByRole("cell", { name: "app_main" })).toBeVisible();
+  await expect(page.getByText(/nanogres:database:read.*nanogres:database:manage/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /initialize/i })).toHaveCount(0);
+  await expect(page.getByRole("cell", { name: "app_main" })).toHaveCount(0);
   const cookie = (await page.context().cookies()).find((item) => item.name === "nanogres_session");
   expect(cookie?.httpOnly).toBe(true);
   expect(cookie?.sameSite).toBe("Lax");
@@ -273,12 +272,12 @@ test.describe("authenticated management journeys", () => {
     await expect(page.getByText("cancelled", { exact: true })).toBeVisible();
   });
 
-  test("surfaces workspace permission denial before a write reaches the workspace", async ({
+  test("surfaces organization permission denial before a write reaches the VPS", async ({
     page,
     request,
   }) => {
     await request.post(`${identityControl}/configure`, {
-      data: { deniedAction: "nanogres:members:manage" },
+      data: { deniedAction: "nanogres:database:manage" },
     });
     await page.getByRole("link", { name: "Databases", exact: true }).click();
     await settlePage(page);
@@ -318,12 +317,12 @@ test.describe("authenticated management journeys", () => {
     await expect(page.getByText("No Nanogres operations recorded yet.")).toBeVisible();
   });
 
-  test("shows a read permission denial without rendering workspace data", async ({
+  test("shows a database read denial without rendering organization data", async ({
     page,
     request,
   }) => {
     await request.post(`${identityControl}/configure`, {
-      data: { deniedAction: "nanogres:workspace:read" },
+      data: { deniedAction: "nanogres:database:read" },
     });
     await page.goto("/databases");
     await expect(

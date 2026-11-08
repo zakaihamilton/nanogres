@@ -25,7 +25,6 @@ import {
   DatabaseTable,
   ErrorNotice,
   ActivityList,
-  WorkspaceBootstrap,
 } from "./live-shared";
 import styles from "./live-screens.module.css";
 
@@ -53,13 +52,13 @@ export function LiveOverviewScreen() {
     offsiteFreshness === "fresh"
       ? `Off-site backups are current. The latest successful copy is ${formatDate(offsite?.lastSuccessAt ?? "")}.`
       : offsiteFreshness === "stale"
-        ? `The latest verified off-site copy is older than 36 hours (${formatDate(offsite?.lastSuccessAt ?? "")}). Check the backup service in your workspace.`
+        ? `The latest verified off-site copy is older than 36 hours (${formatDate(offsite?.lastSuccessAt ?? "")}). Check the backup service on your VPS.`
         : offsiteFreshness === "error"
           ? (offsite?.lastError ??
             "The latest off-site upload failed. Check the backup service logs.")
           : offsiteFreshness === "pending"
             ? "Off-site storage is configured, but a successful upload has not been verified yet."
-            : "Backups are stored locally in the workspace. Configure off-site storage and verify the first upload.";
+            : "Backups are stored locally on the VPS. Configure off-site storage and verify the first upload.";
 
   const storageItems = status?.disk
     ? [
@@ -118,7 +117,7 @@ export function LiveOverviewScreen() {
         eyebrow="POSTGRESQL"
         title="Cluster Overview"
       />
-      {loading && !data ? <Loading label="Connecting to workspace…" /> : null}
+      {loading && !data ? <Loading label="Connecting to your organization databases…" /> : null}
       {!loading && !data ? <FirstRunCard error={error} /> : null}
       {data && error ? <ErrorNotice error={error} onRetry={() => void refresh()} /> : null}
       {data && !status && !error ? (
@@ -133,7 +132,7 @@ export function LiveOverviewScreen() {
                 <h3>Active Connections</h3>
                 <div className={styles.telemetryCardMeta}>
                   <span>Server connection usage</span>
-                  <SectionInfo label="Counts active PostgreSQL sessions across the whole server against its cluster-wide max_connections setting. Other workspaces and maintenance sessions share this connection ceiling." />
+                  <SectionInfo label="Counts active PostgreSQL sessions across the whole server against its cluster-wide max_connections setting. Other organization databases and maintenance sessions share this connection ceiling." />
                 </div>
               </div>
               <div className={styles.telemetryCardBody}>
@@ -148,9 +147,9 @@ export function LiveOverviewScreen() {
               <div className={styles.telemetryCardHeader}>
                 <h3>Disk & Storage Allocation</h3>
                 <div className={styles.telemetryCardMeta}>
-                  <span>Workspace root filesystem</span>
+                  <span>VPS root filesystem</span>
                   <SectionInfo
-                    label={`Shows organization database file sizes and free space on the workspace filesystem. The ${formatBytes(status.databaseQuotaReserveBytes ?? 1024 ** 3)} growth reserve is taken from available disk, not extra physical storage; it can overlap the free-space value, so the chart segments are not additive.`}
+                    label={`Shows organization database file sizes and free space on the VPS filesystem. The ${formatBytes(status.databaseQuotaReserveBytes ?? 1024 ** 3)} growth reserve is taken from available disk, not extra physical storage; it can overlap the free-space value, so the chart segments are not additive.`}
                   />
                 </div>
               </div>
@@ -171,19 +170,19 @@ export function LiveOverviewScreen() {
               label="Connections"
               value={String(status.connections)}
               detail={`Maximum ${status.maxConnections}`}
-              info="Current active PostgreSQL sessions across the whole server compared with the cluster-wide max_connections ceiling. Sessions from other workspaces and maintenance tasks share this limit."
+              info="Current active PostgreSQL sessions across the whole server compared with the cluster-wide max_connections ceiling. Sessions from other organization databases and maintenance tasks share this limit."
             />
             <Metric
               label="Database storage"
               value={formatBytes(totalSize)}
               detail="Across organization databases"
-              info="Sum of database file sizes returned for this organization; protected PostgreSQL system databases are excluded. These files share workspace disk with backups and other files. Database growth targets are hard caps only when quota enforcement is active."
+              info="Sum of database file sizes returned for this organization; protected PostgreSQL system databases are excluded. These files share VPS disk with backups and other files. Database growth targets are hard caps only when quota enforcement is active."
             />
             <Metric
               label="Free disk"
               value={formatBytes(status.disk.freeBytes)}
               detail={`of ${formatBytes(status.disk.totalBytes)}`}
-              info="Free space on PostgreSQL's workspace filesystem. Databases, local backups, and other workspace files share this volume; this is not a database-only quota."
+              info="Free space on the PostgreSQL VPS filesystem. Databases, local backups, and other server files share this volume; this is not a database-only quota."
             />
           </div>
         </>
@@ -201,7 +200,7 @@ export function LiveOverviewScreen() {
             </Panel>
             <Panel
               title="System health"
-              detail="PostgreSQL workspace status"
+              detail="PostgreSQL server status"
               info={`Shows server response and runtime details. Local backup retention follows the server setting (${status.backupRetentionDays} days). An off-site copy is marked stale after 36 hours without a verified successful upload.`}
             >
               <div className={styles.health}>
@@ -220,7 +219,7 @@ export function LiveOverviewScreen() {
                   </div>
                   <div>
                     <dt>Backup retention</dt>
-                    <dd>{status.backupRetentionDays} days in workspace</dd>
+                    <dd>{status.backupRetentionDays} days on VPS</dd>
                   </div>
                   <div>
                     <dt>Latest backup</dt>
@@ -249,7 +248,7 @@ export function LiveOverviewScreen() {
           <Panel
             title="Storage capacity"
             detail="Disk usage and current growth room for each user database"
-            info={`Growth targets share ${status.databaseGrowthPercent ?? 25}% of free disk after a ${formatBytes(status.databaseQuotaReserveBytes ?? 1024 ** 3)} system reserve across user databases. Custom limits use that shared budget; Auto databases share what remains. Targets are advisory unless hard quota enforcement is active, and the whole workspace disk is shared with backups and other files.`}
+            info={`Growth targets share ${status.databaseGrowthPercent ?? 25}% of free disk after a ${formatBytes(status.databaseQuotaReserveBytes ?? 1024 ** 3)} system reserve across user databases. Custom limits use that shared budget; Auto databases share what remains. Targets are advisory unless hard quota enforcement is active, and the whole VPS disk is shared with backups and other files.`}
           >
             <StorageCapacity
               databases={databases}
@@ -261,7 +260,7 @@ export function LiveOverviewScreen() {
           </Panel>
           <Panel
             title="Recent activity"
-            detail="Database and access changes in this workspace"
+            detail="Database and access changes for this organization"
             info="Shows the eight latest organization-scoped operations here. Open Activity to browse up to 50 recent events from the log."
           >
             <ActivityList error={null} events={data.activity} loading={false} />
@@ -270,7 +269,7 @@ export function LiveOverviewScreen() {
             tone={offsiteFreshness === "stale" || offsiteFreshness === "error" ? "warning" : "info"}
           >
             <span>{offsiteNotice}</span>
-            <SectionInfo label="Off-site backup status reflects verified successful uploads. A copy is stale after 36 hours without a verified success. Off-site storage is separate from local backups, which follow the workspace retention period shown in System health." />
+            <SectionInfo label="Off-site backup status reflects verified successful uploads. A copy is stale after 36 hours without a verified success. Off-site storage is separate from local backups, which follow the VPS retention period shown in System health." />
           </Notice>
         </>
       ) : null}
@@ -285,7 +284,9 @@ export function LiveOverviewScreen() {
 }
 
 export function FirstRunCard({ error }: { error: string | null }) {
-  const needsWorkspaceAccess = error === "Perminister denied this action.";
+  const needsDatabaseAccess =
+    error === "Perminister denied this action." ||
+    error?.includes("no Nanogres database access") === true;
 
   return (
     <section aria-labelledby="first-run-title" className={styles.firstRunCard}>
@@ -297,28 +298,26 @@ export function FirstRunCard({ error }: { error: string | null }) {
           <span>GETTING STARTED</span>
         </div>
         <h2 id="first-run-title">
-          {needsWorkspaceAccess
-            ? "Grant your account access to this workspace."
-            : "Connect your workspace to see your Postgres databases."}
+          {needsDatabaseAccess
+            ? "Ask your Perminister admin for Nanogres database access."
+            : "Connect the VPS server to see your organization databases."}
         </h2>
         <p>
-          {needsWorkspaceAccess
-            ? "Your workspace is connected. Perminister needs to grant this account workspace access before Nanogres can show database health, storage, backups, and recent changes."
+          {needsDatabaseAccess
+            ? "Nanogres checks access at organization scope. Grant this account nanogres:database:read to view data and nanogres:database:manage to make changes."
             : "Once the private management API is connected, this page will show database health, storage, backups, and recent changes."}
         </p>
-        {needsWorkspaceAccess ? (
-          <WorkspaceBootstrap />
-        ) : (
+        {!needsDatabaseAccess ? (
           <a
             className={styles.setupLink}
-            href="https://github.com/zakaihamilton/nanogres#connect-workspace"
+            href="https://github.com/zakaihamilton/nanogres#connect-your-vps"
             rel="noreferrer"
             target="_blank"
           >
             Open the setup guide <span aria-hidden="true">↗</span>
           </a>
-        )}
-        {error && !needsWorkspaceAccess ? (
+        ) : null}
+        {error && !needsDatabaseAccess ? (
           <details className={styles.connectionDetails}>
             <summary>Connection details</summary>
             <p>{error}</p>
@@ -330,15 +329,15 @@ export function FirstRunCard({ error }: { error: string | null }) {
           <span className={styles.stepNumber}>01</span>
           <span>
             <strong>
-              {needsWorkspaceAccess ? "Grant workspace access" : "Connect your server"}
+              {needsDatabaseAccess ? "Grant organization access" : "Connect your VPS"}
             </strong>
             <small>
-              {needsWorkspaceAccess
-                ? "Initialize this workspace in Perminister."
+              {needsDatabaseAccess
+                ? "Assign Nanogres database permissions in Perminister."
                 : "Set up the private HTTPS API."}
             </small>
           </span>
-          <Icon name={needsWorkspaceAccess ? "shield" : "server"} size={16} />
+          <Icon name={needsDatabaseAccess ? "shield" : "server"} size={16} />
         </li>
         <li className={styles.firstRunStep}>
           <span className={styles.stepNumber}>02</span>

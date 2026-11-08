@@ -145,7 +145,7 @@ function ScreenHeading({
           </button>
           {!onAction ? (
             <small className={styles.previewActionHint}>
-              Available when the workspace is connected
+              Available when the VPS server is connected
             </small>
           ) : null}
         </div>
@@ -161,10 +161,10 @@ function ApiNotice() {
         <Icon name="server" size={17} />
       </span>
       <div>
-        <strong>Workspace connection pending</strong>
+        <strong>Server connection pending</strong>
         <p>
           The dashboard is ready for your Postgres server. Live inventory and controls will appear
-          here once the workspace API is connected.
+          here once the private VPS API is connected.
         </p>
       </div>
       <span className={styles.pendingPill}>NOT CONNECTED</span>
@@ -506,8 +506,8 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
     <div className={styles.screen}>
       <ScreenHeading
         action="Create a database"
-        description="Manage project databases, access, and recovery from one workspace."
-        eyebrow="YOUR WORKSPACE"
+        description="Manage the databases, access, and recovery assigned to your organization."
+        eyebrow="ORGANIZATION DATABASES"
         title="Your Postgres, in one place."
         onAction={() => onPreviewNavigate?.("databases")}
       />
@@ -542,7 +542,7 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
           value={preview ? "Today" : "—"}
         />
         <MetricCard
-          detail={preview ? "Workspace permissions" : "Managed by Perminister"}
+          detail={preview ? "Organization database permissions" : "Managed by Perminister"}
           icon="access"
           label="Access grants"
           tone="amber"
@@ -564,7 +564,7 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
             <DatabaseTable rows={demoDatabases} onOpen={() => onPreviewNavigate?.("databases")} />
           ) : (
             <EmptyState
-              description="Connect the workspace to see database size, owners, and connection counts."
+              description="Connect the VPS server to see database size, owners, and connection counts."
               title="No live inventory yet"
             />
           )}
@@ -581,7 +581,7 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
                 <small>
                   {preview
                     ? "PostgreSQL 17 · running"
-                    : "System health will load from the workspace"}
+                    : "System health will load from the VPS server"}
                 </small>
               </span>
             </div>
@@ -608,14 +608,14 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
       </div>
 
       <Panel
-        detail="Current workspace disk usage and estimated growth room"
+        detail="Current VPS disk usage and estimated database growth room"
         title="Storage capacity"
       >
         <StorageCapacity databases={demoDatabases} disk={demoDisk} growthPercent={25} />
       </Panel>
 
       <div className={styles.lowerGrid}>
-        <Panel detail="Recent changes across this workspace" title="Recent activity">
+        <Panel detail="Recent changes across this organization" title="Recent activity">
           {preview ? (
             <ActivityList compact />
           ) : (
@@ -651,7 +651,7 @@ export function GettingStartedScreen() {
     <div className={styles.screen}>
       <ScreenHeading
         description="A clear view of database health, storage, access, and recovery."
-        eyebrow="YOUR WORKSPACE"
+        eyebrow="ORGANIZATION DATABASES"
         title="Your Postgres, in one place."
       />
       <FirstRunCard error={null} />
@@ -698,7 +698,7 @@ export function DatabasesScreen({
             <DatabaseTable rows={demoDatabases} variant="management" onDelete={onPreviewDelete} />
           </Panel>
           <Panel
-            detail="Current workspace disk usage and per-database growth room"
+            detail="Current VPS disk usage and per-database growth room"
             title="Storage capacity"
           >
             <StorageCapacity databases={demoDatabases} disk={demoDisk} growthPercent={25} />

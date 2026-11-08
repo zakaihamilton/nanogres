@@ -44,14 +44,14 @@ export default function WelcomePage() {
         <div className={styles.actions}>
           <ThemeControl />
           <Link className={styles.primaryButton} href="/login">
-            Open Workspace <span aria-hidden="true">→</span>
+            Open Dashboard <span aria-hidden="true">→</span>
           </Link>
         </div>
       </header>
 
       {/* Hero Section */}
       <section aria-labelledby="hero-title" className={styles.hero} id="overview">
-        <div className={styles.heroEyebrow}>PostgreSQL Workspace Console</div>
+        <div className={styles.heroEyebrow}>Organization Database Console</div>
         <h1 className={styles.heroTitle} id="hero-title">
           A simpler, friendlier way to{" "}
           <span className={styles.heroTitleAccent}>manage Postgres databases.</span>
@@ -64,7 +64,7 @@ export default function WelcomePage() {
 
         <div className={styles.heroActions}>
           <Link className={styles.ctaPrimary} href="/login">
-            Open Workspace <span aria-hidden="true">→</span>
+            Open Dashboard <span aria-hidden="true">→</span>
           </Link>
         </div>
 
@@ -82,7 +82,7 @@ export default function WelcomePage() {
             </div>
             <div className={styles.showcaseStatus}>
               <span className={styles.statusLight} />
-              <span>Workspace Connected</span>
+              <span>PostgreSQL Connected</span>
             </div>
           </div>
 
@@ -122,7 +122,7 @@ export default function WelcomePage() {
                     <strong className={styles.summaryValue}>3</strong>
                   </div>
                   <div className={styles.summaryItem}>
-                    <span className={styles.summaryLabel}>Workspace Storage</span>
+                    <span className={styles.summaryLabel}>VPS Storage</span>
                     <strong className={styles.summaryValue}>1.26 GB</strong>
                   </div>
                   <div className={styles.summaryItem}>
@@ -397,8 +397,8 @@ export default function WelcomePage() {
             </div>
             <h4>System Storage Visibility</h4>
             <p>
-              Monitor workspace disk usage, table space growth, and backup retention room without
-              leaving the web dashboard.
+              Monitor VPS disk usage, table space growth, and backup retention room without leaving
+              the web dashboard.
             </p>
           </div>
 
@@ -424,7 +424,7 @@ export default function WelcomePage() {
         </p>
         <div className={styles.bottomCtaActions}>
           <Link className={styles.ctaPrimary} href="/login">
-            Open Workspace <span aria-hidden="true">→</span>
+            Open Dashboard <span aria-hidden="true">→</span>
           </Link>
         </div>
       </section>
