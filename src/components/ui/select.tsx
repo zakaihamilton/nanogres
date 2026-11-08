@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { listenToWindowPositionChanges } from "./window-position-events";
 import styles from "./select.module.css";
 
 type OptionProps = {
@@ -241,12 +242,7 @@ export function Select({
     }
 
     updatePosition();
-    window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
-    return () => {
-      window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
-    };
+    return listenToWindowPositionChanges(updatePosition);
   }, [align, open, options.length]);
 
   useEffect(() => {
