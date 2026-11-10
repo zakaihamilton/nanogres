@@ -201,7 +201,7 @@ test.describe("authenticated management journeys", () => {
       page.getByRole("status").filter({ hasText: "Created and downloaded" }),
     ).toBeVisible();
 
-    await page.getByRole("link", { name: "Back to backups" }).click();
+    await page.getByRole("link", { name: "BACKUPS", exact: true }).click();
     await settlePage(page);
     const restoreRetained = page.getByRole("link", {
       name: "Restore as new: app_main__20261104T120000000000Z.dump",
@@ -218,7 +218,7 @@ test.describe("authenticated management journeys", () => {
       }),
     ).toBeVisible();
 
-    await page.getByRole("link", { name: "Back to backups" }).click();
+    await page.getByRole("link", { name: "BACKUPS", exact: true }).click();
     await settlePage(page);
     await page.getByRole("link", { name: "Restore from file" }).click();
     await settlePage(page);
