@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { AuthCard, AuthShell } from "panel-frame-ui";
 import { ThemeControl } from "@/components/theme/theme-control";
 import { getPerministerRecoveryUrl, isPerministerConfigured } from "@/lib/perminister-auth";
 import { passwordLoginAction } from "./actions";
@@ -60,23 +61,21 @@ export default async function LoginPage({
   const message = error ? messages[error] : undefined;
 
   return (
-    <main className={styles.page}>
-      <div className={styles.themeControl}>
-        <ThemeControl />
-      </div>
-      <div className={styles.layout}>
+    <AuthShell
+      brand={
+        <div className={styles.brand}>
+          <Image
+            alt=""
+            className={styles.brandMark}
+            src="/brand-icon.png"
+            width={32}
+            height={32}
+          />
+          <span>nanogres</span>
+        </div>
+      }
+      aside={
         <section aria-labelledby="welcome-title" className={styles.intro}>
-          <div className={styles.brand}>
-            <Image
-              alt=""
-              className={styles.brandMark}
-              src="/brand-icon.png"
-              width={32}
-              height={32}
-            />
-            <span>nanogres</span>
-          </div>
-
           <div className={styles.introBody}>
             <p className={styles.eyebrow}>POSTGRES FOR YOUR PROJECTS</p>
             <h1 id="welcome-title">A clearer home for your Postgres databases.</h1>
@@ -151,8 +150,10 @@ export default async function LoginPage({
             </p>
           </div>
         </section>
-
-        <section aria-labelledby="login-title" className={styles.card}>
+      }
+      utility={<ThemeControl />}
+    >
+      <AuthCard aria-labelledby="login-title" className={styles.card}>
           <div className={styles.loginIcon}>
             <FeatureIcon kind="database" />
           </div>
@@ -248,8 +249,7 @@ export default async function LoginPage({
               </small>
             </span>
           </div>
-        </section>
-      </div>
-    </main>
+      </AuthCard>
+    </AuthShell>
   );
 }

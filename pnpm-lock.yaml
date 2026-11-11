@@ -169,6 +169,9 @@ importers:
       next:
         specifier: ^16.4.1
         version: 16.4.3(@babel/core@7.29.7(supports-color@7.2.0))(@playwright/test@1.64.1)(@types/node@24.19.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      panel-frame-ui:
+        specifier: ^0.1.0
+        version: 0.1.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react:
         specifier: ^19.3.0
         version: 19.3.1
@@ -2380,6 +2383,13 @@ packages:
 
   package-manager-detector@1.9.0:
     resolution: {integrity: sha512-zAMfbta9nPA8AKkA4WdmNAT8R8s6Dk0/xwPsqNnRidMFcLo1YkLuPDTgs2f64XdzS8vbLNnoJ+uUIkgbz7oRHA==}
+
+  panel-frame-ui@0.1.0:
+    resolution: {integrity: sha512-Zm+yNpdEauXvXkqnCeEVVKw/k3BTIJYtiY4fWR7fOTcGNKI21yRxJDaQvRqvd041KVdW/I3nNi60ScdcvNgZGA==}
+    engines: {node: '>=22.14.0'}
+    peerDependencies:
+      react: '>=19.0.0 <20.0.0'
+      react-dom: '>=19.0.0 <20.0.0'
 
   parent-module@1.0.1:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
@@ -5093,6 +5103,11 @@ snapshots:
       p-limit: 3.1.0
 
   package-manager-detector@1.9.0: {}
+
+  panel-frame-ui@0.1.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+    dependencies:
+      react: 19.3.1
+      react-dom: 19.3.1(react@19.3.1)
 
   parent-module@1.0.1:
     dependencies:

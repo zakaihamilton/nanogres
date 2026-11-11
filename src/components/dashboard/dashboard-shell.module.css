@@ -613,3 +613,10 @@
     transition: none;
   }
 }
+
+
+@media (width <= 780px) {
+  .sidebarToggle {
+    display: none;
+  }
+}

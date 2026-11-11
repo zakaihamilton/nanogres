@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "next": "^16.4.1",
+    "panel-frame-ui": "^0.1.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "server-only": "^0.0.1",
