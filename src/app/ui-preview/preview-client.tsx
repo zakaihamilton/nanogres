@@ -32,6 +32,7 @@ const screens = [
 ];
 
 function previewPath(screen: string, deleteDatabase: string): string {
+  if (screen === "overview" || screen === "getting-started") return "/overview";
   if (screen === "database-new") return "/databases/new";
   if (screen === "delete-confirmation") return `/databases/${encodeURIComponent(deleteDatabase)}`;
   if (screen === "databases") return "/databases";

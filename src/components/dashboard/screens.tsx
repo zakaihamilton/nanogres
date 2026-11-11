@@ -225,23 +225,26 @@ function DataTable({
   children: ReactNode;
 }) {
   return (
-    <div aria-label={label} className={styles.tableWrap} role="region" tabIndex={0}>
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            {columns.map((column) => (
-              <th key={column.id} scope="col">
-                {column.visuallyHidden ? (
-                  <span className={styles.srOnly}>{column.label}</span>
-                ) : (
-                  column.label
-                )}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
+    <div className={styles.tableRegion}>
+      <div aria-label={label} className={styles.tableWrap} role="region" tabIndex={0}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th key={column.id} scope="col">
+                  {column.visuallyHidden ? (
+                    <span className={styles.srOnly}>{column.label}</span>
+                  ) : (
+                    column.label
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>{children}</tbody>
+        </table>
+      </div>
+      <p className={styles.tableScrollHint}>Swipe horizontally to see all columns</p>
     </div>
   );
 }

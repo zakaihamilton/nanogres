@@ -151,7 +151,11 @@ export default async function LoginPage({
           </div>
         </section>
       }
-      utility={<ThemeControl />}
+      utility={
+        <div className={styles.themeControl}>
+          <ThemeControl />
+        </div>
+      }
     >
       <AuthCard aria-labelledby="login-title" className={styles.card}>
           <div className={styles.loginIcon}>

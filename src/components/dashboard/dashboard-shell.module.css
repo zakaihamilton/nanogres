@@ -620,3 +620,32 @@
     display: none;
   }
 }
+
+@media (width <= 480px) {
+  .topbarActions {
+    gap: 6px;
+  }
+
+  .breadcrumbs {
+    gap: 5px;
+    letter-spacing: 0.04em;
+  }
+
+  .crumbLink {
+    padding: 4px 5px;
+    letter-spacing: 0.04em;
+  }
+
+  .previewTag,
+  .searchTrigger > span,
+  .searchTrigger .cmdKey {
+    display: none;
+  }
+
+  .searchTrigger {
+    width: 40px;
+    height: 40px;
+    justify-content: center;
+    padding: 0;
+  }
+}

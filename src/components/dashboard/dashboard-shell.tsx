@@ -301,6 +301,7 @@ export function DashboardShell({
             </div>
             <div className={styles.topbarActions}>
               <button
+                aria-label="Search commands"
                 className={styles.searchTrigger}
                 onClick={() => setPaletteOpen(true)}
                 type="button"

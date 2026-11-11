@@ -616,3 +616,55 @@
     transition: none;
   }
 }
+
+/* Keep the mobile sign-in task ahead of decorative product detail. */
+@media (width <= 760px) {
+  .intro {
+    gap: 16px;
+  }
+
+  .introDescription {
+    margin-top: 12px;
+    line-height: 1.5;
+  }
+
+  .featureList,
+  .architectureCard {
+    display: none;
+  }
+}
+
+@media (width <= 480px) {
+  .intro {
+    gap: 12px;
+  }
+
+  .intro h1 {
+    font-size: clamp(32px, 8vw, 38px);
+    line-height: 1.05;
+  }
+
+  .introDescription {
+    margin: 11px 0 0;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .card {
+    padding: 22px 18px;
+  }
+
+  .loginIcon {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 12px;
+  }
+
+  .description {
+    margin: 8px 0 15px;
+  }
+
+  .credentialsForm {
+    gap: 12px;
+  }
+}

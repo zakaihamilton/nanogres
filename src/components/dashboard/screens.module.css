@@ -1213,3 +1213,21 @@
     padding-left: 10px;
   }
 }
+
+.tableRegion {
+  min-width: 0;
+}
+
+.tableScrollHint {
+  display: none;
+}
+
+@media (width <= 720px) {
+  .tableScrollHint {
+    display: block;
+    margin: 8px 4px 0;
+    color: var(--ink-muted);
+    font-size: 11px;
+    text-align: right;
+  }
+}
