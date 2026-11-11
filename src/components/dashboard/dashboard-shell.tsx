@@ -301,14 +301,14 @@ export function DashboardShell({
             </div>
             <div className={styles.topbarActions}>
               <button
-                aria-label="Search commands"
+                aria-label="Commands ⌘K search"
                 className={styles.searchTrigger}
                 onClick={() => setPaletteOpen(true)}
                 type="button"
               >
                 <Icon name="search" size={14} />
                 <span>Commands</span>
-                <kbd className={styles.cmdKey}>⌘K</kbd>
+                <kbd aria-hidden="true" className={styles.cmdKey}>⌘K</kbd>
               </button>
               {!previewMode ? <ThemeControl /> : null}
             </div>

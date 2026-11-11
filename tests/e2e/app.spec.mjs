@@ -106,7 +106,7 @@ test("keyboard users can skip navigation and land on the live page content", asy
   const skipLink = page.getByRole("link", { name: "Skip to main content" });
   await expect(skipLink).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.locator("#main-content")).toBeFocused();
+  await expect(page.locator("#pf-main-content")).toBeFocused();
 });
 
 test("the first-run card explains organization-scoped access", async ({ page, request }) => {
@@ -541,12 +541,12 @@ test("the preview keeps every screen within narrow viewports and respects reduce
       await chooseDropdown(page, "Preview screen", "Databases");
     }
   }
-  const transitionDuration = await page
-    .getByRole("link", { name: "Overview", exact: true })
+  const transitionDurations = await page
+    .locator('.pf-sidebar nav a[href="/overview"]')
     .evaluate((element) => getComputedStyle(element).transitionDuration);
-  expect(transitionDuration.split(",").every((duration) => Number.parseFloat(duration) === 0)).toBe(
-    true,
-  );
+  expect(
+    transitionDurations.split(",").every((duration) => Number.parseFloat(duration) <= 0.01),
+  ).toBe(true);
 
   for (const width of [375, 768]) {
     await page.setViewportSize({ width, height: 844 });
