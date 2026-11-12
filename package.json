@@ -8,6 +8,7 @@
     "node": ">=24.22.1 <25"
   },
   "scripts": {
+    "link": "node ../panel-frame-ui/scripts/link-local.mjs",
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
