@@ -1,2 +1,2 @@
 minimumReleaseAgeExclude:
-  - panel-frame-ui@0.2.3 || 0.2.4
+  - panel-frame-ui@0.2.3 || 0.2.4 || 0.2.5
