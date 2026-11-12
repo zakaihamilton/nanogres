@@ -1,11 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ContextSwitcher } from "panel-frame-ui";
 import { Icon } from "./icons";
 import styles from "./organization-switcher.module.css";
+
+const ORGANIZATION_ACCESS_ACTION = "__nanogres_organization_access__";
 
 export type OrganizationItem = {
   organizationId: string;
@@ -85,25 +86,37 @@ export function OrganizationSwitcher({
         aria-label="Choose an organization"
         className={styles.contextSwitcher}
         disabled={pending}
-        footer={
-          <>
-            {error ? <div role="alert">{error}</div> : null}
-            <Link className="pf-select-footer-link" href="/organizations">
-              <Icon name="server" size={14} /> Organization access
-            </Link>
-          </>
-        }
         id="nanogres-organization-switcher"
         label="Organization"
-        onValueChange={(value) => void selectOrganization(value)}
-        options={choices.map((organization) => ({
-          value: organization.organizationId,
-          label: organization.organizationName,
-          description: `${organization.role} · Organization databases`,
-          icon: <Icon name="server" size={16} />,
-        }))}
+        onValueChange={(value) => {
+          if (value === ORGANIZATION_ACCESS_ACTION) {
+            router.push("/organizations");
+            return;
+          }
+          void selectOrganization(value);
+        }}
+        options={[
+          ...choices.map((organization) => ({
+            value: organization.organizationId,
+            label: organization.organizationName,
+            description: `${organization.role} · Databases`,
+            icon: <Icon name="server" size={16} />,
+          })),
+          {
+            value: ORGANIZATION_ACCESS_ACTION,
+            label: "Organization access",
+            searchLabel: "Organization access",
+            icon: <Icon name="server" size={16} />,
+            kind: "action" as const,
+          },
+        ]}
         value={fallbackId}
       />
+      {error ? (
+        <div className={styles.error} role="alert">
+          {error}
+        </div>
+      ) : null}
     </div>
   );
 }
