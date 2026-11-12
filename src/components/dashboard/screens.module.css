@@ -953,9 +953,9 @@
   justify-content: flex-end;
 }
 
-.previewFormActions button,
-.previewInlineForm button,
-.backupPreviewActions button {
+.previewFormActions button:disabled,
+.previewInlineForm button:disabled,
+.backupPreviewActions button:disabled {
   min-height: 36px;
   padding: 0 12px;
   border: 1px solid var(--line-strong);
