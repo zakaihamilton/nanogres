@@ -1,3 +1,4 @@
+// biome-ignore-all lint/a11y/noNoninteractiveTabindex: Keyboard-focusable dashboard regions allow keyboard scrolling of wide tables.
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -13,7 +14,6 @@ import { formatBytes, type DatabaseStorage, type StorageDisk } from "./storage-c
 import styles from "./live-screens.module.css";
 import { TENANT_NAME_MAX_LENGTH } from "@/lib/tenant-names";
 
-/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Keyboard-focusable regions let users scroll wide data tables on small screens. */
 export type Database = DatabaseStorage & {
   name: string;
   owner: string;

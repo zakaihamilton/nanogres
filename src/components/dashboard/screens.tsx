@@ -1,3 +1,4 @@
+// biome-ignore-all lint/a11y/noNoninteractiveTabindex: Keyboard-focusable dashboard regions allow keyboard scrolling of wide tables.
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Icon } from "./icons";
 import { PanelFrame } from "./panel-frame";
@@ -15,7 +16,6 @@ import {
   LiveOverviewScreen,
 } from "./live-screens";
 
-/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Keyboard-focusable regions let users scroll wide data tables on small screens. */
 
 type ScreenMode = "live" | "preview";
 

@@ -1,3 +1,4 @@
+// biome-ignore-all lint/a11y/noNoninteractiveTabindex: The code tabpanel is keyboard-focusable for scrolling and navigation.
 "use client";
 
 import { useState, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";

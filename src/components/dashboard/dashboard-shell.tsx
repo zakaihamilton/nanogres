@@ -277,7 +277,7 @@ export function DashboardShell({
               >
                 <Icon name="search" size={14} />
                 <span>Commands</span>
-                <kbd aria-hidden="true" className={styles.cmdKey}>⌘K</kbd>
+                <kbd className={styles.cmdKey}>⌘K</kbd>
               </button>
               {!previewMode ? <ThemeControl /> : null}
             </div>

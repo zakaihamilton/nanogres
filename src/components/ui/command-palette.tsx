@@ -33,7 +33,7 @@ export function CommandPalette({
   const inputRef = useRef<HTMLInputElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const paletteRef = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   useEffect(() => {
@@ -276,7 +276,7 @@ export function CommandPalette({
           <kbd className={styles.shortcut}>ESC</kbd>
         </div>
 
-        <ul
+        <div
           aria-label="Commands"
           className={styles.list}
           id="command-list"
@@ -284,12 +284,12 @@ export function CommandPalette({
           role="listbox"
         >
           {filteredItems.length === 0 ? (
-            <li className={styles.empty}>No commands or databases found</li>
+            <div className={styles.empty}>No commands or databases found</div>
           ) : (
             filteredItems.map((item, index) => {
               const isSelected = index === selectedIndex;
               return (
-                <li key={item.id} role="presentation">
+                <div key={item.id}>
                   <button
                     ref={(element) => {
                       itemRefs.current[index] = element;
@@ -312,11 +312,11 @@ export function CommandPalette({
                     </span>
                     {item.badge ? <span className={styles.itemBadge}>{item.badge}</span> : null}
                   </button>
-                </li>
+                </div>
               );
             })
           )}
-        </ul>
+        </div>
       </div>
     </div>
   );

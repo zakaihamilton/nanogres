@@ -1,3 +1,4 @@
+// biome-ignore-all lint/a11y/noNoninteractiveTabindex: Tab panels are keyboard-focusable by the ARIA tabs pattern.
 "use client";
 
 import {

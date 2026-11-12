@@ -68,7 +68,7 @@ export function OrganizationSwitcher({
 
   if (!fallbackId) {
     return (
-      <div aria-label="No organization access" className={styles.trigger}>
+      <div className={styles.trigger}>
         <span className={styles.iconWrap}>
           <Icon name="server" size={16} />
         </span>
