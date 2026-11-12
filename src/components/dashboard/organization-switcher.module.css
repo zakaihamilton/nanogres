@@ -3,6 +3,10 @@
   width: 100%;
 }
 
+.contextSwitcher {
+  width: 100%;
+}
+
 .trigger {
   display: flex;
   width: 100%;

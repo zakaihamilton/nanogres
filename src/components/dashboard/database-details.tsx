@@ -10,6 +10,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Dialog } from "panel-frame-ui";
 import { Icon } from "./icons";
 import { formatBytes } from "./storage-capacity";
 import { ConnectionModal } from "@/components/ui/connection-modal";
@@ -132,23 +133,7 @@ export function DatabaseDetails({ databaseName }: { databaseName: string }) {
     "id SERIAL PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT NOW(), name TEXT NOT NULL",
   );
   const [isDdlSaving, setIsDdlSaving] = useState(false);
-  const createTableDialogRef = useRef<HTMLDialogElement>(null);
   const newTableNameInputRef = useRef<HTMLInputElement>(null);
-  const createTableOpenerRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!createTableModal) return;
-    const dialog = createTableDialogRef.current;
-    if (!dialog) return;
-    const opener = createTableOpenerRef.current;
-    if (!dialog.open) dialog.showModal();
-    newTableNameInputRef.current?.focus();
-
-    return () => {
-      if (dialog.open) dialog.close();
-      if (opener?.isConnected) opener.focus();
-    };
-  }, [createTableModal]);
 
   // Load database info from fleet overview
   const dbQuery = useApiData<{ databases: Database[] }>("/api/nanogres/databases");
@@ -377,11 +362,7 @@ export function DatabaseDetails({ databaseName }: { databaseName: string }) {
               Inspect tables, columns, indexes, and run DDL operations.
             </span>
             <Button
-              onClick={() => {
-                createTableOpenerRef.current =
-                  document.activeElement instanceof HTMLElement ? document.activeElement : null;
-                setCreateTableModal(true);
-              }}
+              onClick={() => setCreateTableModal(true)}
               variant="primary"
             >
               <Icon name="plus" size={14} /> Create Table
@@ -658,23 +639,14 @@ export function DatabaseDetails({ databaseName }: { databaseName: string }) {
 
       {/* Create Table Modal Dialog */}
       {createTableModal ? (
-        <>
-          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- Backdrop clicks close the dialog; Escape and Cancel remain available. */}
-          <dialog
-            ref={createTableDialogRef}
-            aria-labelledby="create-table-title"
-            className={styles.modalContainer}
-            onCancel={(event) => {
-              event.preventDefault();
-              setCreateTableModal(false);
-            }}
-            onClick={(event) => {
-              if (event.target === event.currentTarget) setCreateTableModal(false);
-            }}
-          >
-            <h2 id="create-table-title" style={{ fontSize: 17, marginBottom: 12 }}>
-              Create Table in “{databaseName}”
-            </h2>
+        <Dialog
+          className={styles.modalContainer}
+          description="Define a name and columns for the new table."
+          initialFocusRef={newTableNameInputRef}
+          onOpenChange={setCreateTableModal}
+          open
+          title={`Create Table in “${databaseName}”`}
+        >
             <form onSubmit={handleCreateTable}>
               <div className={styles.formField} style={{ marginBottom: 12 }}>
                 <label htmlFor="new-tbl-name">Table name</label>
@@ -706,8 +678,7 @@ export function DatabaseDetails({ databaseName }: { databaseName: string }) {
                 </Button>
               </div>
             </form>
-          </dialog>
-        </>
+        </Dialog>
       ) : null}
 
       <ConnectionModal

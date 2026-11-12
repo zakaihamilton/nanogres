@@ -102,7 +102,6 @@ export function DashboardShell({
 }) {
   const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [sidebarVisible, setSidebarVisible] = useState(true);
   const [databaseNames, setDatabaseNames] = useState<string[]>(() =>
     previewMode ? ["app_main", "event_store", "sandbox"] : [],
   );
@@ -143,22 +142,10 @@ export function DashboardShell({
     <ToastProvider>
       <PanelFrameDashboardShell
         brand={
-          <Link
-            aria-label="Nanogres overview"
-            className="pf-brand"
-            href="/overview"
-            onClick={
-              previewMode
-                ? (event) => {
-                    event.preventDefault();
-                    onPreviewNavigate?.("/overview");
-                  }
-                : undefined
-            }
-          >
+          <span className="pf-brand">
             <Image alt="" className={styles.brandMark} src="/brand-icon.png" width={32} height={32} />
             <span className={styles.brandName}>nanogres</span>
-          </Link>
+          </span>
         }
         sidebarContext={
           <OrganizationSwitcher
@@ -205,7 +192,6 @@ export function DashboardShell({
             </nav>
           </div>
         }
-        sidebarVisible={sidebarVisible}
         sidebarFooter={
           <>
             {previewMode ? (
@@ -244,23 +230,6 @@ export function DashboardShell({
         toolbar={
           <>
             <div className={styles.topbarStart}>
-              <Tooltip
-                label={sidebarVisible ? "Collapse sidebar" : "Expand sidebar"}
-                placement="bottom"
-              >
-                <button
-                  aria-controls="pf-dashboard-sidebar"
-                  aria-expanded={sidebarVisible}
-                  aria-label={
-                    sidebarVisible ? "Collapse navigation sidebar" : "Expand navigation sidebar"
-                  }
-                  className={styles.sidebarToggle}
-                  onClick={() => setSidebarVisible((visible) => !visible)}
-                  type="button"
-                >
-                  <Icon name={sidebarVisible ? "sidebarCollapse" : "sidebarExpand"} size={18} />
-                </button>
-              </Tooltip>
               <div className={styles.breadcrumbs}>
                 <Tooltip label="Go to overview" placement="bottom">
                   <Link
