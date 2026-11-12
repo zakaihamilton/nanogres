@@ -1,6 +1,7 @@
 {
   "extends": ["stylelint-config-standard"],
   "rules": {
+    "selector-pseudo-class-no-unknown": [true, { "ignorePseudoClasses": ["global"] }],
     "selector-class-pattern": null,
     "no-descending-specificity": null,
     "alpha-value-notation": null,
