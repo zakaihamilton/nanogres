@@ -1,14 +1,19 @@
+// biome-ignore-all lint/a11y/noNoninteractiveTabindex: Keyboard-focusable dashboard regions allow keyboard scrolling of wide tables.
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
+import {
+  AlertDialog,
+  Button as PanelButton,
+  PageHeader as PanelPageHeader,
+} from "panel-frame-ui";
 import { Tooltip } from "@/components/ui/tooltip";
 import { PanelFrame } from "./panel-frame";
 import { formatBytes, type DatabaseStorage, type StorageDisk } from "./storage-capacity";
 import styles from "./live-screens.module.css";
 import { TENANT_NAME_MAX_LENGTH } from "@/lib/tenant-names";
 
-/* eslint-disable jsx-a11y/no-noninteractive-tabindex -- Keyboard-focusable regions let users scroll wide data tables on small screens. */
 export type Database = DatabaseStorage & {
   name: string;
   owner: string;
@@ -161,16 +166,7 @@ export function PageHeader({
   description: string;
   action?: ReactNode;
 }) {
-  return (
-    <div className={styles.pageHeader}>
-      <div>
-        <p className={styles.eyebrow}>{eyebrow}</p>
-        <h1>{title}</h1>
-        <p className={styles.description}>{description}</p>
-      </div>
-      {action}
-    </div>
-  );
+  return <PanelPageHeader actions={action} description={description} eyebrow={eyebrow} title={title} />;
 }
 
 export function PrimaryLink({ href, children }: { href: string; children: ReactNode }) {
@@ -197,15 +193,15 @@ export function Button({
   type?: "button" | "submit";
 }) {
   return (
-    <button
+    <PanelButton
       aria-label={ariaLabel}
-      className={`${styles.button} ${styles[variant]}`}
       disabled={disabled}
       onClick={onClick}
       type={type}
+      variant={variant}
     >
       {children}
-    </button>
+    </PanelButton>
   );
 }
 
@@ -369,20 +365,9 @@ export function DeleteDatabaseDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const [confirmationName, setConfirmationName] = useState("");
   const [copyStatus, setCopyStatus] = useState("");
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (!dialog.open) dialog.showModal();
-    nameInputRef.current?.focus();
-    return () => {
-      if (dialog.open) dialog.close();
-    };
-  }, []);
 
   async function copyDatabaseName() {
     try {
@@ -400,25 +385,19 @@ export function DeleteDatabaseDialog({
   }
 
   return (
-    <dialog
-      aria-describedby="delete-database-warning"
+    <AlertDialog
       aria-busy={busy}
-      aria-labelledby="delete-database-title"
-      aria-modal="true"
       className={styles.dialog}
-      onCancel={(event) => {
-        event.preventDefault();
-        if (!busy) onCancel();
+      description="This permanently deletes the database and all of its data. This cannot be undone."
+      initialFocusRef={nameInputRef}
+      onOpenChange={(open) => {
+        if (!open && !busy) onCancel();
       }}
-      ref={dialogRef}
-      role="alertdialog"
+      open
+      title="Delete database?"
     >
       <div className={styles.dialogContent}>
         <p className={styles.dialogEyebrow}>DESTRUCTIVE ACTION</p>
-        <h2 id="delete-database-title">Delete database?</h2>
-        <p className={styles.dialogWarning} id="delete-database-warning">
-          This permanently deletes the database and all of its data. This cannot be undone.
-        </p>
         <div className={styles.dialogNameGroup}>
           <span className={styles.dialogNameLabel}>Database name</span>
           <div className={styles.dialogNameRow}>
@@ -467,7 +446,7 @@ export function DeleteDatabaseDialog({
           </div>
         </form>
       </div>
-    </dialog>
+    </AlertDialog>
   );
 }
 

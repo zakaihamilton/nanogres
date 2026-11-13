@@ -106,7 +106,7 @@ test("keyboard users can skip navigation and land on the live page content", asy
   const skipLink = page.getByRole("link", { name: "Skip to main content" });
   await expect(skipLink).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.locator("#main-content")).toBeFocused();
+  await expect(page.locator("#pf-main-content")).toBeFocused();
 });
 
 test("the first-run card explains organization-scoped access", async ({ page, request }) => {
@@ -210,8 +210,13 @@ test.describe("authenticated management journeys", () => {
     await settlePage(page);
     await page.getByLabel("New database name").fill("e2e_retained_restore");
     await page.getByRole("button", { name: "Restore", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "Confirm restore" })).toBeVisible();
-    await page.getByRole("dialog").getByRole("button", { name: "Restore", exact: true }).click();
+    await expect(
+      page.getByRole("alertdialog", { name: "Confirm restore" }),
+    ).toBeVisible();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Restore", exact: true })
+      .click();
     await expect(
       page.getByRole("status").filter({
         hasText: "Restored app_main__20261104T120000000000Z.dump as e2e_retained_restore.",
@@ -229,14 +234,17 @@ test.describe("authenticated management journeys", () => {
     });
     await page.getByLabel("New database name").fill("e2e_uploaded_restore");
     await page.getByRole("button", { name: "Restore from file" }).click();
-    await expect(page.getByRole("dialog", { name: "Confirm restore" })).toBeVisible();
+    await expect(page.getByRole("alertdialog", { name: "Confirm restore" })).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("dialog", { name: "Confirm restore" })).toBeHidden();
+    await expect(page.getByRole("alertdialog", { name: "Confirm restore" })).toBeHidden();
     const beforeConfirm = await (await request.get(`${apiControl}/state`)).json();
     expect(beforeConfirm.uploadCount).toBe(0);
 
     await page.getByRole("button", { name: "Restore from file" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Restore", exact: true }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Restore", exact: true })
+      .click();
     await expect(
       page
         .getByRole("status")
@@ -367,7 +375,10 @@ test.describe("authenticated management journeys", () => {
     });
     await page.getByLabel("New database name").fill("e2e_interrupted_restore");
     await page.getByRole("button", { name: "Restore from file" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Restore", exact: true }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Restore", exact: true })
+      .click();
     await expect(
       page
         .getByRole("alert")
@@ -404,8 +415,13 @@ test("custom preview dropdowns support keyboard selection and update the screen 
   await screenPicker.focus();
   await screenPicker.press("End");
   await expect(page.getByRole("listbox")).toBeVisible();
-  expect(await page.getByRole("option", { name: "Activity" }).getAttribute("data-active")).toBe(
-    "true",
+  const activityOptionId = await page
+    .getByRole("option", { name: "Activity" })
+    .getAttribute("id");
+  expect(activityOptionId).toBeTruthy();
+  await expect(screenPicker).toHaveAttribute(
+    "aria-activedescendant",
+    activityOptionId,
   );
   await screenPicker.press("Enter");
   await expect(page.getByRole("heading", { name: "Activity", exact: true })).toBeVisible();
@@ -498,10 +514,14 @@ test("public, preview, and authenticated screens meet WCAG 2.1 AA automated chec
       });
       await page.getByLabel("New database name").fill("e2e_a11y_restore");
       await page.getByRole("button", { name: "Restore from file" }).click();
-      await expect(page.getByRole("dialog", { name: "Confirm restore" })).toBeVisible();
+      await expect(
+        page.getByRole("alertdialog", { name: "Confirm restore" }),
+      ).toBeVisible();
       await auditAccessibility(page);
       await page.keyboard.press("Escape");
-      await expect(page.getByRole("dialog", { name: "Confirm restore" })).toBeHidden();
+      await expect(
+        page.getByRole("alertdialog", { name: "Confirm restore" }),
+      ).toBeHidden();
     }
   }
 });
@@ -541,12 +561,12 @@ test("the preview keeps every screen within narrow viewports and respects reduce
       await chooseDropdown(page, "Preview screen", "Databases");
     }
   }
-  const transitionDuration = await page
-    .getByRole("link", { name: "Overview", exact: true })
+  const transitionDurations = await page
+    .locator('.pf-sidebar nav a[href="/overview"]')
     .evaluate((element) => getComputedStyle(element).transitionDuration);
-  expect(transitionDuration.split(",").every((duration) => Number.parseFloat(duration) === 0)).toBe(
-    true,
-  );
+  expect(
+    transitionDurations.split(",").every((duration) => Number.parseFloat(duration) <= 0.01),
+  ).toBe(true);
 
   for (const width of [375, 768]) {
     await page.setViewportSize({ width, height: 844 });

@@ -246,24 +246,28 @@
 }
 
 .modalContainer {
+  width: min(560px, calc(100vw - 24px));
+  max-width: min(560px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
   margin: auto;
-  background: var(--surface-raised);
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  padding: 24px;
-  max-width: 520px;
-  width: min(520px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
-  overflow: auto;
-  box-shadow:
-    var(--shadow-soft),
-    0 16px 40px rgb(0 0 0 / 20%);
-  animation: scale-up 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
-.modalContainer::backdrop {
-  background: rgb(0 0 0 / 45%);
-  backdrop-filter: blur(2px);
+.modalContainer :global(.pf-dialog-panel) {
+  max-height: calc(100dvh - 32px);
+  border-radius: 12px;
+}
+
+.modalContainer :global(.pf-dialog-header) {
+  padding: 20px 24px 0;
+}
+
+.modalContainer :global(.pf-dialog-body) {
+  padding: 0 24px 24px;
 }
 
 .modalForm {

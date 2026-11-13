@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import type { ReactNode } from "react";
+import { ThemeProvider } from "panel-frame-ui";
 import { THEME_COOKIE, THEMES, type Theme } from "@/lib/theme";
 import "./globals.css";
+
+const themePersistence = { type: "cookie" as const, name: THEME_COOKIE };
 
 export const metadata: Metadata = {
   title: {
@@ -19,7 +22,15 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
   return (
     <html lang="en" data-theme={theme} suppressHydrationWarning>
-      <body>{children}</body>
+      <body>
+        <ThemeProvider
+          initialTheme={theme}
+          persistence={themePersistence}
+          systemMode="system"
+        >
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

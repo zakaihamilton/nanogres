@@ -321,35 +321,6 @@
   gap: 13px;
 }
 
-.sidebarToggle {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ink-muted);
-  cursor: pointer;
-  transition:
-    background-color 140ms ease,
-    border-color 140ms ease,
-    color 140ms ease;
-}
-
-.sidebarToggle:hover {
-  border-color: var(--line);
-  background: var(--surface-muted);
-  color: var(--ink);
-}
-
-.sidebarToggle:focus-visible {
-  outline: 2px solid var(--green);
-  outline-offset: 2px;
-}
-
 .breadcrumbs,
 .topbarActions {
   display: flex;
@@ -611,5 +582,35 @@
   .frame,
   .sidebar {
     transition: none;
+  }
+}
+
+
+@media (width <= 480px) {
+  .topbarActions {
+    gap: 6px;
+  }
+
+  .breadcrumbs {
+    gap: 5px;
+    letter-spacing: 0.04em;
+  }
+
+  .crumbLink {
+    padding: 4px 5px;
+    letter-spacing: 0.04em;
+  }
+
+  .previewTag,
+  .searchTrigger > span,
+  .searchTrigger .cmdKey {
+    display: none;
+  }
+
+  .searchTrigger {
+    width: 40px;
+    height: 40px;
+    justify-content: center;
+    padding: 0;
   }
 }

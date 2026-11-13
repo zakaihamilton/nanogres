@@ -353,6 +353,12 @@
   gap: 14px;
 }
 
+.telemetryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .tableWrap {
   width: 100%;
   overflow-x: auto;
@@ -441,7 +447,7 @@
   text-align: right;
 }
 
-.actionCell .button {
+.actionCell :global(.pf-button) {
   min-height: 29px;
   padding: 0 9px;
   font-size: 10px;
@@ -533,8 +539,8 @@
   gap: 9px;
 }
 
-.formRow .button,
-.inlineForm .button {
+.formRow :global(.pf-button),
+.inlineForm :global(.pf-button) {
   flex: 0 0 auto;
   white-space: nowrap;
 }
@@ -789,28 +795,54 @@
 }
 
 .dialog {
-  width: min(460px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
+  width: min(560px, calc(100vw - 24px));
+  max-width: min(560px, calc(100vw - 24px));
   max-height: calc(100dvh - 32px);
   margin: auto;
   padding: 0;
-  overflow: auto;
-  border: 1px solid var(--line-strong);
-  border-radius: 14px;
-  background: var(--surface);
+  overflow: visible;
+  border: 0;
+  background: transparent;
   color: var(--ink);
-  box-shadow: var(--shadow-soft);
+  box-shadow: none;
 }
 
-.dialog::backdrop {
-  background: rgb(9 17 13 / 58%);
-  backdrop-filter: blur(2px);
+.dialog :global(.pf-dialog-panel) {
+  max-height: calc(100dvh - 32px);
+  border-color: var(--line-strong);
+  border-radius: 14px;
+}
+
+.dialog :global(.pf-dialog-header) {
+  padding: 20px 24px 0;
+}
+
+.dialog :global(.pf-dialog-heading h2) {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 660;
+  letter-spacing: -0.045em;
+}
+
+.dialog :global(.pf-dialog-heading p) {
+  margin: 12px 0 0;
+  padding: 11px 12px;
+  border: 1px solid var(--red-pale);
+  border-radius: 9px;
+  background: var(--red-pale);
+  color: var(--red);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.dialog :global(.pf-dialog-body) {
+  padding: 0 24px 24px;
 }
 
 .dialogContent {
   display: grid;
   gap: 15px;
-  padding: clamp(20px, 4vw, 26px);
+  padding: 0;
 }
 
 .dialogEyebrow {
@@ -819,24 +851,6 @@
   font-size: 9px;
   font-weight: 760;
   letter-spacing: 0.12em;
-}
-
-.dialogContent h2 {
-  margin: -7px 0 0;
-  font-size: 22px;
-  font-weight: 660;
-  letter-spacing: -0.045em;
-}
-
-.dialogWarning {
-  margin: 0;
-  padding: 11px 12px;
-  border: 1px solid var(--red-pale);
-  border-radius: 9px;
-  background: var(--red-pale);
-  color: var(--red);
-  font-size: 11px;
-  line-height: 1.55;
 }
 
 .dialogNameGroup {
@@ -942,10 +956,13 @@
   }
 
   .metrics,
-  .telemetryGrid,
   .backupSummary,
   .formGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .telemetryGrid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .pageHeader > :last-child {
@@ -981,7 +998,7 @@
     flex-direction: column;
   }
 
-  .dialogActions .button {
+  .dialogActions :global(.pf-button) {
     width: 100%;
   }
 
@@ -1191,12 +1208,6 @@
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgb(22, 115, 93, 0);
   }
-}
-
-.telemetryGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
 }
 
 .telemetryCard {

@@ -6,53 +6,7 @@
   white-space: nowrap;
 }
 
-.label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.select {
-  min-height: 34px;
-  min-width: 90px;
-  padding: 0 9px 0 10px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--surface);
-  color: var(--ink-soft);
-  cursor: pointer;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
-  transition:
-    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
-}
-
-.select:hover {
-  background: var(--surface-muted);
-  border-color: var(--line-strong);
-  color: var(--ink);
-  transform: translateY(-1px);
-}
-
-.select:active {
-  transform: translateY(0) scale(0.98);
-}
-
-.select:focus-visible {
+.control :global(.pf-select-trigger:focus-visible) {
   outline: 2px solid var(--green);
   outline-offset: 2px;
-}
-
-@media (width <= 540px) {
-  .label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    white-space: nowrap;
-    clip-path: inset(50%);
-  }
 }

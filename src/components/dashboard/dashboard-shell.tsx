@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { DashboardShell as PanelFrameDashboardShell } from "panel-frame-ui";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -101,7 +102,6 @@ export function DashboardShell({
 }) {
   const pathname = usePathname();
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [sidebarVisible, setSidebarVisible] = useState(true);
   const [databaseNames, setDatabaseNames] = useState<string[]>(() =>
     previewMode ? ["app_main", "event_store", "sandbox"] : [],
   );
@@ -110,28 +110,28 @@ export function DashboardShell({
   function handleBreadcrumbNavigate(event: MouseEvent<HTMLAnchorElement>, href: string) {
     if (!previewMode || !onPreviewNavigate) return;
     event.preventDefault();
-    onPreviewNavigate?.(href);
+    onPreviewNavigate(href);
   }
 
   useEffect(() => {
     if (previewMode) return;
     fetch("/api/nanogres/databases")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.databases && Array.isArray(d.databases)) {
-          setDatabaseNames(d.databases.map((db: { name: string }) => db.name));
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (data?.databases && Array.isArray(data.databases)) {
+          setDatabaseNames(data.databases.map((database: { name: string }) => database.name));
         }
       })
       .catch(() => {
-        // ignore
+        // Ignore unavailable database metadata.
       });
   }, [previewMode]);
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setPaletteOpen((prev) => !prev);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((previous) => !previous);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -140,135 +140,96 @@ export function DashboardShell({
 
   return (
     <ToastProvider>
-      <div className={`${styles.frame} ${sidebarVisible ? "" : styles.frameSidebarHidden}`}>
-        <a className={styles.skipLink} href="#main-content">
-          Skip to main content
-        </a>
-        <aside
-          aria-hidden={!sidebarVisible}
-          aria-label="Main navigation"
-          className={styles.sidebar}
-          id="dashboard-sidebar"
-          inert={!sidebarVisible}
-        >
-          <Link
-            aria-label="Nanogres overview"
-            className={styles.brand}
-            href="/overview"
-            onClick={
-              previewMode
-                ? (event) => {
-                    event.preventDefault();
-                    onPreviewNavigate?.("/overview");
-                  }
-                : undefined
-            }
-          >
-            <Image
-              alt=""
-              className={styles.brandMark}
-              src="/brand-icon.png"
-              width={32}
-              height={32}
-            />
+      <PanelFrameDashboardShell
+        brand={
+          <span className="pf-brand">
+            <Image alt="" className={styles.brandMark} src="/brand-icon.png" width={32} height={32} />
             <span className={styles.brandName}>nanogres</span>
-          </Link>
-
+          </span>
+        }
+        sidebarContext={
           <OrganizationSwitcher
             currentOrganizationId={currentOrganization?.id}
             currentOrganizationName={currentOrganization?.name}
             preview={previewMode}
             organizations={organizations}
           />
-
-          <p className={styles.sectionLabel}>Manage</p>
-          <nav className={styles.navigation}>
-            {navigation
-              .filter((item) => !previewMode || item.href !== "/sql")
-              .map((item) => {
-                const active = isActive(pathname, item, activePath);
-                return (
-                  <Link
-                    aria-current={active ? "page" : undefined}
-                    aria-disabled={(previewMode && !onPreviewNavigate) || undefined}
-                    className={`${styles.navItem} ${active ? styles.navItemActive : ""}`}
-                    href={item.href}
-                    onClick={
-                      previewMode
-                        ? (event) => {
-                            event.preventDefault();
-                            onPreviewNavigate?.(item.href);
-                          }
-                        : undefined
-                    }
-                    key={item.href}
-                  >
-                    <Icon name={item.icon} size={18} />
-                    <span>{item.label}</span>
-                    {item.href === "/databases" && previewMode ? (
-                      <span aria-hidden="true" className={styles.navCount}>
-                        {databaseNames.length}
-                      </span>
-                    ) : null}
-                  </Link>
-                );
-              })}
-          </nav>
-
-          <div className={styles.sidebarSpacer} />
-          {previewMode ? (
-            <div className={styles.sidebarStatus}>
-              <span className={styles.statusDot} />
-              <span>
-                <strong>Preview mode</strong>
-                <small>Synthetic data only</small>
-              </span>
-            </div>
-          ) : null}
-          <div className={styles.profile}>
-            <span aria-hidden="true" className={styles.avatar}>
-              {initials(account.name) || "N"}
-            </span>
-            <span className={styles.profileText}>
-              <strong>{account.name}</strong>
-              {account.email ? <small>{account.email}</small> : null}
-            </span>
-            {!previewMode ? (
-              <form action="/api/auth/logout" method="post">
-                <Tooltip label="Sign out">
-                  <button aria-label="Sign out" className={styles.signOut} type="submit">
-                    ↗
-                  </button>
-                </Tooltip>
-              </form>
-            ) : (
-              <span aria-label="Preview only" className={styles.previewUserMark} role="img">
-                <Icon name="sparkle" size={16} />
-              </span>
-            )}
+        }
+        navigation={
+          <div className="pf-sidebar-group">
+            <p className="pf-sidebar-group-label">Manage</p>
+            <nav aria-label="Main navigation">
+              {navigation
+                .filter((item) => !previewMode || item.href !== "/sql")
+                .map((item) => {
+                  const active = isActive(pathname, item, activePath);
+                  return (
+                    <Link
+                      aria-current={active ? "page" : undefined}
+                      aria-disabled={(previewMode && !onPreviewNavigate) || undefined}
+                      className="pf-sidebar-link"
+                      href={item.href}
+                      onClick={
+                        previewMode
+                          ? (event) => {
+                              event.preventDefault();
+                              onPreviewNavigate?.(item.href);
+                            }
+                          : undefined
+                      }
+                      key={item.href}
+                    >
+                      <Icon name={item.icon} size={18} />
+                      <span>{item.label}</span>
+                      {item.href === "/databases" && previewMode ? (
+                        <span aria-hidden="true" className={styles.navCount}>
+                          {databaseNames.length}
+                        </span>
+                      ) : null}
+                    </Link>
+                  );
+                })}
+            </nav>
           </div>
-        </aside>
-
-        <div className={styles.mainPanel}>
-          <header className={styles.topbar}>
+        }
+        sidebarFooter={
+          <>
+            {previewMode ? (
+              <div className={styles.sidebarStatus}>
+                <span className={styles.statusDot} />
+                <span>
+                  <strong>Preview mode</strong>
+                  <small>Synthetic data only</small>
+                </span>
+              </div>
+            ) : null}
+            <div className={styles.profile}>
+              <span aria-hidden="true" className={styles.avatar}>
+                {initials(account.name) || "N"}
+              </span>
+              <span className={styles.profileText}>
+                <strong>{account.name}</strong>
+                {account.email ? <small>{account.email}</small> : null}
+              </span>
+              {!previewMode ? (
+                <form action="/api/auth/logout" method="post">
+                  <Tooltip label="Sign out">
+                    <button aria-label="Sign out" className={styles.signOut} type="submit">
+                      ↗
+                    </button>
+                  </Tooltip>
+                </form>
+              ) : (
+                <span aria-label="Preview only" className={styles.previewUserMark} role="img">
+                  <Icon name="sparkle" size={16} />
+                </span>
+              )}
+            </div>
+          </>
+        }
+        toolbar={
+          <>
             <div className={styles.topbarStart}>
-              <Tooltip
-                label={sidebarVisible ? "Collapse sidebar" : "Expand sidebar"}
-                placement="bottom"
-              >
-                <button
-                  aria-controls="dashboard-sidebar"
-                  aria-expanded={sidebarVisible}
-                  aria-label={
-                    sidebarVisible ? "Collapse navigation sidebar" : "Expand navigation sidebar"
-                  }
-                  className={styles.sidebarToggle}
-                  onClick={() => setSidebarVisible((visible) => !visible)}
-                  type="button"
-                >
-                  <Icon name={sidebarVisible ? "sidebarCollapse" : "sidebarExpand"} size={18} />
-                </button>
-              </Tooltip>
               <div className={styles.breadcrumbs}>
                 <Tooltip label="Go to overview" placement="bottom">
                   <Link
@@ -281,13 +242,16 @@ export function DashboardShell({
                       : "ORGANIZATION"}
                   </Link>
                 </Tooltip>
-                {breadcrumbs.map((crumb, idx) => (
-                  <span key={idx} style={{ display: "inline-flex", alignItems: "center", gap: 9 }}>
+                {breadcrumbs.map((crumb, index) => (
+                  <span
+                    key={index}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 9 }}
+                  >
                     <span aria-hidden="true" className={styles.crumbSep}>
                       /
                     </span>
-                    {crumb.href && idx < breadcrumbs.length - 1 ? (
-                      <Tooltip label={`Go to ${crumb.label.toLowerCase()}`} placement="bottom">
+                    {crumb.href && index < breadcrumbs.length - 1 ? (
+                      <Tooltip label={"Go to " + crumb.label.toLowerCase()} placement="bottom">
                         <Link
                           className={styles.crumbLink}
                           href={crumb.href}
@@ -306,6 +270,7 @@ export function DashboardShell({
             </div>
             <div className={styles.topbarActions}>
               <button
+                aria-label="Commands ⌘K search"
                 className={styles.searchTrigger}
                 onClick={() => setPaletteOpen(true)}
                 type="button"
@@ -316,12 +281,11 @@ export function DashboardShell({
               </button>
               {!previewMode ? <ThemeControl /> : null}
             </div>
-          </header>
-          <main className={styles.mainContent} id="main-content" tabIndex={-1}>
-            {children}
-          </main>
-        </div>
-      </div>
+          </>
+        }
+      >
+        {children}
+      </PanelFrameDashboardShell>
       <CommandPalette
         databases={databaseNames}
         isOpen={paletteOpen}

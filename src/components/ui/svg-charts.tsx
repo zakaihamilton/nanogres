@@ -66,7 +66,7 @@ export function ConnectionGauge({
 
   return (
     <div className={styles.gaugeWrap} style={{ width: size, height: size * 0.88 }}>
-      <svg className={styles.gaugeSvg} height={size} width={size} viewBox={`0 0 ${size} ${size}`}>
+      <svg aria-hidden="true" className={styles.gaugeSvg} height={size} width={size} viewBox={`0 0 ${size} ${size}`}>
         <path className={styles.gaugeTrack} d={trackPath} strokeWidth={strokeWidth} />
         <path
           className={styles.gaugeValue}
@@ -127,7 +127,7 @@ export function StorageDonut({
 
   return (
     <div className={styles.donutWrap}>
-      <svg className={styles.donutSvg} height={size} width={size} viewBox={`0 0 ${size} ${size}`}>
+      <svg aria-hidden="true" className={styles.donutSvg} height={size} width={size} viewBox={`0 0 ${size} ${size}`}>
         <circle
           cx={center}
           cy={center}

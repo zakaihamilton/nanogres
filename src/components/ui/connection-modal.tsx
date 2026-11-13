@@ -1,6 +1,8 @@
+// biome-ignore-all lint/a11y/noNoninteractiveTabindex: The code tabpanel is keyboard-focusable for scrolling and navigation.
 "use client";
 
-import { useState, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useState, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { Dialog } from "panel-frame-ui";
 import { nanogresToast } from "./toast";
 import styles from "./connection-modal.module.css";
 
@@ -48,24 +50,7 @@ export function ConnectionModal({
 }) {
   const [tab, setTab] = useState<Tab>("uri");
   const [copied, setCopied] = useState(false);
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    const previouslyFocused =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    if (!dialog.open) dialog.showModal();
-    closeButtonRef.current?.focus();
-
-    return () => {
-      if (dialog.open) dialog.close();
-      if (previouslyFocused?.isConnected) previouslyFocused.focus();
-    };
-  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -186,35 +171,15 @@ PGPASSWORD="[YOUR_PASSWORD]"`;
   }
 
   return (
-    <>
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- Backdrop clicks close the dialog; Escape and the close button remain available. */}
-      <dialog
-        ref={dialogRef}
-        aria-labelledby="conn-modal-title"
-        className={styles.modal}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) onClose();
-        }}
-        onCancel={(event) => {
-          event.preventDefault();
-          onClose();
-        }}
-      >
-        <div className={styles.modalHeader}>
-          <h2 id="conn-modal-title" className={styles.modalTitle}>
-            Connect to “{database}”
-          </h2>
-          <button
-            ref={closeButtonRef}
-            className={styles.closeButton}
-            onClick={onClose}
-            type="button"
-            aria-label="Close modal"
-          >
-            ×
-          </button>
-        </div>
-        <div className={styles.modalBody}>
+    <Dialog
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      open={isOpen}
+      showCloseButton
+      title={`Connect to “${database}”`}
+    >
+      <div className={styles.modalBody}>
           <div aria-label="Connection examples" className={styles.tabs} role="tablist">
             {connectionTabs.map(([key, label], index) => (
               <button
@@ -265,8 +230,7 @@ PGPASSWORD="[YOUR_PASSWORD]"`;
               <> Runtime roles use the transaction-pooling port.</>
             )}
           </p>
-        </div>
-      </dialog>
-    </>
+      </div>
+    </Dialog>
   );
 }

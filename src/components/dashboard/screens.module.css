@@ -953,9 +953,9 @@
   justify-content: flex-end;
 }
 
-.previewFormActions button,
-.previewInlineForm button,
-.backupPreviewActions button {
+.previewFormActions button:disabled,
+.previewInlineForm button:disabled,
+.backupPreviewActions button:disabled {
   min-height: 36px;
   padding: 0 12px;
   border: 1px solid var(--line-strong);
@@ -1211,5 +1211,23 @@
   .table td {
     padding-right: 10px;
     padding-left: 10px;
+  }
+}
+
+.tableRegion {
+  min-width: 0;
+}
+
+.tableScrollHint {
+  display: none;
+}
+
+@media (width <= 720px) {
+  .tableScrollHint {
+    display: block;
+    margin: 8px 4px 0;
+    color: var(--ink-muted);
+    font-size: 11px;
+    text-align: right;
   }
 }
