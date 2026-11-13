@@ -37,6 +37,20 @@
   --red: light-dark(#a84e4c, #e1978e);
   --red-pale: light-dark(#fae9e7, #3b2524);
   --shadow-soft: light-dark(0 12px 32px rgb(25 48 38 / 5%), 0 12px 32px rgb(0 0 0 / 18%));
+  --pf-background: var(--canvas);
+  --pf-surface: var(--surface);
+  --pf-surface-raised: var(--surface-raised);
+  --pf-text: var(--ink);
+  --pf-muted: var(--ink-muted);
+  --pf-border: var(--line);
+  --pf-accent: var(--green);
+  --pf-accent-contrast: var(--on-green);
+  --pf-danger: var(--red);
+  --pf-danger-surface: var(--red-pale);
+  --pf-success: var(--green-strong);
+  --pf-success-surface: var(--green-pale);
+  --pf-warning: var(--amber);
+  --pf-warning-surface: var(--amber-pale);
 }
 
 :root[data-theme="light"] {

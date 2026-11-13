@@ -250,14 +250,7 @@
 }
 
 .card {
-  width: 100%;
-  padding: clamp(30px, 3.2vw, 40px);
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  background: color-mix(in srgb, var(--surface) 97%, transparent);
-  box-shadow:
-    0 28px 80px rgb(22 45 34 / 10%),
-    0 4px 12px rgb(22 45 34 / 4%);
+  max-width: 520px;
 }
 
 .loginIcon {
@@ -573,14 +566,21 @@
   }
 }
 
+@media (width <= 780px) {
+  .featureList,
+  .architectureCard {
+    display: none;
+  }
+
+  .intro {
+    gap: 0;
+  }
+}
+
 @media (width <= 480px) {
   .themeControl {
     top: 13px;
     right: 14px;
-  }
-
-  .card {
-    padding: 25px 22px;
   }
 
   .architectureCard {
