@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({ children }: Readonly<{ children: ReactNode }>) {
   const session = await getCurrentPerministerSession();
-  if (!session) redirect("/login");
+  if (!session) redirect("/login?next=%2Foverview");
 
   const name = [session.account.firstName, session.account.lastName].filter(Boolean).join(" ");
   const displayName = name || session.account.username || session.account.email || "Nanogres user";

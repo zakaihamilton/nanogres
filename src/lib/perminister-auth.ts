@@ -7,9 +7,6 @@ export const SESSION_COOKIE = "nanogres_session";
 export const LEGACY_WORKSPACE_COOKIE = "nanogres_workspace_id";
 export const ORGANIZATION_COOKIE = "nanogres_organization_id";
 export const LEGACY_WORKSPACE_NAMES_COOKIE = "nanogres_workspace_names";
-export const OAUTH_STATE_COOKIE = "nanogres_oauth_state";
-export const OAUTH_VERIFIER_COOKIE = "nanogres_oauth_verifier";
-export const OAUTH_COOKIE_MAX_AGE = 10 * 60;
 
 export type PerministerConfig = {
   baseUrl: string;
@@ -17,16 +14,6 @@ export type PerministerConfig = {
   clientSecret: string;
   appOrigin: string;
 };
-
-export type PerministerSessionGrant = {
-  authenticated: true;
-  sessionToken: string;
-  session: { expiresAt: string };
-};
-
-export type PerministerLoginResult =
-  | { success: true; sessionToken: string; expiresAt: string }
-  | { success: false; error: "invalid" | "rate_limited" | "unavailable" };
 
 type PerministerAccount = {
   subjectId: string;
@@ -133,21 +120,6 @@ export function isPerministerConfigured(): boolean {
   return getPerministerConfig() !== null;
 }
 
-export function isPerministerSessionGrant(value: unknown): value is PerministerSessionGrant {
-  if (typeof value !== "object" || value === null) return false;
-  const body = value as Record<string, unknown>;
-  if (typeof body.session !== "object" || body.session === null) return false;
-  const session = body.session as Record<string, unknown>;
-  return (
-    body.authenticated === true &&
-    typeof body.sessionToken === "string" &&
-    body.sessionToken.length > 0 &&
-    body.sessionToken.length <= 4096 &&
-    typeof session.expiresAt === "string" &&
-    Number.isFinite(Date.parse(session.expiresAt))
-  );
-}
-
 function isAccount(value: unknown): value is PerministerAccount {
   if (typeof value !== "object" || value === null) return false;
   const account = value as Record<string, unknown>;
@@ -226,52 +198,6 @@ function clientHeaders(config: PerministerConfig, token?: string): HeadersInit {
     "X-Perminister-Client-Id": config.clientId,
     "X-Perminister-Client-Secret": config.clientSecret,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
-
-export async function loginWithPerminister(
-  config: PerministerConfig,
-  identifier: string,
-  password: string,
-): Promise<PerministerLoginResult> {
-  let response: Response;
-  try {
-    response = await fetch(`${config.baseUrl}/api/auth/consumer/login`, {
-      method: "POST",
-      headers: {
-        ...clientHeaders(config),
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ identifier, password }),
-      cache: "no-store",
-      redirect: "error",
-      signal: AbortSignal.timeout(8_000),
-    });
-  } catch {
-    return { success: false, error: "unavailable" };
-  }
-
-  if (response.status === 429) return { success: false, error: "rate_limited" };
-  if (response.status === 400 || response.status === 401 || response.status === 403) {
-    return { success: false, error: "invalid" };
-  }
-  if (!response.ok) return { success: false, error: "unavailable" };
-
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch {
-    return { success: false, error: "unavailable" };
-  }
-  if (!isPerministerSessionGrant(body)) return { success: false, error: "unavailable" };
-
-  const expiresAt = Date.parse(body.session.expiresAt);
-  if (expiresAt <= Date.now()) return { success: false, error: "unavailable" };
-  return {
-    success: true,
-    sessionToken: body.sessionToken,
-    expiresAt: body.session.expiresAt,
   };
 }
 

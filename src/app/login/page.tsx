@@ -1,8 +1,10 @@
 import Image from "next/image";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AuthCard, AuthShell } from "panel-frame-ui";
 import { ThemeControl } from "@/components/theme/theme-control";
 import { getPerministerRecoveryUrl, isPerministerConfigured } from "@/lib/perminister-auth";
-import { passwordLoginAction } from "./actions";
+import { safeNanogresReturnTo } from "@/lib/perminister-sso";
 import styles from "./login.module.css";
 
 const messages: Record<string, string> = {
@@ -51,7 +53,11 @@ function SecurityIcon() {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string | string[]; loggedOut?: string | string[] }>;
+  searchParams: Promise<{
+    error?: string | string[];
+    loggedOut?: string | string[];
+    next?: string | string[];
+  }>;
 }) {
   const query = await searchParams;
   const configured = isPerministerConfigured();
@@ -59,6 +65,13 @@ export default async function LoginPage({
   const error = Array.isArray(query.error) ? query.error[0] : query.error;
   const loggedOut = Array.isArray(query.loggedOut) ? query.loggedOut[0] : query.loggedOut;
   const message = error ? messages[error] : undefined;
+  const next = safeNanogresReturnTo(Array.isArray(query.next) ? query.next[0] : query.next);
+  const loginQuery = new URLSearchParams();
+  if (next) loginQuery.set("next", next);
+  if (error || loggedOut) loginQuery.set("prompt", "login");
+  if (configured && !error && !loggedOut) {
+    redirect(`/api/auth/login${loginQuery.size ? `?${loginQuery}` : ""}`);
+  }
 
   return (
     <AuthShell
@@ -181,53 +194,15 @@ export default async function LoginPage({
 
           {configured ? (
             <>
-              <form action={passwordLoginAction} className={styles.credentialsForm}>
-                <label className={styles.field}>
-                  <span className={styles.fieldLabel}>Email or username</span>
-                  <input
-                    autoComplete="username"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    className={styles.input}
-                    maxLength={254}
-                    name="identifier"
-                    placeholder="you@example.com"
-                    required
-                    spellCheck={false}
-                    type="text"
-                  />
-                </label>
-                <label className={styles.field}>
-                  <span className={styles.fieldLabel}>Password</span>
-                  <input
-                    autoComplete="current-password"
-                    className={styles.input}
-                    maxLength={1024}
-                    name="password"
-                    placeholder="Enter your password"
-                    required
-                    type="password"
-                  />
-                </label>
-                {recoveryUrl ? (
-                  <a className={styles.recoveryLink} href={recoveryUrl}>
-                    Forgot password?
-                  </a>
-                ) : null}
-                <button className={styles.signInButton} type="submit">
-                  Sign in
-                  <span aria-hidden="true">→</span>
-                </button>
-              </form>
-
-              <div aria-hidden="true" className={styles.divider}>
-                <span>OR</span>
-              </div>
-
-              <a className={styles.singleSignOnButton} href="/api/auth/login">
-                Continue with Perminister
+              <Link className={styles.singleSignOnButton} href={`/api/auth/login?${loginQuery}`}>
+                {loggedOut ? "Sign in again with Perminister" : "Try again with Perminister"}
                 <span aria-hidden="true">↗</span>
-              </a>
+              </Link>
+              {recoveryUrl ? (
+                <a className={styles.recoveryLink} href={recoveryUrl}>
+                  Forgot your Perminister password?
+                </a>
+              ) : null}
             </>
           ) : (
             <button className={styles.signInButton} disabled type="button">

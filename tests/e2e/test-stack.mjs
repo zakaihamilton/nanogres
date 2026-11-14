@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes, sign as signBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
@@ -22,6 +22,16 @@ let identityState;
 let apiState;
 let uploadSequence = 0;
 const oauthCodes = new Map();
+const signingKeyId = "nanogres-e2e-signing-key";
+const { privateKey: oidcPrivateKey, publicKey: oidcPublicKey } = generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+});
+const oidcPublicJwk = {
+  ...(oidcPublicKey.export({ format: "jwk" })),
+  alg: "RS256",
+  kid: signingKeyId,
+  use: "sig",
+};
 
 function resetIdentityState() {
   identityState = { bootstrapRequired: false, deniedAction: null };
@@ -143,12 +153,20 @@ function identityPayload() {
   };
 }
 
-function sessionGrant() {
-  return {
-    authenticated: true,
-    sessionToken,
-    session: { expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() },
-  };
+function signTestIdToken(nonce) {
+  const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const header = encode({ alg: "RS256", typ: "JWT", kid: signingKeyId });
+  const now = Math.floor(Date.now() / 1000);
+  const payload = encode({
+    iss: identityOrigin,
+    sub: "e2e-user-1",
+    aud: clientId,
+    iat: now,
+    exp: now + 300,
+    nonce,
+  });
+  const input = `${header}.${payload}`;
+  return `${input}.${signBytes("RSA-SHA256", Buffer.from(input), oidcPrivateKey).toString("base64url")}`;
 }
 
 async function identityHandler(request, response) {
@@ -164,16 +182,43 @@ async function identityHandler(request, response) {
     sendJson(response, 200, { updated: true });
     return;
   }
+  if (url.pathname === "/.well-known/openid-configuration" && request.method === "GET") {
+    sendJson(response, 200, {
+      issuer: identityOrigin,
+      authorization_endpoint: `${identityOrigin}/oauth/authorize`,
+      token_endpoint: `${identityOrigin}/oauth/token`,
+      jwks_uri: `${identityOrigin}/.well-known/jwks.json`,
+      response_types_supported: ["code"],
+      id_token_signing_alg_values_supported: ["RS256"],
+      code_challenge_methods_supported: ["S256"],
+      token_endpoint_auth_methods_supported: ["client_secret_basic"],
+      scopes_supported: ["openid", "profile", "email", "perminister_api"],
+    });
+    return;
+  }
+  if (url.pathname === "/.well-known/jwks.json" && request.method === "GET") {
+    response.writeHead(200, {
+      "Cache-Control": "no-store",
+      "Content-Type": "application/jwk-set+json; charset=utf-8",
+    });
+    response.end(JSON.stringify({ keys: [oidcPublicJwk] }));
+    return;
+  }
   if (url.pathname === "/oauth/authorize" && request.method === "GET") {
     if (
       url.searchParams.get("client_id") !== clientId ||
-      url.searchParams.get("code_challenge_method") !== "S256"
+      url.searchParams.get("response_type") !== "code" ||
+      url.searchParams.get("scope") !== "openid profile email perminister_api" ||
+      url.searchParams.get("state")?.length !== 43 ||
+      url.searchParams.get("nonce")?.length !== 43 ||
+      url.searchParams.get("code_challenge_method") !== "S256" ||
+      url.searchParams.get("code_challenge")?.length !== 43
     ) {
       sendJson(response, 400, { error: "Invalid test OAuth request." });
       return;
     }
     const redirectUri = url.searchParams.get("redirect_uri") ?? "";
-    if (new URL(redirectUri).origin !== appOrigin) {
+    if (redirectUri !== `${appOrigin}/auth/perminister/callback`) {
       sendJson(response, 400, { error: "Unexpected test callback origin." });
       return;
     }
@@ -197,7 +242,9 @@ async function identityHandler(request, response) {
     oauthCodes.set(code, {
       challenge: form.get("code_challenge"),
       redirectUri: form.get("redirect_uri"),
-      state: form.get("state"),
+        state: form.get("state"),
+      nonce: form.get("nonce"),
+      clientId: form.get("client_id"),
     });
     const callback = new URL(form.get("redirect_uri"));
     callback.search = new URLSearchParams({ code, state: form.get("state") ?? "" }).toString();
@@ -205,38 +252,36 @@ async function identityHandler(request, response) {
     response.end();
     return;
   }
-  if (url.pathname === "/api/auth/consumer/token" && request.method === "POST") {
-    if (!hasClientHeaders(request)) {
-      sendJson(response, 401, { error: "Test client credentials are invalid." });
-      return;
-    }
-    const body = await readJson(request);
-    const code = oauthCodes.get(body.code);
-    const challenge = createHash("sha256")
-      .update(String(body.code_verifier ?? ""))
-      .digest("base64url");
-    if (!code || code.challenge !== challenge || body.grant_type !== "authorization_code") {
-      sendJson(response, 400, { error: "Invalid test OAuth code or verifier." });
-      return;
-    }
-    oauthCodes.delete(body.code);
-    sendJson(response, 200, sessionGrant());
-    return;
-  }
-  if (url.pathname === "/api/auth/consumer/login" && request.method === "POST") {
-    if (!hasClientHeaders(request)) {
-      sendJson(response, 401, { error: "Test client credentials are invalid." });
-      return;
-    }
-    const body = await readJson(request);
+  if (url.pathname === "/oauth/token" && request.method === "POST") {
+    const basic = /^Basic ([A-Za-z0-9+/]+={0,2})$/i.exec(request.headers.authorization ?? "");
+    const decoded = basic ? Buffer.from(basic[1], "base64").toString("utf8") : "";
+    const separator = decoded.indexOf(":");
+    const clientCredentials = separator >= 0
+      ? [decodeURIComponent(decoded.slice(0, separator)), decodeURIComponent(decoded.slice(separator + 1))]
+      : [];
+    const form = new URLSearchParams((await readBody(request)).toString("utf8"));
+    const code = oauthCodes.get(form.get("code"));
+    const challenge = createHash("sha256").update(form.get("code_verifier") ?? "").digest("base64url");
     if (
-      body.identifier !== "nanogres-e2e@example.test" ||
-      body.password !== "test-only-password-for-browser-tests"
+      clientCredentials[0] !== clientId ||
+      clientCredentials[1] !== clientSecret ||
+      form.get("grant_type") !== "authorization_code" ||
+      !code ||
+      code.clientId !== clientId ||
+      code.redirectUri !== form.get("redirect_uri") ||
+      code.challenge !== challenge
     ) {
-      sendJson(response, 401, { error: "Invalid test credentials." });
+      sendJson(response, 400, { error: "invalid_grant" });
       return;
     }
-    sendJson(response, 200, sessionGrant());
+    oauthCodes.delete(form.get("code"));
+    sendJson(response, 200, {
+      access_token: sessionToken,
+      token_type: "Bearer",
+      expires_in: 3600,
+      scope: "openid profile email perminister_api",
+      id_token: signTestIdToken(code.nonce),
+    });
     return;
   }
   if (url.pathname === "/api/auth/consumer/session" && request.method === "GET") {
@@ -626,6 +671,7 @@ const environment = {
   NANOGRES_APP_ORIGIN: appOrigin,
   NANOGRES_API_URL: apiOrigin,
   NANOGRES_API_TOKEN: apiToken,
+  NANOGRES_NEXT_DIST_DIR: ".next-e2e",
 };
 const nextBin = path.join(repositoryRoot, "node_modules/next/dist/bin/next");
 const next = spawn(

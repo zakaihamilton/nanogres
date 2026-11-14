@@ -40,9 +40,9 @@ async function chooseDropdown(page, label, optionLabel) {
 }
 
 async function signIn(page) {
-  await page.goto("/");
-  await page.getByRole("link", { name: "Open Dashboard" }).first().click();
-  await page.getByRole("link", { name: "Continue with Perminister" }).click();
+  await page.goto("/login");
+  await expect(page).toHaveURL(/127\.0\.0\.1:4311\/oauth\/authorize/);
+  await expect(page.getByLabel("Email or username")).toHaveCount(0);
   await page.getByRole("button", { name: "Continue as test admin" }).click();
   await expect(page).toHaveURL(/\/overview$/);
   await expect(page.getByRole("heading", { name: "Cluster Overview" })).toBeVisible();
@@ -82,19 +82,16 @@ test("welcome, sign-in route, and protected dashboard entry are discoverable", a
     }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Open Dashboard" }).first().click();
-  await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole("heading", { name: "Sign in to Nanogres" })).toBeVisible();
+  await expect(page).toHaveURL(/127\.0\.0\.1:4311\/oauth\/authorize/);
+  await expect(page.getByRole("heading", { name: "Perminister test sign-in" })).toBeVisible();
+  await expect(page.getByLabel("Password")).toHaveCount(0);
 
   await page.goto("/overview");
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/127\.0\.0\.1:4311\/oauth\/authorize/);
 });
 
-test("email and password sign-in creates an HTTP-only browser session", async ({ page }) => {
-  await page.goto("/login");
-  await page.getByLabel("Email or username").fill("nanogres-e2e@example.test");
-  await page.getByLabel("Password").fill("test-only-password-for-browser-tests");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/overview$/);
+test("Perminister OIDC sign-in creates an HTTP-only app-bound session", async ({ page }) => {
+  await signIn(page);
   const cookie = (await page.context().cookies()).find((item) => item.name === "nanogres_session");
   expect(cookie?.httpOnly).toBe(true);
   expect(cookie?.sameSite).toBe("Lax");

@@ -1,49 +1,65 @@
-import { createHash, randomBytes } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { getAppOrigin, getPerministerConfig } from "@/lib/perminister-auth";
 import {
-  getAppOrigin,
-  getPerministerConfig,
-  OAUTH_COOKIE_MAX_AGE,
-  OAUTH_STATE_COOKIE,
-  OAUTH_VERIFIER_COOKIE,
-} from "@/lib/perminister-auth";
+  createPerministerSsoTransaction,
+  perministerSsoCookieName,
+  safeNanogresReturnTo,
+  sealPerministerSsoTransaction,
+} from "@/lib/perminister-sso";
 
 export const runtime = "nodejs";
+const SSO_COOKIE_MAX_AGE = 10 * 60;
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const config = getPerministerConfig();
   const appOrigin = getAppOrigin();
+  const next = safeNanogresReturnTo(request.nextUrl.searchParams.get("next"));
   if (!config || !appOrigin) {
-    return NextResponse.redirect(
-      new URL("/login?error=setup", appOrigin ?? request.nextUrl.origin),
-    );
+    const error = new URLSearchParams({ error: "setup" });
+    if (next) error.set("next", next);
+    return NextResponse.redirect(new URL(`/login?${error}`, appOrigin ?? request.nextUrl.origin));
   }
 
-  const state = randomBytes(32).toString("base64url");
-  const verifier = randomBytes(32).toString("base64url");
-  const challenge = createHash("sha256").update(verifier).digest("base64url");
-  const callback = `${config.appOrigin}/auth/perminister/callback`;
+  const generated = createPerministerSsoTransaction();
+  const redirectUri = new URL("/auth/perminister/callback", config.appOrigin).toString();
   const authorizeUrl = new URL("/oauth/authorize", config.baseUrl);
+  const prompt = request.nextUrl.searchParams.get("prompt") === "login" ? "login" : undefined;
   authorizeUrl.search = new URLSearchParams({
     client_id: config.clientId,
-    redirect_uri: callback,
+    redirect_uri: redirectUri,
     response_type: "code",
-    state,
-    code_challenge: challenge,
+    scope: "openid profile email perminister_api",
+    state: generated.state,
+    nonce: generated.nonce,
+    ...(prompt ? { prompt } : {}),
+    code_challenge: generated.challenge,
     code_challenge_method: "S256",
   }).toString();
 
-  const response = NextResponse.redirect(authorizeUrl);
-  const secure = config.appOrigin.startsWith("https:");
-  const cookieOptions = {
-    httpOnly: true,
-    secure,
-    sameSite: "lax" as const,
-    path: "/",
-    maxAge: OAUTH_COOKIE_MAX_AGE,
+  const transaction = {
+    state: generated.state,
+    verifier: generated.verifier,
+    nonce: generated.nonce,
+    redirectUri,
+    returnTo: next,
   };
-  response.cookies.set(OAUTH_STATE_COOKIE, state, cookieOptions);
-  response.cookies.set(OAUTH_VERIFIER_COOKIE, verifier, cookieOptions);
+  const cookieName = perministerSsoCookieName(transaction.state);
+  if (!cookieName) {
+    return NextResponse.redirect(new URL("/login?error=callback", appOrigin));
+  }
+
+  const response = NextResponse.redirect(authorizeUrl, 302);
+  response.cookies.set(
+    cookieName,
+    sealPerministerSsoTransaction(transaction, config.clientSecret),
+    {
+      httpOnly: true,
+      secure: config.appOrigin.startsWith("https:"),
+      sameSite: "lax",
+      path: "/",
+      maxAge: SSO_COOKIE_MAX_AGE,
+    },
+  );
   response.headers.set("Cache-Control", "no-store");
   return response;
 }

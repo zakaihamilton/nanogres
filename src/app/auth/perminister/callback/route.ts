@@ -1,30 +1,44 @@
-import { timingSafeEqual } from "node:crypto";
+import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
+import { exchangePerministerOidcCode } from "@/lib/perminister-oidc";
 import {
   getAppOrigin,
   getPerministerConfig,
-  isPerministerSessionGrant,
-  OAUTH_STATE_COOKIE,
-  OAUTH_VERIFIER_COOKIE,
   SESSION_COOKIE,
+  validatePerministerSession,
 } from "@/lib/perminister-auth";
+import {
+  matchesPerministerSsoState,
+  perministerSsoCookieName,
+  readPerministerSsoTransaction,
+  safeNanogresReturnTo,
+} from "@/lib/perminister-sso";
 
 export const runtime = "nodejs";
 
-function stateMatches(received: string, expected: string | undefined): boolean {
-  if (!expected) return false;
-  const receivedBytes = Buffer.from(received);
-  const expectedBytes = Buffer.from(expected);
-  return (
-    receivedBytes.length === expectedBytes.length && timingSafeEqual(receivedBytes, expectedBytes)
-  );
-}
-
-function loginError(request: NextRequest, code: "setup" | "denied" | "callback"): NextResponse {
+function loginError(
+  request: NextRequest,
+  code: "setup" | "denied" | "callback",
+  state = "",
+  returnTo: string | null = null,
+): NextResponse {
+  const query = new URLSearchParams({ error: code });
+  const safeReturn = safeNanogresReturnTo(returnTo);
+  if (safeReturn) query.set("next", safeReturn);
   const origin = getAppOrigin() ?? request.nextUrl.origin;
-  const response = NextResponse.redirect(new URL(`/login?error=${code}`, origin));
-  response.cookies.delete(OAUTH_STATE_COOKIE);
-  response.cookies.delete(OAUTH_VERIFIER_COOKIE);
+  const response = NextResponse.redirect(new URL(`/login?${query}`, origin));
+  const cookieName = perministerSsoCookieName(state);
+  if (cookieName) {
+    response.cookies.set(cookieName, "", {
+      httpOnly: true,
+      secure: origin.startsWith("https:"),
+      sameSite: "lax",
+      path: "/",
+      maxAge: 0,
+    });
+  }
+  response.headers.set("Cache-Control", "no-store");
+  response.headers.set("Referrer-Policy", "no-referrer");
   return response;
 }
 
@@ -34,60 +48,68 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!config || !appOrigin) return loginError(request, "setup");
 
   const query = request.nextUrl.searchParams;
-  if (query.has("error")) return loginError(request, "denied");
+  const state = query.get("state") ?? "";
+  if (query.getAll("state").length !== 1) return loginError(request, "callback", state);
 
-  const code = query.get("code") ?? "";
-  const receivedState = query.get("state") ?? "";
-  const expectedState = request.cookies.get(OAUTH_STATE_COOKIE)?.value;
-  const verifier = request.cookies.get(OAUTH_VERIFIER_COOKIE)?.value;
-  if (!code || code.length > 2048 || !verifier || !stateMatches(receivedState, expectedState)) {
-    return loginError(request, "callback");
+  const cookieName = perministerSsoCookieName(state);
+  if (!cookieName) return loginError(request, "callback", state);
+  const cookieValue = (await cookies()).get(cookieName)?.value;
+  const transaction = readPerministerSsoTransaction(cookieValue, config.clientSecret);
+  if (!transaction || !matchesPerministerSsoState(transaction.state, state)) {
+    return loginError(request, "callback", state);
   }
 
-  let tokenResponse: Response;
+  const codes = query.getAll("code");
+  if (query.has("error")) return loginError(request, "denied", state, transaction.returnTo);
+  if (codes.length !== 1 || !codes[0] || codes[0].length > 2048) {
+    return loginError(request, "callback", state, transaction.returnTo);
+  }
+
+  let accessToken: string;
   try {
-    tokenResponse = await fetch(`${config.baseUrl}/api/auth/consumer/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Perminister-Client-Id": config.clientId,
-        "X-Perminister-Client-Secret": config.clientSecret,
-      },
-      body: JSON.stringify({
-        grant_type: "authorization_code",
-        code,
-        code_verifier: verifier,
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(8_000),
+    const grant = await exchangePerministerOidcCode({
+      baseUrl: config.baseUrl,
+      clientId: config.clientId,
+      clientSecret: config.clientSecret,
+      code: codes[0],
+      codeVerifier: transaction.verifier,
+      nonce: transaction.nonce,
+      redirectUri: transaction.redirectUri,
     });
+    accessToken = grant.accessToken;
   } catch {
-    return loginError(request, "callback");
+    return loginError(request, "callback", state, transaction.returnTo);
   }
 
-  if (!tokenResponse.ok) return loginError(request, "callback");
-  let body: unknown;
-  try {
-    body = await tokenResponse.json();
-  } catch {
-    return loginError(request, "callback");
+  const session = await validatePerministerSession(accessToken, config);
+  if (!session) return loginError(request, "callback", state, transaction.returnTo);
+
+  const expiresAt = Date.parse(session.session.expiresAt);
+  const maxAge = Math.floor((expiresAt - Date.now()) / 1000);
+  if (!Number.isFinite(expiresAt) || maxAge <= 0) {
+    return loginError(request, "callback", state, transaction.returnTo);
   }
-  if (!isPerministerSessionGrant(body)) return loginError(request, "callback");
 
-  const maxAge = Math.floor((Date.parse(body.session.expiresAt) - Date.now()) / 1000);
-  if (maxAge <= 0) return loginError(request, "callback");
-
-  const response = NextResponse.redirect(new URL("/overview", appOrigin));
-  response.cookies.set(SESSION_COOKIE, body.sessionToken, {
+  const response = NextResponse.redirect(
+    new URL(transaction.returnTo ?? "/overview", appOrigin),
+    303,
+  );
+  response.cookies.set(SESSION_COOKIE, accessToken, {
     httpOnly: true,
     secure: appOrigin.startsWith("https:"),
     sameSite: "lax",
     path: "/",
     maxAge,
-    expires: new Date(body.session.expiresAt),
+    expires: new Date(expiresAt),
   });
-  response.cookies.delete(OAUTH_STATE_COOKIE);
-  response.cookies.delete(OAUTH_VERIFIER_COOKIE);
+  response.cookies.set(cookieName, "", {
+    httpOnly: true,
+    secure: appOrigin.startsWith("https:"),
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
   response.headers.set("Cache-Control", "no-store");
+  response.headers.set("Referrer-Policy", "no-referrer");
   return response;
 }
