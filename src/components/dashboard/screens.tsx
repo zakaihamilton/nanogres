@@ -18,11 +18,29 @@ import {
 
 
 type ScreenMode = "live" | "preview";
+export type PreviewScenario =
+  | "healthy"
+  | "disconnected-server"
+  | "empty-cluster"
+  | "many-databases"
+  | "long-names"
+  | "near-full-storage"
+  | "storage-full"
+  | "connection-saturation"
+  | "backups-stale"
+  | "backups-failed"
+  | "backups-unconfigured"
+  | "read-only"
+  | "validation-errors"
+  | "delete-error";
 
 type ScreenProps = {
   mode: ScreenMode;
   previewPage?: "list" | "new" | "restore" | "restore-existing";
   previewBackup?: string;
+  previewScenario?: PreviewScenario;
+  readOnly?: boolean;
+  validationPreview?: boolean;
   onPreviewNavigate?: (screen: string) => void;
   onPreviewDelete?: (database: DatabaseRow) => void;
   onPreviewCreateDatabase?: (name: string) => void;
@@ -111,6 +129,63 @@ const demoDatabases: DatabaseRow[] = [
     state: "Idle",
   },
 ];
+
+function databasesForScenario(scenario: PreviewScenario): DatabaseRow[] {
+  if (scenario === "disconnected-server" || scenario === "empty-cluster") return [];
+  if (scenario === "many-databases") {
+    return [
+      ...demoDatabases,
+      ...Array.from({ length: 20 }, (_, index) => {
+        const base = demoDatabases[(index % 3) + 1];
+        return {
+          ...base,
+          name: `tenant_database_${String(index + 1).padStart(2, "0")}`,
+          owner: `service_user_${String(index + 1).padStart(2, "0")}`,
+          systemDatabase: false,
+          connections: `${index % 9} / 50`,
+        };
+      }),
+    ];
+  }
+  if (scenario === "long-names") {
+    return demoDatabases.map((database, index) =>
+      index === 1
+        ? {
+            ...database,
+            name: "customer_analytics_and_event_archive_for_regional_operations",
+            owner: "distributed_reporting_service_account",
+          }
+        : database,
+    );
+  }
+  if (scenario === "connection-saturation") {
+    return demoDatabases.map((database) =>
+      database.name === "app_main"
+        ? { ...database, connections: "98 / 100" }
+        : database.name === "event_store"
+          ? { ...database, connections: "49 / 50" }
+          : database,
+    );
+  }
+  return demoDatabases;
+}
+
+export function previewDatabaseNamesForScenario(scenario: PreviewScenario): string[] | null {
+  if (scenario === "disconnected-server") return null;
+  return databasesForScenario(scenario)
+    .filter((database) => !database.systemDatabase)
+    .map((database) => database.name);
+}
+
+function diskForScenario(scenario: PreviewScenario): StorageDisk {
+  if (scenario === "near-full-storage") {
+    return { totalBytes: 40 * gib, usedBytes: 37.5 * gib, freeBytes: 2.5 * gib };
+  }
+  if (scenario === "storage-full") {
+    return { totalBytes: 40 * gib, usedBytes: 39.5 * gib, freeBytes: 0.5 * gib };
+  }
+  return demoDisk;
+}
 
 function ScreenHeading({
   eyebrow,
@@ -382,7 +457,13 @@ function EmptyState({ title, description }: { title: string; description: string
   );
 }
 
-function DatabaseCreatePreviewForm({ onSubmit }: { onSubmit?: (name: string) => void }) {
+function DatabaseCreatePreviewForm({
+  onSubmit,
+  validationPreview = false,
+}: {
+  onSubmit?: (name: string) => void;
+  validationPreview?: boolean;
+}) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -404,6 +485,8 @@ function DatabaseCreatePreviewForm({ onSubmit }: { onSubmit?: (name: string) => 
           name="database-name"
           pattern={TENANT_NAME_PATTERN}
           placeholder="my_project"
+          defaultValue={validationPreview ? "Invalid Database Name!" : ""}
+          aria-invalid={validationPreview || undefined}
           required
         />
         <button className={styles.primaryButton} disabled={!onSubmit} type="submit">
@@ -502,54 +585,90 @@ function RoleCreatePreviewForm({ onSubmit }: { onSubmit?: (name: string) => void
   );
 }
 
-export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: ScreenProps) {
+export function OverviewScreen({
+  mode,
+  onPreviewNavigate,
+  previewNotice,
+  previewScenario = "healthy",
+  readOnly = false,
+}: ScreenProps) {
   const preview = mode === "preview";
   if (!preview) return <LiveOverviewScreen />;
+  const connected = previewScenario !== "disconnected-server";
+  const databases = databasesForScenario(previewScenario);
+  const managedDatabaseCount = databases.filter((database) => !database.systemDatabase).length;
+  const protectedDatabaseCount = databases.filter((database) => database.systemDatabase).length;
+  const disk = diskForScenario(previewScenario);
+  const backupValue =
+    previewScenario === "backups-failed"
+      ? "Failed"
+      : previewScenario === "backups-unconfigured"
+        ? "None"
+        : previewScenario === "backups-stale"
+          ? "4 days"
+          : "Today";
   return (
     <div className={styles.screen}>
       <ScreenHeading
-        action="Create a database"
+        action={readOnly || !connected ? undefined : "Create a database"}
         description="Manage the databases, access, and recovery assigned to your organization."
         eyebrow="ORGANIZATION DATABASES"
         title="Your Postgres, in one place."
-        onAction={() => onPreviewNavigate?.("databases")}
+        onAction={readOnly || !connected ? undefined : () => onPreviewNavigate?.("databases")}
       />
+      {!connected ? <ApiNotice /> : null}
       {previewNotice ? (
         <div className={styles.previewNotice} role="status">
           {previewNotice}
         </div>
       ) : null}
-      {!preview ? <ApiNotice /> : null}
-
       <div className={styles.metrics}>
         <MetricCard
           detail={
-            preview ? "3 managed · 1 protected system database" : "Waiting for system connection"
+            !connected
+              ? "Waiting for system connection"
+              : `${managedDatabaseCount} managed · ${protectedDatabaseCount} protected system databases`
           }
           icon="database"
           label="Managed databases"
-          value={preview ? "3" : "—"}
+          value={connected ? String(managedDatabaseCount) : "—"}
         />
         <MetricCard
-          detail={preview ? "Across active databases" : "Waiting for system connection"}
+          detail={!connected ? "Waiting for system connection" : "Across active databases"}
           icon="activity"
           label="Active connections"
           tone="blue"
-          value={preview ? "11" : "—"}
+          value={
+            !connected
+              ? "—"
+              : previewScenario === "connection-saturation"
+                ? "147"
+                : "11"
+          }
         />
         <MetricCard
-          detail={preview ? "Most recent: today, 09:15" : "No backup schedule yet"}
+          detail={
+            !connected
+              ? "No backup schedule yet"
+              : previewScenario === "backups-failed"
+                ? "Most recent attempt failed"
+                : previewScenario === "backups-unconfigured"
+                  ? "No backup schedule yet"
+                  : previewScenario === "backups-stale"
+                    ? "Last completed 4 days ago"
+                    : "Most recent: today, 09:15"
+          }
           icon="backup"
           label="Latest backup"
           tone="green"
-          value={preview ? "Today" : "—"}
+          value={connected ? backupValue : "—"}
         />
         <MetricCard
           detail={preview ? "Organization database permissions" : "Managed by Perminister"}
           icon="access"
           label="Access grants"
           tone="amber"
-          value={preview ? "2" : "—"}
+          value={connected ? "2" : "—"}
         />
       </div>
 
@@ -557,14 +676,19 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
         <Panel
           className={styles.databasePanel}
           detail={
-            preview
-              ? "4 total · 3 managed · 1 protected system · refreshed just now"
+            connected
+              ? `${databases.length} total · ${managedDatabaseCount} managed · ${protectedDatabaseCount} protected system · refreshed just now`
               : "Live inventory will appear after connection"
           }
           title="Databases"
         >
-          {preview ? (
-            <DatabaseTable rows={demoDatabases} onOpen={() => onPreviewNavigate?.("databases")} />
+          {connected && databases.length ? (
+            <DatabaseTable rows={databases} onOpen={() => onPreviewNavigate?.("databases")} />
+          ) : connected ? (
+            <EmptyState
+              description="Create a database to begin using this Postgres server."
+              title="No databases yet"
+            />
           ) : (
             <EmptyState
               description="Connect the VPS server to see database size, owners, and connection counts."
@@ -580,9 +704,9 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
                 <Icon name={preview ? "check" : "clock"} size={18} />
               </span>
               <span>
-                <strong>{preview ? "All systems healthy" : "Waiting for first check"}</strong>
+                <strong>{connected ? "All systems healthy" : "Waiting for first check"}</strong>
                 <small>
-                  {preview
+                  {connected
                     ? "PostgreSQL 17 · running"
                     : "System health will load from the VPS server"}
                 </small>
@@ -591,19 +715,29 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
             <div className={styles.healthRows}>
               <div>
                 <span>API endpoint</span>
-                <strong>{preview ? "Connected" : "Not configured"}</strong>
+                <strong>{connected ? "Connected" : "Not configured"}</strong>
               </div>
               <div>
                 <span>Postgres</span>
-                <strong>{preview ? "Healthy" : "Pending"}</strong>
+                <strong>{connected ? "Healthy" : "Pending"}</strong>
               </div>
               <div>
                 <span>Last checked</span>
-                <strong>{preview ? "Just now" : "—"}</strong>
+                <strong>{connected ? "Just now" : "—"}</strong>
               </div>
               <div>
                 <span>Off-site backup</span>
-                <strong>{preview ? "Verified today" : "—"}</strong>
+                <strong>
+                  {!connected
+                    ? "—"
+                    : previewScenario === "backups-failed"
+                      ? "Failed"
+                      : previewScenario === "backups-unconfigured"
+                        ? "Not configured"
+                        : previewScenario === "backups-stale"
+                          ? "Overdue"
+                          : "Verified today"}
+                </strong>
               </div>
             </div>
           </div>
@@ -614,7 +748,14 @@ export function OverviewScreen({ mode, onPreviewNavigate, previewNotice }: Scree
         detail="Current VPS disk usage and estimated database growth room"
         title="Storage capacity"
       >
-        <StorageCapacity databases={demoDatabases} disk={demoDisk} growthPercent={25} />
+        {connected ? (
+          <StorageCapacity databases={databases} disk={disk} growthPercent={25} />
+        ) : (
+          <EmptyState
+            description="Storage usage appears after the server connection is available."
+            title="Storage status unavailable"
+          />
+        )}
       </Panel>
 
       <div className={styles.lowerGrid}>
@@ -669,18 +810,26 @@ export function DatabasesScreen({
   previewPage = "list",
   onPreviewCreateDatabase,
   previewNotice,
+  previewScenario = "healthy",
+  readOnly = false,
+  validationPreview = false,
 }: ScreenProps) {
   const preview = mode === "preview";
   if (!preview) return <LiveDatabasesScreen />;
+  const connected = previewScenario !== "disconnected-server";
+  const databases = databasesForScenario(previewScenario);
+  const protectedDatabaseCount = databases.filter((database) => database.systemDatabase).length;
+  const disk = diskForScenario(previewScenario);
   return (
     <div className={styles.screen}>
       <ScreenHeading
-        action={previewPage === "list" ? "Create a database" : undefined}
+        action={previewPage === "list" && !readOnly && connected ? "Create a database" : undefined}
         description="Create databases and review size, owners, and active connections."
         eyebrow="DATA"
         title="Databases"
-        onAction={() => onPreviewNavigate?.("database-new")}
+        onAction={readOnly ? undefined : () => onPreviewNavigate?.("database-new")}
       />
+      {!connected ? <ApiNotice /> : null}
       {previewNotice ? (
         <div className={styles.previewNotice} role="status">
           {previewNotice}
@@ -692,20 +841,54 @@ export function DatabasesScreen({
             detail={`Lowercase letters, numbers, and underscores; max ${TENANT_NAME_MAX_LENGTH} characters.`}
             title="Create a database"
           >
-            <DatabaseCreatePreviewForm onSubmit={onPreviewCreateDatabase} />
+            <DatabaseCreatePreviewForm
+              onSubmit={readOnly ? undefined : onPreviewCreateDatabase}
+              validationPreview={validationPreview}
+            />
+            {validationPreview ? (
+              <div className={styles.previewNotice} role="alert">
+                The database name must use lowercase letters, numbers, or underscores and be at
+                least two characters long.
+              </div>
+            ) : null}
           </Panel>
         </>
       ) : (
         <>
-          <Panel detail="4 total · 3 managed · 1 protected system" title="All databases">
-            <DatabaseTable rows={demoDatabases} variant="management" onDelete={onPreviewDelete} />
-          </Panel>
           <Panel
-            detail="Current VPS disk usage and per-database growth room"
-            title="Storage capacity"
+            detail={
+              connected
+                ? `${databases.length} total · ${databases.filter((database) => !database.systemDatabase).length} managed · ${protectedDatabaseCount} protected system`
+                : "Inventory unavailable until server connects"
+            }
+            title="All databases"
           >
-            <StorageCapacity databases={demoDatabases} disk={demoDisk} growthPercent={25} />
+            {!connected ? (
+              <EmptyState
+                description="Connect the VPS server to load its database inventory."
+                title="Server connection pending"
+              />
+            ) : databases.length ? (
+              <DatabaseTable
+                rows={databases}
+                variant="management"
+                onDelete={readOnly ? undefined : onPreviewDelete}
+              />
+            ) : (
+              <EmptyState
+                description="Create a database to begin using this Postgres server."
+                title="No databases yet"
+              />
+            )}
           </Panel>
+          {connected ? (
+            <Panel
+              detail="Current VPS disk usage and per-database growth room"
+              title="Storage capacity"
+            >
+              <StorageCapacity databases={databases} disk={disk} growthPercent={25} />
+            </Panel>
+          ) : null}
           <div className={styles.footerHint}>
             <Icon name="shield" size={15} />
             <span>Database operations will require an active Perminister grant.</span>
@@ -722,13 +905,14 @@ export function AccessScreen({
   onPreviewNavigate,
   previewPage = "list",
   previewNotice,
+  readOnly = false,
 }: ScreenProps) {
   const preview = mode === "preview";
   if (!preview) return <LiveAccessScreen />;
   return (
     <div className={styles.screen}>
       <ScreenHeading
-        action={previewPage === "list" ? "Create role" : undefined}
+        action={previewPage === "list" && !readOnly ? "Create role" : undefined}
         description="Create least-privilege Postgres login roles for individual databases."
         eyebrow="SECURITY"
         title="Access & roles"
@@ -754,7 +938,7 @@ export function AccessScreen({
             title="Create a database role"
             detail="Passwords are never shown again after creation."
           >
-            <RoleCreatePreviewForm onSubmit={onPreviewCreateRole} />
+            <RoleCreatePreviewForm onSubmit={readOnly ? undefined : onPreviewCreateRole} />
           </Panel>
         </>
       ) : (
@@ -773,9 +957,20 @@ export function BackupsScreen({
   onPreviewNavigate,
   previewPage = "list",
   previewBackup = "app_main",
+  previewScenario = "healthy",
+  readOnly = false,
 }: ScreenProps) {
   const preview = mode === "preview";
   if (!preview) return <LiveBackupsScreen />;
+  const backupsConfigured = previewScenario !== "backups-unconfigured";
+  const backupNotice =
+    previewScenario === "backups-stale"
+      ? "The latest scheduled backup is four days old. The next run has not completed."
+      : previewScenario === "backups-failed"
+        ? "The latest backup failed because the remote storage destination could not be reached."
+        : previewScenario === "backups-unconfigured"
+          ? "No backup schedule or remote destination is configured for this organization."
+          : null;
   return (
     <div className={styles.screen}>
       <ScreenHeading
@@ -785,9 +980,18 @@ export function BackupsScreen({
       />
       {previewPage === "list" ? (
         <>
+          {backupNotice ? (
+            <div
+              className={styles.previewNotice}
+              role={previewScenario === "backups-failed" ? "alert" : "status"}
+            >
+              {backupNotice}
+            </div>
+          ) : null}
           <div className={styles.backupPageActions}>
             <button
               className={styles.primaryButton}
+              disabled={readOnly}
               type="button"
               onClick={() => onPreviewNavigate?.("backups-new")}
             >
@@ -795,6 +999,7 @@ export function BackupsScreen({
             </button>{" "}
             <button
               className={styles.secondaryButton}
+              disabled={readOnly}
               type="button"
               onClick={() => onPreviewNavigate?.("backups-restore")}
             >
@@ -808,7 +1013,9 @@ export function BackupsScreen({
               </span>
               <span>
                 <small>Schedule</small>
-                <strong>Daily near 02:00 UTC</strong>
+                <strong>
+                  {backupsConfigured ? "Daily near 02:00 UTC" : "Not configured"}
+                </strong>
               </span>
             </div>
             <div>
@@ -817,7 +1024,7 @@ export function BackupsScreen({
               </span>
               <span>
                 <small>Retention</small>
-                <strong>14 days locally</strong>
+                <strong>{backupsConfigured ? "14 days locally" : "No retention policy"}</strong>
               </span>
             </div>
             <div>
@@ -826,18 +1033,35 @@ export function BackupsScreen({
               </span>
               <span>
                 <small>Destination</small>
-                <strong>Local disk + S3 Storage</strong>
+                <strong>{backupsConfigured ? "Local disk + S3 Storage" : "Not connected"}</strong>
               </span>
             </div>
           </div>
-          <div className={styles.previewNotice} role="status">
-            The latest off-site copy was verified today. Older S3 copies remain available after
-            local 14-day retention.
-          </div>
-          <Panel detail="3 retained files" title="Backup history">
-            <BackupTable
-              onRestore={(database) => onPreviewNavigate?.(`backups-restore-existing:${database}`)}
-            />
+          {backupsConfigured ? (
+            <div className={styles.previewNotice} role="status">
+              {previewScenario === "backups-stale"
+                ? "The latest off-site copy is also four days old. Older S3 copies remain available after local 14-day retention."
+                : previewScenario === "backups-failed"
+                  ? "The latest backup did not reach off-site storage. Older verified copies remain available."
+                  : "The latest off-site copy was verified today. Older S3 copies remain available after local 14-day retention."}
+            </div>
+          ) : null}
+          <Panel detail={backupsConfigured ? "3 retained files" : "No retained files"} title="Backup history">
+            {backupsConfigured ? (
+              <BackupTable
+                onRestore={
+                  readOnly
+                    ? undefined
+                    : (database) => onPreviewNavigate?.(`backups-restore-existing:${database}`)
+                }
+                previewScenario={previewScenario}
+              />
+            ) : (
+              <EmptyState
+                description="Set a schedule and destination to start retaining recovery points."
+                title="No backups yet"
+              />
+            )}
           </Panel>
         </>
       ) : previewPage === "new" ? (
@@ -999,22 +1223,41 @@ function RoleTable({ variant }: { variant: "database" | "access" }) {
   );
 }
 
-function BackupTable({ onRestore }: { onRestore: (database: string) => void }) {
+function BackupTable({
+  onRestore,
+  previewScenario,
+}: {
+  onRestore?: (database: string) => void;
+  previewScenario: PreviewScenario;
+}) {
   const backups = [
     {
       database: "app_main",
-      time: "Today, 09:15",
+      time:
+        previewScenario === "backups-stale"
+          ? "Nov 9, 09:15"
+          : previewScenario === "backups-failed"
+            ? "Today, 09:15"
+            : "Today, 09:15",
       size: "184 MB",
+      status:
+        previewScenario === "backups-stale"
+          ? "Stale"
+          : previewScenario === "backups-failed"
+            ? "Failed"
+            : "Verified",
     },
     {
       database: "event_store",
-      time: "Today, 09:10",
+      time: previewScenario === "backups-stale" ? "Nov 9, 09:10" : "Today, 09:10",
       size: "42 MB",
+      status: "Verified",
     },
     {
       database: "app_main",
-      time: "Yesterday, 16:48",
+      time: previewScenario === "backups-stale" ? "Nov 8, 16:48" : "Yesterday, 16:48",
       size: "179 MB",
+      status: "Verified",
     },
   ];
   return (
@@ -1024,6 +1267,7 @@ function BackupTable({ onRestore }: { onRestore: (database: string) => void }) {
         { id: "database", label: "Database" },
         { id: "created", label: "Created" },
         { id: "size", label: "Size" },
+        { id: "status", label: "Status" },
         { id: "actions", label: "Actions", visuallyHidden: true },
       ]}
     >
@@ -1034,6 +1278,7 @@ function BackupTable({ onRestore }: { onRestore: (database: string) => void }) {
           </td>
           <td className={styles.mutedCell}>{backup.time}</td>
           <td>{backup.size}</td>
+          <td>{backup.status}</td>
           <td>
             <div className={styles.backupPreviewActions}>
               <div className={styles.previewDownloadAction}>
@@ -1044,8 +1289,9 @@ function BackupTable({ onRestore }: { onRestore: (database: string) => void }) {
               </div>
               <button
                 aria-label={`Restore as new: ${backup.database} backup from ${backup.time}`}
+                disabled={!onRestore}
                 type="button"
-                onClick={() => onRestore(backup.database)}
+                onClick={() => onRestore?.(backup.database)}
               >
                 Restore as new
               </button>

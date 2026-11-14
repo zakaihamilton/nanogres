@@ -196,7 +196,7 @@ export function LiveOverviewScreen() {
               detail={`${databases.length} total · ${managedDatabases.length} managed · ${systemDatabaseCount} protected system · ${formatBytes(totalSize)} used`}
               info="This overview preview shows up to six rows. Open Databases for the full organization list. Organization-scoped lists exclude protected PostgreSQL system databases."
             >
-              <DatabaseTable databases={databases.slice(0, 6)} overview />
+              <DatabaseTable databases={databases.slice(0, 6)} />
             </Panel>
             <Panel
               title="System health"

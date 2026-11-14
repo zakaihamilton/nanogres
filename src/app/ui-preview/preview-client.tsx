@@ -10,7 +10,9 @@ import {
   DatabasesScreen,
   GettingStartedScreen,
   OverviewScreen,
+  previewDatabaseNamesForScenario,
 } from "@/components/dashboard/screens";
+import type { PreviewScenario } from "@/components/dashboard/screens";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { ThemeControl } from "@/components/theme/theme-control";
 import { Select } from "@/components/ui/select";
@@ -30,6 +32,36 @@ const screens = [
   { value: "backups-restore-existing", label: "Restore retained backup" },
   { value: "activity", label: "Activity" },
 ];
+const scenarioOptions: { value: PreviewScenario; label: string }[] = [
+  { value: "healthy", label: "Healthy server" },
+  { value: "disconnected-server", label: "Disconnected server" },
+  { value: "empty-cluster", label: "Empty cluster" },
+  { value: "many-databases", label: "Many databases" },
+  { value: "long-names", label: "Long database and organization names" },
+  { value: "near-full-storage", label: "Near-full storage" },
+  { value: "storage-full", label: "Storage almost full" },
+  { value: "connection-saturation", label: "Connection limit near" },
+  { value: "backups-stale", label: "Stale backups" },
+  { value: "backups-failed", label: "Failed backup" },
+  { value: "backups-unconfigured", label: "Backups not configured" },
+  { value: "read-only", label: "Read-only member" },
+  { value: "validation-errors", label: "Form validation errors" },
+  { value: "delete-error", label: "Delete error dialog" },
+];
+
+function screenForScenario(scenario: PreviewScenario): string | undefined {
+  if (
+    scenario === "many-databases" ||
+    scenario === "long-names" ||
+    scenario === "empty-cluster"
+  )
+    return "databases";
+  if (scenario.startsWith("backups-")) return "backups";
+  if (scenario === "validation-errors") return "database-new";
+  if (scenario === "delete-error") return "delete-confirmation";
+  if (scenario === "disconnected-server" || scenario === "connection-saturation") return "overview";
+  return undefined;
+}
 
 function previewPath(screen: string, deleteDatabase: string): string {
   if (screen === "overview" || screen === "getting-started") return "/overview";
@@ -77,6 +109,7 @@ function PreviewScreen({
   onCreateDatabase,
   onCreateRole,
   previewNotice,
+  previewScenario,
   deleteDatabase,
   previewBackup,
 }: {
@@ -86,6 +119,7 @@ function PreviewScreen({
   onCreateDatabase: (name: string) => void;
   onCreateRole: (name: string) => void;
   previewNotice: string | null;
+  previewScenario: PreviewScenario;
   deleteDatabase: string;
   previewBackup: string;
 }) {
@@ -102,12 +136,16 @@ function PreviewScreen({
           onPreviewDelete={(database) => onDelete(database.name)}
           onPreviewCreateDatabase={onCreateDatabase}
           previewNotice={previewNotice}
+          previewScenario={previewScenario}
+          readOnly={previewScenario === "read-only"}
+          validationPreview={previewScenario === "validation-errors"}
         />
       );
     case "delete-confirmation":
       return (
         <DeleteConfirmationPreview
           databaseName={deleteDatabase}
+          error={previewScenario === "delete-error" ? "The database could not be deleted. Try again." : null}
           onExit={() => onNavigate("databases")}
         />
       );
@@ -120,6 +158,8 @@ function PreviewScreen({
           onPreviewNavigate={onNavigate}
           onPreviewCreateRole={onCreateRole}
           previewNotice={previewNotice}
+          previewScenario={previewScenario}
+          readOnly={previewScenario === "read-only"}
         />
       );
     case "backups-new":
@@ -140,6 +180,8 @@ function PreviewScreen({
                   ? "restore-existing"
                   : "list"
           }
+          previewScenario={previewScenario}
+          readOnly={previewScenario === "read-only"}
         />
       );
     case "activity":
@@ -150,6 +192,8 @@ function PreviewScreen({
           mode="preview"
           onPreviewNavigate={onNavigate}
           previewNotice={previewNotice}
+          previewScenario={previewScenario}
+          readOnly={previewScenario === "read-only"}
         />
       );
   }
@@ -157,9 +201,11 @@ function PreviewScreen({
 
 function DeleteConfirmationPreview({
   databaseName,
+  error,
   onExit,
 }: {
   databaseName: string;
+  error: string | null;
   onExit: () => void;
 }) {
   const [open, setOpen] = useState(true);
@@ -200,7 +246,7 @@ function DeleteConfirmationPreview({
     <DeleteDatabaseDialog
       busy={false}
       database={previewDatabase}
-      error={null}
+      error={error}
       onCancel={() => {
         setOpen(false);
         onExit();
@@ -236,6 +282,7 @@ export default function PreviewClient() {
   const [previewNotice, setPreviewNotice] = useState<string | null>(null);
   const [deleteDatabase, setDeleteDatabase] = useState("event_store");
   const [previewBackup, setPreviewBackup] = useState("app_main");
+  const [previewScenario, setPreviewScenario] = useState<PreviewScenario>("healthy");
   const restoreDeleteFocus = useRef(false);
 
   useEffect(() => {
@@ -291,6 +338,14 @@ export default function PreviewClient() {
     setPreviewNotice(`Preview only. No Postgres role named “${name}” was created.`);
   }
 
+  function selectScenario(value: string) {
+    const nextScenario = value as PreviewScenario;
+    setPreviewScenario(nextScenario);
+    const suggestedScreen = screenForScenario(nextScenario);
+    if (suggestedScreen) setScreen(suggestedScreen);
+    setPreviewNotice(null);
+  }
+
   return (
     <div className={styles.page}>
       <PreviewToolbar
@@ -309,18 +364,38 @@ export default function PreviewClient() {
             ))}
           </Select>
         </label>
+        <label className={styles.screenControl}>
+          <span>Scenario</span>
+          <Select aria-label="Preview scenario" onChange={selectScenario} value={previewScenario}>
+            {scenarioOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+        </label>
       </PreviewToolbar>
       <DashboardShell
         account={{ name: "Avery Morgan", email: "avery@example.test" }}
         activePath={previewPath(screen, deleteDatabase)}
-        currentOrganization={{ id: "org-main", name: "Acme Production Org" }}
+        previewDatabaseNames={previewDatabaseNamesForScenario(previewScenario)}
+        currentOrganization={{
+          id: "org-main",
+          name:
+            previewScenario === "long-names"
+              ? "Acme Production Organization for Regional Analytics Teams"
+              : "Acme Production Org",
+        }}
         onPreviewNavigate={navigate}
         previewMode
         organizations={[
           {
             organizationId: "org-main",
-            organizationName: "Acme Production Org",
-            role: "manager",
+            organizationName:
+              previewScenario === "long-names"
+                ? "Acme Production Organization for Regional Analytics Teams"
+                : "Acme Production Org",
+            role: previewScenario === "read-only" ? "viewer" : "manager",
           },
           {
             organizationId: "org-staging",
@@ -340,6 +415,7 @@ export default function PreviewClient() {
           }}
           onNavigate={navigate}
           previewNotice={previewNotice}
+          previewScenario={previewScenario}
           screen={screen}
         />
       </DashboardShell>

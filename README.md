@@ -96,7 +96,9 @@ The public welcome page is at `/`; authenticated users land at `/overview`.
 
 Open [`http://localhost:3000/ui-preview`](http://localhost:3000/ui-preview) to browse the screens
 without authentication. It is enabled only in development, uses clearly labeled synthetic data,
-and has no live VPS actions.
+and has no live VPS actions. The scenario selector covers disconnected and empty servers, large
+inventories, long names, storage pressure, connection saturation, stale or failed backups,
+read-only access, validation errors, and a failed delete confirmation.
 
 For sign-in, configure a Perminister client whose origin exactly matches your local app origin and
 whose callback is `<origin>/auth/perminister/callback`. Production and preview origins need their
