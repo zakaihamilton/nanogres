@@ -89,6 +89,7 @@ export function DashboardShell({
   organizations,
   children,
   previewMode = false,
+  previewDatabaseNames,
   activePath,
   onPreviewNavigate,
 }: {
@@ -97,6 +98,7 @@ export function DashboardShell({
   organizations?: OrganizationItem[];
   children: ReactNode;
   previewMode?: boolean;
+  previewDatabaseNames?: string[] | null;
   activePath?: string;
   onPreviewNavigate?: (path: string) => void;
 }) {
@@ -105,6 +107,10 @@ export function DashboardShell({
   const [databaseNames, setDatabaseNames] = useState<string[]>(() =>
     previewMode ? ["app_main", "event_store", "sandbox"] : [],
   );
+  const effectiveDatabaseNames =
+    previewMode && previewDatabaseNames !== undefined
+      ? previewDatabaseNames ?? []
+      : databaseNames;
   const breadcrumbs = getBreadcrumbs(activePath ?? pathname);
 
   function handleBreadcrumbNavigate(event: MouseEvent<HTMLAnchorElement>, href: string) {
@@ -181,9 +187,11 @@ export function DashboardShell({
                     >
                       <Icon name={item.icon} size={18} />
                       <span>{item.label}</span>
-                      {item.href === "/databases" && previewMode ? (
+                      {item.href === "/databases" &&
+                      previewMode &&
+                      previewDatabaseNames !== null ? (
                         <span aria-hidden="true" className={styles.navCount}>
-                          {databaseNames.length}
+                          {effectiveDatabaseNames.length}
                         </span>
                       ) : null}
                     </Link>
@@ -287,7 +295,7 @@ export function DashboardShell({
         {children}
       </PanelFrameDashboardShell>
       <CommandPalette
-        databases={databaseNames}
+        databases={effectiveDatabaseNames}
         isOpen={paletteOpen}
         onNavigate={previewMode ? onPreviewNavigate : undefined}
         onClose={() => setPaletteOpen(false)}

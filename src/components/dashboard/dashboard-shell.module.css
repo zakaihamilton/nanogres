@@ -453,11 +453,24 @@
 }
 
 .mainContent {
-  width: min(100%, 1440px);
-  flex: 1;
-  margin: 0 auto;
-  padding: 36px 42px 54px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
   overflow-x: clip;
+}
+
+.sharedToolbar {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.desktopSidebarToggle {
+  display: grid;
 }
 
 @media (width <= 960px) {
@@ -470,7 +483,7 @@
   }
 
   .mainContent {
-    padding: 30px 25px 42px;
+    padding: 0;
   }
 }
 
@@ -568,7 +581,11 @@
   }
 
   .mainContent {
-    padding: 25px 17px 34px;
+    padding: 0;
+  }
+
+  .desktopSidebarToggle {
+    display: none;
   }
 }
 
