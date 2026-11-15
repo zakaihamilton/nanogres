@@ -11,7 +11,7 @@ const messages: Record<string, string> = {
   setup: "Sign-in is not configured yet. Add the Perminister app client to the server environment.",
   denied: "Sign-in was cancelled. You can try again when you’re ready.",
   callback: "We couldn’t complete sign-in. Please start again.",
-  invalid: "We couldn’t sign you in. Check your email or username and password, then try again.",
+  invalid: "We couldn’t complete sign-in. Please try again through Perminister.",
   rate_limited: "Too many sign-in attempts. Wait a moment before trying again.",
   unavailable: "Perminister is temporarily unavailable. Try again in a moment.",
 };
