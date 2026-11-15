@@ -62,6 +62,55 @@
   padding: 12px 17px;
 }
 
+.extensionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 17px;
+}
+
+.extensionDetails {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.extensionStatus {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.extensionStatusEnabled {
+  border-color: var(--green-pale);
+  background: var(--green-pale);
+  color: var(--green-strong);
+}
+
+.extensionStatusDisabled {
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+}
+
+.extensionDescription {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.extensionNotice {
+  padding: 0 17px 16px;
+}
+
 .tabBtn {
   display: inline-flex;
   align-items: center;
@@ -122,6 +171,11 @@
   .tableDetailPanel {
     min-width: 0;
     padding: 16px;
+  }
+
+  .extensionRow {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .statsStrip {

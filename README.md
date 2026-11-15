@@ -19,6 +19,8 @@ server and a guarded place to handle routine database work.
 - **Keep database access organized.** Each Perminister organization has one database catalog.
   Create database-scoped read-only, read-write, and schema-migration roles; Perminister checks
   organization-level Nanogres permissions on the server for each action.
+- **Manage database extensions.** Enable or disable pgvector for each database from its Extensions
+  tab. The PostgreSQL package is installed once on the VPS; the extension is enabled per database.
 - **Make and move backups.** Schedule daily backups, download a custom-format dump, or restore a
   trusted `.dump` or `.backup` file into a new database.
 - **Review the interface safely.** Open synthetic-data screens, including the getting-started state,

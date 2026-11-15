@@ -10,7 +10,7 @@ export function actionFor(method: string, segments: string[]): string | null {
       if (
         resource === "databases" &&
         identifier &&
-        (subResource === "schema" || subResource === "queries")
+        (subResource === "schema" || subResource === "queries" || subResource === "extensions")
       ) {
         return read;
       }
