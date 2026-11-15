@@ -6,6 +6,11 @@
   white-space: nowrap;
 }
 
+.control:global(.pf-theme-select) :global(.pf-select-trigger) {
+  height: 40px;
+  min-height: 40px;
+}
+
 .control :global(.pf-select-trigger:focus-visible) {
   outline: 2px solid var(--green);
   outline-offset: 2px;

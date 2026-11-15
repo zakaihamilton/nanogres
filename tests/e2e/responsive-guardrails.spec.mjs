@@ -300,3 +300,20 @@ test("synthetic preview stays within responsive layout and spacing contracts", a
     }
   }
 });
+
+test("synthetic preview dropdowns share a height", async ({ page }) => {
+  await page.goto("/ui-preview");
+
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: 900 });
+    const heights = await page.locator(".ui-preview-toolbar .pf-select-trigger").evaluateAll(
+      (triggers) => triggers.map((trigger) => trigger.getBoundingClientRect().height),
+    );
+
+    expect(heights.length, `${width}px preview toolbar dropdown count`).toBe(3);
+    expect(
+      Math.max(...heights) - Math.min(...heights),
+      `${width}px preview toolbar dropdown heights`,
+    ).toBeLessThanOrEqual(1);
+  }
+});
