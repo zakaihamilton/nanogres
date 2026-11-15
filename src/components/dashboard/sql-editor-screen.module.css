@@ -140,6 +140,7 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 .guardrailToggle {
@@ -169,6 +170,7 @@
 
 /* Results panel */
 .resultsPanel {
+  min-width: 0;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -181,6 +183,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 12px;
   padding: 10px 16px;
   background: var(--surface-muted);
   border-bottom: 1px solid var(--line);
@@ -189,8 +193,10 @@
 
 .resultsMeta {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
   color: var(--ink-soft);
 }
 
@@ -203,6 +209,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .exportBtn {
@@ -236,12 +243,15 @@
 }
 
 .tableWrap {
+  min-width: 0;
+  max-width: 100%;
   max-height: 400px;
   overflow: auto;
 }
 
 .resultsTable {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 12.5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -271,4 +281,39 @@
 
 .resultsTable tr:hover td {
   background: var(--surface-muted);
+}
+
+@media (width <= 620px) {
+  .guardrailsBar {
+    align-items: flex-start;
+    padding: 10px 12px;
+  }
+
+  .guardrailsLeft,
+  .actionButtons {
+    width: 100%;
+  }
+
+  .guardrailsLeft {
+    gap: 8px 14px;
+  }
+
+  .actionButtons > button {
+    flex: 1 1 auto;
+    white-space: normal;
+  }
+
+  .resultsHeader {
+    align-items: flex-start;
+    padding: 10px 12px;
+  }
+
+  .resultsMeta {
+    gap: 6px 9px;
+  }
+
+  .resultsMeta > span:nth-child(2),
+  .resultsMeta > span:nth-child(4) {
+    display: none;
+  }
 }
