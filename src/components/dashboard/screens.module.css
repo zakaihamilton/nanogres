@@ -334,6 +334,7 @@
 }
 
 .overviewGrid {
+  min-width: 0;
   grid-template-columns: minmax(0, 1.85fr) minmax(280px, 0.9fr);
 }
 
@@ -402,6 +403,7 @@
 
 .tableWrap {
   width: 100%;
+  contain: layout;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
@@ -1085,7 +1087,7 @@
 
 @media (width <= 1180px) {
   .overviewGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
