@@ -2015,6 +2015,81 @@ def get_database_schema(database: str) -> dict[str, object]:
     return data if isinstance(data, dict) else {"schemas": []}
 
 
+def pgvector_status(database: str) -> dict[str, object]:
+    if not NAME_PATTERN.fullmatch(database):
+        raise ApiError(400, "Invalid database name.")
+    status = json_query(
+        """
+        SELECT json_build_object(
+          'name', 'vector',
+          'displayName', 'pgvector',
+          'available', EXISTS (
+            SELECT 1 FROM pg_available_extensions WHERE name = 'vector'
+          ),
+          'enabled', EXISTS (
+            SELECT 1 FROM pg_extension WHERE extname = 'vector'
+          ),
+          'version', (
+            SELECT extversion FROM pg_extension WHERE extname = 'vector'
+          )
+        )::text
+        """,
+        database=database,
+    )
+    if not isinstance(status, dict):
+        raise ApiError(503, "PostgreSQL returned an invalid extension status.")
+    return status
+
+
+def get_database_extensions(
+    organization_id: object,
+    logical_database: str,
+) -> dict[str, object]:
+    database = require_organization_database(organization_id, logical_database)
+    return {"extension": pgvector_status(database)}
+
+
+def update_database_extension(
+    organization_id: object,
+    logical_database: str,
+    payload: dict[str, object],
+    actor: str | None,
+) -> dict[str, object]:
+    if payload.get("name") != "vector":
+        raise ApiError(400, "Only the pgvector extension is supported.")
+    enabled = payload.get("enabled")
+    if not isinstance(enabled, bool):
+        raise ApiError(400, "enabled must be a boolean.")
+
+    database = require_organization_database(organization_id, logical_database)
+    status = pgvector_status(database)
+    if enabled == status["enabled"]:
+        return {"extension": status}
+
+    if enabled:
+        if not status["available"]:
+            raise ApiError(
+                409,
+                "The pgvector package is not installed for this PostgreSQL server version.",
+            )
+        run_sql("CREATE EXTENSION IF NOT EXISTS vector", database)
+        action = "database.extension.enabled"
+        detail = f"pgvector enabled for database {logical_database}."
+    else:
+        try:
+            run_sql("DROP EXTENSION IF EXISTS vector RESTRICT", database)
+        except ApiError as error:
+            raise ApiError(
+                409,
+                "Cannot disable pgvector while database objects depend on it. Remove those objects and retry; Nanogres will not cascade-drop them.",
+            ) from error
+        action = "database.extension.disabled"
+        detail = f"pgvector disabled for database {logical_database}."
+
+    record_event(action, detail, actor, organization_id)
+    return {"extension": pgvector_status(database)}
+
+
 def execute_ddl(
     database: str,
     payload: dict[str, object],
@@ -2914,6 +2989,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {"events": list_activity(organization_id)})
             elif path == "/v1/activity/queries":
                 self._json(200, {"queries": get_active_queries(organization_id)})
+            elif path.startswith("/v1/databases/") and path.endswith("/extensions"):
+                encoded_name = path.removeprefix("/v1/databases/").removesuffix("/extensions")
+                if "/" in encoded_name:
+                    raise ApiError(404, "Route not found.")
+                self._json(
+                    200,
+                    get_database_extensions(organization_id, unquote(encoded_name)),
+                )
             elif path.startswith("/v1/databases/") and path.endswith("/schema"):
                 encoded_name = path.removeprefix("/v1/databases/").removesuffix("/schema")
                 if "/" in encoded_name:
@@ -3035,6 +3118,19 @@ class Handler(BaseHTTPRequestHandler):
                             row for row in scoped_databases if row["name"] == logical_name
                         )
                     },
+                )
+            elif path.startswith("/v1/databases/") and path.endswith("/extensions"):
+                encoded_name = path.removeprefix("/v1/databases/").removesuffix("/extensions")
+                if "/" in encoded_name:
+                    raise ApiError(404, "Route not found.")
+                self._json(
+                    200,
+                    update_database_extension(
+                        organization_id,
+                        unquote(encoded_name),
+                        body,
+                        actor,
+                    ),
                 )
             elif path.startswith("/v1/databases/") and path.endswith("/quota"):
                 encoded_name = path.removeprefix("/v1/databases/").removesuffix("/quota")

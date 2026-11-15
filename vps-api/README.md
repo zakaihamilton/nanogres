@@ -9,6 +9,7 @@ uses local peer authentication for administration. SQL editor queries and restor
 
 - `GET /healthz` and `GET /v1/overview`
 - `GET /v1/databases`, `POST /v1/databases`, `DELETE /v1/databases/{name}`
+- `GET /v1/databases/{name}/extensions`, `POST /v1/databases/{name}/extensions` with `{"name":"vector","enabled":true|false}`
 - `POST /v1/databases/{name}/quota` with `{"mode":"auto"}` or `{"mode":"custom","maxBytes":1073741824}`
 - `GET /v1/roles`, `POST /v1/roles`
 - `POST /v1/query` executes one SQL statement against an organization database
@@ -39,6 +40,11 @@ The SQL editor uses the organization's restricted query role instead of the Post
 That role can create and modify objects in the organization's databases but cannot create databases,
 manage roles, or connect to other organizations' databases. The VPS API token is used to derive its
 loopback database password; the password is not returned to the dashboard.
+
+The database Extensions panel manages the allowlisted `vector` extension (pgvector) one database at a
+time. The matching `postgresql-NN-pgvector` package must be installed on the VPS for the active
+PostgreSQL major version. Enabling creates the extension as the API's local PostgreSQL administrator;
+disabling uses `DROP EXTENSION ... RESTRICT`, so dependent columns or indexes are never cascade-dropped.
 
 Transfer creation accepts a `connectionString` and either
 `{"direction":"import","targetMode":"new|replace","targetDatabase":"name"}` or

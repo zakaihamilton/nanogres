@@ -35,6 +35,12 @@ The connection modal defaults to `nanogres.duckdns.org`, runtime port 6432, migr
 `NEXT_PUBLIC_NANOGRES_DB_PORT` and `NEXT_PUBLIC_NANOGRES_DB_MIGRATION_PORT` variables override the
 two port defaults. These values are public connection settings and must not contain passwords.
 
+Pgvector is optional. To make it available in the dashboard, install the `postgresql-<major>-pgvector`
+package that matches the active PostgreSQL cluster (for example, `postgresql-18-pgvector`). Then open
+the database's **Extensions** tab to enable or disable it for that database. Disabling uses
+`DROP EXTENSION ... RESTRICT`; remove objects that depend on pgvector first. The dashboard never
+cascade-drops dependent objects.
+
 For Visitoring, create a normal **Read and write** role for runtime access and a **Schema migration**
 role for migrations. In Visitoring's Vercel environment, use the normal role's connection URI for
 `DATABASE_URL`; use the migration role's session-pool URI for `MIGRATION_DATABASE_URL`; and copy
