@@ -1,18 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { DashboardShell as PanelFrameDashboardShell } from "panel-frame-ui";
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect, type MouseEvent, type ReactNode } from "react";
-import { Tooltip } from "@/components/ui/tooltip";
+import { DashboardShell as PanelFrameDashboardShell } from "panel-frame-ui";
+import { type MouseEvent, type ReactNode, useEffect, useState } from "react";
 import { ThemeControl } from "@/components/theme/theme-control";
-import { ToastProvider } from "@/components/ui/toast";
 import { CommandPalette } from "@/components/ui/command-palette";
-import { Icon, type IconName } from "./icons";
-import { OrganizationSwitcher, type OrganizationItem } from "./organization-switcher";
+import { ToastProvider } from "@/components/ui/toast";
+import { Tooltip } from "@/components/ui/tooltip";
 import styles from "./dashboard-shell.module.css";
+import { Icon, type IconName } from "./icons";
+import { type OrganizationItem, OrganizationSwitcher } from "./organization-switcher";
 
 type AccountView = {
   name: string;
@@ -165,9 +164,7 @@ export function DashboardShell({
           <div className="pf-sidebar-group">
             <p className="pf-sidebar-group-label">Manage</p>
             <nav aria-label="Main navigation">
-              {navigation
-                .filter((item) => !previewMode || item.href !== "/sql")
-                .map((item) => {
+              {navigation.map((item) => {
                   const active = isActive(pathname, item, activePath);
                   return (
                     <Link
