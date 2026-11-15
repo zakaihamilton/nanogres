@@ -899,6 +899,16 @@
     padding: 16px 16px 44px;
   }
 
+  .header {
+    flex-wrap: wrap;
+  }
+
+  .actions {
+    flex: 1 1 100%;
+    min-width: 0;
+    justify-content: space-between;
+  }
+
   .hero {
     padding: 36px 0 24px;
   }
@@ -910,9 +920,7 @@
   }
 
   .ctaPrimary,
-  .ctaSecondary,
-  .primaryButton,
-  .secondaryButton {
+  .ctaSecondary {
     width: 100%;
   }
 
@@ -929,5 +937,17 @@
   .connectBox {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+
+@media (width <= 350px) {
+  .actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .actions > :first-child {
+    justify-self: end;
   }
 }
