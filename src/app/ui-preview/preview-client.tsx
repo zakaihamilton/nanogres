@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PreviewToolbar } from "ui-preview-kit";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { DeleteDatabaseDialog } from "@/components/dashboard/live-screens";
+import type { PreviewScenario } from "@/components/dashboard/screens";
 import {
   AccessScreen,
   ActivityScreen,
@@ -12,8 +14,7 @@ import {
   OverviewScreen,
   previewDatabaseNamesForScenario,
 } from "@/components/dashboard/screens";
-import type { PreviewScenario } from "@/components/dashboard/screens";
-import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { SqlEditorPreview } from "@/components/dashboard/sql-editor-preview";
 import { ThemeControl } from "@/components/theme/theme-control";
 import { Select } from "@/components/ui/select";
 import styles from "./page.module.css";
@@ -31,6 +32,7 @@ const screens = [
   { value: "backups-restore", label: "Restore from file" },
   { value: "backups-restore-existing", label: "Restore retained backup" },
   { value: "activity", label: "Activity" },
+  { value: "sql-editor", label: "SQL Editor" },
 ];
 const scenarioOptions: { value: PreviewScenario; label: string }[] = [
   { value: "healthy", label: "Healthy server" },
@@ -47,6 +49,10 @@ const scenarioOptions: { value: PreviewScenario; label: string }[] = [
   { value: "read-only", label: "Read-only member" },
   { value: "validation-errors", label: "Form validation errors" },
   { value: "delete-error", label: "Delete error dialog" },
+  { value: "sql-error", label: "SQL query error" },
+  { value: "sql-empty-results", label: "SQL empty results" },
+  { value: "sql-wide-results", label: "SQL wide results" },
+  { value: "sql-no-database", label: "SQL with no database" },
 ];
 
 function screenForScenario(scenario: PreviewScenario): string | undefined {
@@ -59,6 +65,7 @@ function screenForScenario(scenario: PreviewScenario): string | undefined {
   if (scenario.startsWith("backups-")) return "backups";
   if (scenario === "validation-errors") return "database-new";
   if (scenario === "delete-error") return "delete-confirmation";
+  if (scenario.startsWith("sql-")) return "sql-editor";
   if (scenario === "disconnected-server" || scenario === "connection-saturation") return "overview";
   return undefined;
 }
@@ -75,6 +82,7 @@ function previewPath(screen: string, deleteDatabase: string): string {
   if (screen === "backups-restore-existing") return "/backups/restore/preview.dump";
   if (screen === "backups") return "/backups";
   if (screen === "activity") return "/activity";
+  if (screen === "sql-editor") return "/sql";
   return "/";
 }
 
@@ -186,6 +194,8 @@ function PreviewScreen({
       );
     case "activity":
       return <ActivityScreen mode="preview" />;
+    case "sql-editor":
+      return <SqlEditorPreview previewScenario={previewScenario} />;
     default:
       return (
         <OverviewScreen
@@ -315,6 +325,7 @@ export default function PreviewClient() {
       "/backups/restore": "backups-restore",
       "/backups/transfers": "backups",
       "/activity": "activity",
+      "/sql": "sql-editor",
     };
     const mappedPath =
       screenByPath[pathOrScreen] ??

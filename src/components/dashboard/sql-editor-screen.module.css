@@ -32,6 +32,15 @@
   flex-wrap: wrap;
 }
 
+.previewDatabaseLabel,
+.previewTimeout {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
 .selectDb {
   min-width: 190px;
   max-width: 280px;
@@ -50,6 +59,16 @@
   border-bottom: 1px solid var(--line);
   overflow-x: auto;
   padding-bottom: 2px;
+}
+
+.previewTabList {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.previewTabPanel {
+  min-width: 0;
 }
 
 .scratchTab {
@@ -235,6 +254,19 @@
   color: var(--green-strong);
   transform: translateY(-1px);
   box-shadow: 0 2px 5px rgb(0 0 0 / 6%);
+}
+
+.exportBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.exportBtn:disabled:hover {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--ink);
+  transform: none;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
 }
 
 .exportBtn:active {

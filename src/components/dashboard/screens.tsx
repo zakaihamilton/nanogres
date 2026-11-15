@@ -1,20 +1,20 @@
 // biome-ignore-all lint/a11y/noNoninteractiveTabindex: Keyboard-focusable dashboard regions allow keyboard scrolling of wide tables.
-import { useState, type FormEvent, type ReactNode } from "react";
-import { Icon } from "./icons";
-import { PanelFrame } from "./panel-frame";
+import { type FormEvent, type ReactNode, useState } from "react";
 import { Select } from "@/components/ui/select";
 import { generateSecurePassword } from "@/lib/generate-password";
-import { StorageCapacity, type DatabaseStorage, type StorageDisk } from "./storage-capacity";
-import styles from "./screens.module.css";
 import { TENANT_NAME_MAX_LENGTH, TENANT_NAME_PATTERN } from "@/lib/tenant-names";
+import { Icon } from "./icons";
 import {
+  FirstRunCard,
   LiveAccessScreen,
   LiveActivityScreen,
   LiveBackupsScreen,
   LiveDatabasesScreen,
-  FirstRunCard,
   LiveOverviewScreen,
 } from "./live-screens";
+import { PanelFrame } from "./panel-frame";
+import styles from "./screens.module.css";
+import { type DatabaseStorage, StorageCapacity, type StorageDisk } from "./storage-capacity";
 
 
 type ScreenMode = "live" | "preview";
@@ -32,7 +32,11 @@ export type PreviewScenario =
   | "backups-unconfigured"
   | "read-only"
   | "validation-errors"
-  | "delete-error";
+  | "delete-error"
+  | "sql-error"
+  | "sql-empty-results"
+  | "sql-wide-results"
+  | "sql-no-database";
 
 type ScreenProps = {
   mode: ScreenMode;
@@ -172,6 +176,7 @@ function databasesForScenario(scenario: PreviewScenario): DatabaseRow[] {
 
 export function previewDatabaseNamesForScenario(scenario: PreviewScenario): string[] | null {
   if (scenario === "disconnected-server") return null;
+  if (scenario === "sql-no-database") return [];
   return databasesForScenario(scenario)
     .filter((database) => !database.systemDatabase)
     .map((database) => database.name);
