@@ -24,6 +24,7 @@ const previewScreens = [
   ["backups-restore", "Restore from a file", "Restore from file"],
   ["backups-restore-existing", "Restore a backup", "Restore retained backup"],
   ["activity", "Activity", "Activity"],
+  ["sql-editor", "SQL Editor", "SQL Editor"],
 ];
 
 async function resetTestServices(request) {
@@ -412,16 +413,16 @@ test("custom preview dropdowns support keyboard selection and update the screen 
   await screenPicker.focus();
   await screenPicker.press("End");
   await expect(page.getByRole("listbox")).toBeVisible();
-  const activityOptionId = await page
-    .getByRole("option", { name: "Activity" })
+  const selectedOptionId = await page
+    .getByRole("option", { name: "SQL Editor" })
     .getAttribute("id");
-  expect(activityOptionId).toBeTruthy();
+  expect(selectedOptionId).toBeTruthy();
   await expect(screenPicker).toHaveAttribute(
     "aria-activedescendant",
-    activityOptionId,
+    selectedOptionId,
   );
   await screenPicker.press("Enter");
-  await expect(page.getByRole("heading", { name: "Activity", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "SQL Editor", exact: true })).toBeVisible();
 
   await chooseDropdown(page, "Color theme", "Dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");

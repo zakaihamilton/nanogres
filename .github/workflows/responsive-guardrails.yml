@@ -1,0 +1,37 @@
+name: Responsive UI guardrails
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  preview-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a reviewed PR preview
+        env:
+          PULL_REQUEST_BODY: ${{ github.event.pull_request.body || '' }}
+        run: |
+          required='- [x] I reviewed the PR preview at 320, 390, 768, 1024, and 1280 px in both light and dark themes, including headers, controls, padding, and margins.'
+          if ! grep -Fq -- "$required" <<< "$PULL_REQUEST_BODY"; then
+            echo "::error::Review the PR preview at all five widths in both themes, then check the preview review box in the PR description."
+            exit 1
+          fi
+
+  responsive-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.18.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:responsive

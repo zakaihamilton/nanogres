@@ -18,13 +18,19 @@
   text-transform: uppercase;
 }
 
-.screenControl [data-select-root] {
+.screenControl :global(.pf-select-field) {
   width: 152px;
 }
 
-.screenControl [data-select-trigger] {
+.screenControl :global(.pf-select) {
+  width: 100%;
+}
+
+.screenControl :global(.pf-select-trigger) {
+  width: 100%;
   min-width: 152px;
-  min-height: 38px;
+  height: 40px;
+  min-height: 40px;
   padding: 0 30px 0 11px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -35,7 +41,7 @@
   font-weight: 650;
 }
 
-.screenControl [data-select-trigger]:focus-visible {
+.screenControl :global(.pf-select-trigger:focus-visible) {
   outline: 2px solid var(--green);
   outline-offset: 2px;
 }
@@ -77,12 +83,12 @@
     flex: 1 1 140px;
   }
 
-  .screenControl [data-select-root] {
+  .screenControl :global(.pf-select-field) {
     min-width: 0;
     width: 100%;
   }
 
-  .screenControl [data-select-trigger] {
+  .screenControl :global(.pf-select-trigger) {
     min-width: 0;
   }
 

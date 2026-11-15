@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-11-05T11:36:58.277Z",
+  "generatedAt": "2026-11-15T07:53:27.401Z",
   "entries": [
     {
       "fingerprint": "4f86b76d2fd40dd3e9be8463",
@@ -163,6 +163,42 @@
       "scope": ".",
       "file": "components/dashboard/live-transfers.tsx",
       "line": 257
+    },
+    {
+      "fingerprint": "2940a16b37cf241885e2de52",
+      "provider": "jscpd",
+      "category": "duplication",
+      "type": "duplication",
+      "scope": ".",
+      "file": "components/dashboard/sql-editor-preview.tsx",
+      "line": 242
+    },
+    {
+      "fingerprint": "eedab97dd5b647517e6150d3",
+      "provider": "jscpd",
+      "category": "duplication",
+      "type": "duplication",
+      "scope": ".",
+      "file": "components/dashboard/sql-editor-preview.tsx",
+      "line": 249
+    },
+    {
+      "fingerprint": "67a4b473b1bd453f9932180a",
+      "provider": "jscpd",
+      "category": "duplication",
+      "type": "duplication",
+      "scope": ".",
+      "file": "components/dashboard/sql-editor-preview.tsx",
+      "line": 270
+    },
+    {
+      "fingerprint": "5f08a896572774926715a2fc",
+      "provider": "jscpd",
+      "category": "duplication",
+      "type": "duplication",
+      "scope": ".",
+      "file": "components/dashboard/sql-editor-preview.tsx",
+      "line": 311
     }
   ]
 }
