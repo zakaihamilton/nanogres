@@ -4,6 +4,8 @@ import { exchangePerministerOidcCode } from "@/lib/perminister-oidc";
 import {
   getAppOrigin,
   getPerministerConfig,
+  nanogresOrganizations,
+  ORGANIZATION_COOKIE,
   SESSION_COOKIE,
   validatePerministerSession,
 } from "@/lib/perminister-auth";
@@ -53,7 +55,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const cookieName = perministerSsoCookieName(state);
   if (!cookieName) return loginError(request, "callback", state);
-  const cookieValue = (await cookies()).get(cookieName)?.value;
+  const cookieJar = await cookies();
+  const cookieValue = cookieJar.get(cookieName)?.value;
   const transaction = readPerministerSsoTransaction(cookieValue, config.clientSecret);
   if (!transaction || !matchesPerministerSsoState(transaction.state, state)) {
     return loginError(request, "callback", state);
@@ -84,6 +87,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const session = await validatePerministerSession(accessToken, config);
   if (!session) return loginError(request, "callback", state, transaction.returnTo);
 
+  const availableOrganizations = nanogresOrganizations({ ...session, token: accessToken });
+  const currentOrganizationId = cookieJar
+    .get(ORGANIZATION_COOKIE)
+    ?.value?.trim()
+    .toLowerCase();
+  const selectedOrganization =
+    availableOrganizations.find(
+      (organization) => organization.organizationId === currentOrganizationId,
+    ) ?? availableOrganizations[0];
+
   const expiresAt = Date.parse(session.session.expiresAt);
   const maxAge = Math.floor((expiresAt - Date.now()) / 1000);
   if (!Number.isFinite(expiresAt) || maxAge <= 0) {
@@ -102,6 +115,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     maxAge,
     expires: new Date(expiresAt),
   });
+  const organizationCookieOptions = {
+    httpOnly: true,
+    secure: appOrigin.startsWith("https:"),
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+  };
+  if (selectedOrganization) {
+    response.cookies.set(
+      ORGANIZATION_COOKIE,
+      selectedOrganization.organizationId,
+      organizationCookieOptions,
+    );
+  } else {
+    response.cookies.set(ORGANIZATION_COOKIE, "", {
+      ...organizationCookieOptions,
+      maxAge: 0,
+    });
+  }
   response.cookies.set(cookieName, "", {
     httpOnly: true,
     secure: appOrigin.startsWith("https:"),
