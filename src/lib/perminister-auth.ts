@@ -7,6 +7,9 @@ export const SESSION_COOKIE = "nanogres_session";
 export const LEGACY_WORKSPACE_COOKIE = "nanogres_workspace_id";
 export const ORGANIZATION_COOKIE = "nanogres_organization_id";
 export const LEGACY_WORKSPACE_NAMES_COOKIE = "nanogres_workspace_names";
+const PERMINISTER_SESSION_TIMEOUT_MS = 30_000;
+const ORGANIZATION_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export type PerministerConfig = {
   baseUrl: string;
@@ -204,13 +207,22 @@ function clientHeaders(config: PerministerConfig, token?: string): HeadersInit {
 export async function validatePerministerSession(
   token: string,
   config = getPerministerConfig(),
+  selectedOrganizationId?: string,
 ): Promise<PerministerSessionPayload | null> {
   if (!config) return null;
   try {
-    const response = await fetch(`${config.baseUrl}/api/auth/consumer/session`, {
+    const sessionUrl = new URL("/api/auth/consumer/session", config.baseUrl);
+    const normalizedOrganizationId = selectedOrganizationId?.trim().toLowerCase();
+    if (
+      normalizedOrganizationId &&
+      ORGANIZATION_ID_PATTERN.test(normalizedOrganizationId)
+    ) {
+      sessionUrl.searchParams.set("organization_id", normalizedOrganizationId);
+    }
+    const response = await fetch(sessionUrl, {
       headers: clientHeaders(config, token),
       cache: "no-store",
-      signal: AbortSignal.timeout(6_000),
+      signal: AbortSignal.timeout(PERMINISTER_SESSION_TIMEOUT_MS),
     });
     if (!response.ok) return null;
     const payload: unknown = await response.json();
@@ -220,10 +232,12 @@ export async function validatePerministerSession(
   }
 }
 
-export async function getCurrentPerministerSession(): Promise<CurrentSession | null> {
+export async function getCurrentPerministerSession(
+  selectedOrganizationId?: string,
+): Promise<CurrentSession | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  const payload = await validatePerministerSession(token);
+  const payload = await validatePerministerSession(token, undefined, selectedOrganizationId);
   return payload ? { ...payload, token } : null;
 }
 
@@ -378,7 +392,8 @@ export async function authorizeNanogresAction(action: string): Promise<
     }
   | Response
 > {
-  const session = await getCurrentPerministerSession();
+  const selectedOrganizationId = (await cookies()).get(ORGANIZATION_COOKIE)?.value;
+  const session = await getCurrentPerministerSession(selectedOrganizationId);
   if (!session) {
     return Response.json(
       { error: "Sign in to continue." },
