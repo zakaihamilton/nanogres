@@ -1,5 +1,5 @@
 import Link from "next/link";
-import styles from "./privacy.module.css";
+import styles from "../privacy.module.css";
 
 export const metadata = {
   title: "Privacy policy · Nanogres",
