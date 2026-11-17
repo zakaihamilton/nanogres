@@ -110,7 +110,7 @@
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .header {
     align-items: flex-start;
     padding: 20px 2px;
