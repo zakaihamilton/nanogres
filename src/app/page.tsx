@@ -447,6 +447,9 @@ export default function WelcomePage() {
           <Link className={styles.footerLink} href="/sql">
             SQL Studio
           </Link>
+          <Link className={styles.footerLink} href="/privacy">
+            Privacy policy
+          </Link>
         </div>
       </footer>
     </main>

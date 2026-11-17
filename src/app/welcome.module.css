@@ -852,7 +852,9 @@
 
 .footerLinks {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -907,6 +909,10 @@
     flex: 1 1 100%;
     min-width: 0;
     justify-content: space-between;
+  }
+
+  .footerLinks {
+    justify-content: flex-start;
   }
 
   .hero {
