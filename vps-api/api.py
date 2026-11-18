@@ -14,6 +14,8 @@ import json
 import os
 import re
 import selectors
+import shlex
+import signal
 import secrets
 import shutil
 import socket
@@ -55,6 +57,12 @@ RESTORE_UPLOAD_TTL = timedelta(hours=24)
 RESTORE_UPLOAD_DIR = STATE_DIR / "restore-uploads"
 TRANSFER_DIR = STATE_DIR / "transfers"
 WORKLOAD_IDENTITY_DIR = STATE_DIR / "workload-identities"
+WORKLOAD_PGBOUNCER_AUTH_FILE = Path("/var/lib/nanogres/workload-pgbouncer-users.txt")
+WORKLOAD_PGBOUNCER_AUTH_SOURCE = Path("/etc/nanogres/pgbouncer-users.txt")
+WORKLOAD_PGBOUNCER_PID_FILES = (
+    Path("/run/nanogres-pgbouncer-identity-runtime/pgbouncer.pid"),
+    Path("/run/nanogres-pgbouncer-identity-migrations/pgbouncer.pid"),
+)
 TRANSFER_JOB_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 WORKLOAD_IDENTITY_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 TRANSFER_INTERNAL_PATTERN = re.compile(r"^transfer_(?:old_)?[a-f0-9]{24}$")
@@ -80,6 +88,7 @@ transfer_workers: dict[str, threading.Thread] = {}
 transfer_processes: dict[str, subprocess.Popen[str]] = {}
 transfer_cancel_events: dict[str, threading.Event] = {}
 workload_identity_lock = threading.RLock()
+workload_pgbouncer_auth_lock = threading.RLock()
 workload_ssh_key_lock = threading.RLock()
 
 
@@ -405,6 +414,78 @@ def delete_workload_identity(identity_id: str, organization_id: object) -> None:
     with workload_ssh_key_lock:
         keys = _read_workload_ssh_keys()
         _write_workload_ssh_keys([item for item in keys if item.get("grantId") != identity_id])
+
+
+def _pgbouncer_username(line: str) -> str | None:
+    try:
+        fields = shlex.split(line, comments=True)
+    except ValueError:
+        return None
+    return fields[0] if fields else None
+
+
+def store_workload_pgbouncer_credential(username: str, password: str) -> None:
+    if (
+        not NAME_PATTERN.fullmatch(username)
+        or not password
+        or any(character in password for character in ('"', '\r', '\n', '\t'))
+    ):
+        raise ApiError(400, "A valid workload login credential is required.")
+
+    with workload_pgbouncer_auth_lock:
+        try:
+            source_lines = WORKLOAD_PGBOUNCER_AUTH_SOURCE.read_text(encoding="utf-8").splitlines()
+            auth_user_line = next(
+                (
+                    line
+                    for line in source_lines
+                    if _pgbouncer_username(line) == "nanogres_pgbouncer_auth"
+                ),
+                None,
+            )
+            if auth_user_line is None:
+                raise ApiError(503, "Nanogres workload authentication is not configured.")
+            try:
+                existing_lines = WORKLOAD_PGBOUNCER_AUTH_FILE.read_text(encoding="utf-8").splitlines()
+            except FileNotFoundError:
+                existing_lines = []
+        except OSError as error:
+            raise ApiError(503, "Nanogres could not update workload authentication.") from error
+
+        lines = [auth_user_line]
+        lines.extend(
+            line
+            for line in existing_lines
+            if line.strip()
+            and _pgbouncer_username(line)
+            not in {"nanogres_pgbouncer_auth", username}
+        )
+        lines.append(f'"{username}" "{password}"')
+
+        temporary = ""
+        try:
+            WORKLOAD_PGBOUNCER_AUTH_FILE.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            descriptor, temporary = tempfile.mkstemp(
+                prefix=".workload-pgbouncer-users.",
+                dir=WORKLOAD_PGBOUNCER_AUTH_FILE.parent,
+            )
+            os.fchmod(descriptor, 0o600)
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                handle.write("\n".join(lines) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, WORKLOAD_PGBOUNCER_AUTH_FILE)
+            temporary = ""
+            for pid_file in WORKLOAD_PGBOUNCER_PID_FILES:
+                pid = int(pid_file.read_text(encoding="ascii").strip())
+                if pid <= 1:
+                    raise ValueError("invalid PgBouncer process id")
+                os.kill(pid, signal.SIGHUP)
+        except (OSError, ValueError) as error:
+            raise ApiError(503, "Nanogres could not reload workload authentication.") from error
+        finally:
+            if temporary:
+                Path(temporary).unlink(missing_ok=True)
 
 
 def _workload_ssh_key_path() -> Path:
@@ -3752,6 +3833,8 @@ class Handler(BaseHTTPRequestHandler):
                 )
         statements.append("COMMIT")
         run_sql("; ".join(statements), database)
+        if workload_identity_only:
+            store_workload_pgbouncer_credential(name, str(password))
         record_event(
             "role.created",
             f"Role {logical_name} created for {logical_database} ({access}).",
