@@ -1,7 +1,6 @@
 export function actionFor(method: string, segments: string[]): string | null {
   const [resource, identifier, subResource] = segments;
-  const productId = process.env.PERMINISTER_PRODUCT_ID?.trim().toLowerCase();
-  if (!productId) return null;
+  const productId = process.env.PERMINISTER_PRODUCT_ID?.trim().toLowerCase() || "nanogres";
   const read = `${productId}:database:read`;
   const manage = `${productId}:database:manage`;
 
