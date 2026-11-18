@@ -49,7 +49,7 @@ export function LiveWorkloadIdentities({
 
   const selectedDatabase = database || userDatabases[0]?.name || "";
   const eligibleRoles = roles.filter(
-    (candidate) => candidate.database === selectedDatabase && !candidate.systemRole,
+    (candidate) => candidate.connectionDatabase === selectedDatabase && !candidate.systemRole,
   );
   const selectedRole = role || eligibleRoles[0]?.name || "";
   const identities = identitiesQuery.data?.identities ?? [];
