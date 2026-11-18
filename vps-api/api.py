@@ -716,7 +716,7 @@ def issue_workload_certificate(
             "host": "127.0.0.1",
             "port": 6435 if migration_role else 6434,
             "user": username,
-            "database": str(role.get("connectionDatabase")),
+            "database": database,
             "tlsServerName": "nanogres.duckdns.org",
             "pooling": "session" if migration_role else "transaction",
             "sshHost": "nanogres.duckdns.org",
