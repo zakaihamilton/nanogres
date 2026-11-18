@@ -16,7 +16,7 @@ install -d -o root -g postgres -m 0750 /etc/nanogres/pgbouncer
 install -o root -g postgres -m 0640 "$CERT_DIR/fullchain.pem" /etc/nanogres/pgbouncer/server.crt
 install -o root -g postgres -m 0640 "$CERT_DIR/privkey.pem" /etc/nanogres/pgbouncer/server.key
 
-for service in nanogres-pgbouncer-runtime.service nanogres-pgbouncer-migrations.service; do
+for service in nanogres-pgbouncer-runtime.service nanogres-pgbouncer-migrations.service nanogres-pgbouncer-identity-runtime.service nanogres-pgbouncer-identity-migrations.service; do
   if systemctl is-active --quiet "$service"; then
     systemctl reload "$service"
   fi
