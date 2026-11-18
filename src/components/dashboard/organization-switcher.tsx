@@ -58,7 +58,8 @@ export function OrganizationSwitcher({
         setError(message);
         return;
       }
-      router.push("/overview");
+      // The endpoint updates an HTTP-only cookie, so load fresh server-rendered data.
+      window.location.assign("/overview");
     } catch {
       setError("The organization could not be selected. Try again.");
     } finally {
