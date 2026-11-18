@@ -166,6 +166,17 @@ printf '"nanogres_pgbouncer_auth" "%s"\n' "$PGBOUNCER_AUTH_PASSWORD" > /etc/nano
 chown root:postgres /etc/nanogres/pgbouncer-users.txt
 chmod 0640 /etc/nanogres/pgbouncer-users.txt
 
+WORKLOAD_PGBOUNCER_AUTH_FILE=/var/lib/nanogres/workload-pgbouncer-users.txt
+WORKLOAD_PGBOUNCER_AUTH_TMP=$(mktemp /var/lib/nanogres/.workload-pgbouncer-users.XXXXXX)
+if [ -s "$WORKLOAD_PGBOUNCER_AUTH_FILE" ]; then
+  awk '$1 != "\"nanogres_pgbouncer_auth\"" && $1 != "nanogres_pgbouncer_auth" { print }' \
+    "$WORKLOAD_PGBOUNCER_AUTH_FILE" > "$WORKLOAD_PGBOUNCER_AUTH_TMP"
+fi
+cat /etc/nanogres/pgbouncer-users.txt >> "$WORKLOAD_PGBOUNCER_AUTH_TMP"
+chown postgres:postgres "$WORKLOAD_PGBOUNCER_AUTH_TMP"
+chmod 0600 "$WORKLOAD_PGBOUNCER_AUTH_TMP"
+mv "$WORKLOAD_PGBOUNCER_AUTH_TMP" "$WORKLOAD_PGBOUNCER_AUTH_FILE"
+
 runuser -u postgres -- psql -X -v ON_ERROR_STOP=1 -d postgres <<SQL
 DO \$nanogres\$
 BEGIN
