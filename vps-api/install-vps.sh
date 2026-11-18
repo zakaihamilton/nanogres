@@ -172,7 +172,9 @@ if [ -s "$WORKLOAD_PGBOUNCER_AUTH_FILE" ]; then
   awk '$1 != "\"nanogres_pgbouncer_auth\"" && $1 != "nanogres_pgbouncer_auth" { print }' \
     "$WORKLOAD_PGBOUNCER_AUTH_FILE" > "$WORKLOAD_PGBOUNCER_AUTH_TMP"
 fi
-cat /etc/nanogres/pgbouncer-users.txt >> "$WORKLOAD_PGBOUNCER_AUTH_TMP"
+if [ ! -s "$WORKLOAD_PGBOUNCER_AUTH_TMP" ]; then
+  printf '# Workload credentials are managed by the Nanogres API.\\n' > "$WORKLOAD_PGBOUNCER_AUTH_TMP"
+fi
 chown postgres:postgres "$WORKLOAD_PGBOUNCER_AUTH_TMP"
 chmod 0600 "$WORKLOAD_PGBOUNCER_AUTH_TMP"
 mv "$WORKLOAD_PGBOUNCER_AUTH_TMP" "$WORKLOAD_PGBOUNCER_AUTH_FILE"
