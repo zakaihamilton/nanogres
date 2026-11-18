@@ -68,7 +68,7 @@ export async function verifyWorkloadIdentityToken(
     const payload = decodeJsonSegment(encodedPayload);
     if (
       header.alg !== "RS256" ||
-      (header.typ !== undefined && header.typ !== "JWT") ||
+      (header.typ !== undefined && header.typ !== "JWT" && header.typ !== "jwt") ||
       typeof header.kid !== "string" ||
       !/^[A-Za-z0-9._-]{1,128}$/.test(header.kid) ||
       "jku" in header ||
