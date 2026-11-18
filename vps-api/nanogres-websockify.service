@@ -1,0 +1,23 @@
+[Unit]
+Description=Nanogres HTTPS WebSocket bridge for workload SSH
+After=network-online.target nanogres-workload-sshd.service
+Wants=network-online.target
+Requires=nanogres-workload-sshd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/websockify 127.0.0.1:8766 127.0.0.1:2222
+Restart=on-failure
+RestartSec=2s
+User=nanogres-workload-proxy
+Group=nanogres-workload-proxy
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET
+LockPersonality=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

@@ -20,6 +20,10 @@ if ! command -v rclone >/dev/null 2>&1 || ! command -v repquota >/dev/null 2>&1 
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y rclone quota
 fi
+if ! command -v sshd >/dev/null 2>&1 || ! command -v websockify >/dev/null 2>&1; then
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server python3-websockify
+fi
 
 . /etc/os-release
 if [ "${ID:-}" != "ubuntu" ] && [ "${ID:-}" != "debian" ]; then
@@ -61,6 +65,7 @@ if ! dpkg --compare-versions "$PGBOUNCER_VERSION" ge "1.26.1"; then
 fi
 
 install -d -o root -g root -m 0755 /opt/nanogres-api
+install -d -o root -g root -m 0755 /usr/local/libexec
 install -d -o postgres -g postgres -m 0700 /var/backups/nanogres /var/lib/nanogres
 install -d -o root -g postgres -m 0750 /etc/nanogres
 install -d -o root -g postgres -m 0750 /etc/nanogres/pgbouncer
@@ -85,9 +90,50 @@ install -o root -g root -m 0644 "$SOURCE_DIR/pgbouncer-runtime.ini" /etc/nanogre
 install -o root -g root -m 0644 "$SOURCE_DIR/pgbouncer-migrations.ini" /etc/nanogres/pgbouncer-migrations.ini
 install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-pgbouncer-runtime.service" /etc/systemd/system/nanogres-pgbouncer-runtime.service
 install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-pgbouncer-migrations.service" /etc/systemd/system/nanogres-pgbouncer-migrations.service
+install -o root -g root -m 0644 "$SOURCE_DIR/pgbouncer-identity-runtime.ini" /etc/nanogres/pgbouncer-identity-runtime.ini
+install -o root -g root -m 0644 "$SOURCE_DIR/pgbouncer-identity-migrations.ini" /etc/nanogres/pgbouncer-identity-migrations.ini
+install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-pgbouncer-identity-runtime.service" /etc/systemd/system/nanogres-pgbouncer-identity-runtime.service
+install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-pgbouncer-identity-migrations.service" /etc/systemd/system/nanogres-pgbouncer-identity-migrations.service
+install -o root -g root -m 0644 "$SOURCE_DIR/sshd-nanogres-workload.conf" /etc/ssh/sshd_config-nanogres-workload
+install -o root -g root -m 0755 "$SOURCE_DIR/nanogres-authorized-keys.py" /usr/local/libexec/nanogres-authorized-keys
+install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-workload-sshd.service" /etc/systemd/system/nanogres-workload-sshd.service
+install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-websockify.service" /etc/systemd/system/nanogres-websockify.service
 install -o root -g root -m 0755 "$SOURCE_DIR/nanogres-pgbouncer-tls-sync.sh" /usr/local/sbin/nanogres-pgbouncer-tls-sync
 install -d -o root -g root -m 0755 /etc/letsencrypt/renewal-hooks/deploy
 install -o root -g root -m 0755 "$SOURCE_DIR/reload-nginx-on-renewal.sh" /etc/letsencrypt/renewal-hooks/deploy/nanogres-reload-nginx
+
+if ! id nanogres-workload >/dev/null 2>&1; then
+  useradd --system --no-create-home --home-dir /var/empty --shell /usr/sbin/nologin nanogres-workload
+fi
+usermod --password NP --home /var/empty --shell /usr/sbin/nologin nanogres-workload
+if ! id nanogres-workload-proxy >/dev/null 2>&1; then
+  useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin nanogres-workload-proxy
+fi
+usermod --lock --home /nonexistent --shell /usr/sbin/nologin nanogres-workload-proxy
+ssh-keygen -A
+install -d -o postgres -g postgres -m 0700 /var/lib/nanogres/workload-identities
+
+WORKLOAD_CA_DIR=/etc/nanogres/pgbouncer
+WORKLOAD_CA_CERT="$WORKLOAD_CA_DIR/client-ca.crt"
+WORKLOAD_CA_KEY="$WORKLOAD_CA_DIR/client-ca.key"
+if [ -e "$WORKLOAD_CA_CERT" ] || [ -e "$WORKLOAD_CA_KEY" ]; then
+  if [ ! -s "$WORKLOAD_CA_CERT" ] || [ ! -s "$WORKLOAD_CA_KEY" ]; then
+    echo "The workload client CA is only partially present; refusing to replace it." >&2
+    exit 1
+  fi
+else
+  CA_TEMP_DIR=$(mktemp -d)
+  trap 'rm -rf "$CA_TEMP_DIR"' EXIT HUP INT TERM
+  openssl req -x509 -newkey rsa:3072 -sha256 -nodes -days 365 \
+    -subj "/CN=Nanogres Workload Client CA" \
+    -keyout "$CA_TEMP_DIR/client-ca.key" -out "$CA_TEMP_DIR/client-ca.crt"
+  install -o root -g postgres -m 0640 "$CA_TEMP_DIR/client-ca.key" "$WORKLOAD_CA_KEY"
+  install -o root -g postgres -m 0640 "$CA_TEMP_DIR/client-ca.crt" "$WORKLOAD_CA_CERT"
+  rm -rf "$CA_TEMP_DIR"
+  trap - EXIT HUP INT TERM
+fi
+chown root:postgres "$WORKLOAD_CA_KEY" "$WORKLOAD_CA_CERT"
+chmod 0640 "$WORKLOAD_CA_KEY" "$WORKLOAD_CA_CERT"
 
 if [ ! -s /etc/nanogres/api.env ]; then
   umask 027
@@ -187,7 +233,22 @@ systemctl enable --now nanogres-offsite-backup.path
 systemctl enable --now nanogres-backup-alert.timer
 systemctl enable nanogres-api.service
 systemctl restart nanogres-api.service
+systemctl enable --now nanogres-workload-sshd.service
+systemctl enable --now nanogres-websockify.service
+
+if [ -s /etc/letsencrypt/live/nanogres.duckdns.org/fullchain.pem ] && [ -s /etc/letsencrypt/live/nanogres.duckdns.org/privkey.pem ]; then
+  for service in nanogres-pgbouncer-identity-runtime.service nanogres-pgbouncer-identity-migrations.service; do
+    systemctl enable "$service"
+    systemctl reset-failed "$service" >/dev/null 2>&1 || true
+    systemctl restart "$service"
+  done
+else
+  systemctl disable --now nanogres-pgbouncer-identity-runtime.service >/dev/null 2>&1 || true
+  systemctl disable --now nanogres-pgbouncer-identity-migrations.service >/dev/null 2>&1 || true
+  echo "Workload identity PgBouncer listeners are staged but disabled until the Nanogres TLS certificate is installed."
+fi
 
 echo "Nanogres API is installed and bound to 127.0.0.1:8765."
 echo "PostgreSQL remains private on 127.0.0.1:5432. PgBouncer uses TLS on ports 6432 and 6433 when the certificate is present."
+echo "Passwordless workload SSH is loopback-only; WebSocket transport uses the existing HTTPS port 8443. Workload PgBouncer listeners stay on loopback."
 echo "The HTTPS proxy config is staged but not enabled; no firewall rules were changed."

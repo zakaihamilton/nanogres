@@ -9,6 +9,7 @@ import { nanogresToast } from "@/components/ui/toast";
 import { Tooltip } from "@/components/ui/tooltip";
 import { generateSecurePassword } from "@/lib/generate-password";
 import { Icon } from "./icons";
+import { LiveWorkloadIdentities } from "./live-workload-identities";
 import {
   type Role,
   apiRequest,
@@ -42,6 +43,7 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
   const selectedDatabase = database || userDatabases[0]?.name || "";
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [passwordless, setPasswordless] = useState(false);
   const [access, setAccess] = useState<"readwrite" | "readonly" | "migration">("readwrite");
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -67,12 +69,20 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
       await apiRequest("/api/nanogres/roles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, database: selectedDatabase, password, access }),
+        body: JSON.stringify({
+          name,
+          database: selectedDatabase,
+          ...(passwordless ? { useWorkloadIdentity: true } : { password }),
+          access,
+        }),
       });
       setName("");
       setPassword("");
+      setPasswordless(false);
       setPasswordVisible(false);
-      const successMsg = `Role “${name}” created for ${selectedDatabase}. Store the password safely; Nanogres will not show it again.`;
+      const successMsg = passwordless
+        ? `Role “${name}” created for ${selectedDatabase}. Connect through a workload identity grant.`
+        : `Role “${name}” created for ${selectedDatabase}. Store the password safely; Nanogres will not show it again.`;
       setMessage(successMsg);
       nanogresToast.success(`Role “${name}” created successfully`);
       await rolesQuery.refresh();
@@ -116,7 +126,11 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
         <>
           <Panel
             title="Create a database role"
-            detail="Passwords are sent over HTTPS, stored by Postgres as SCRAM hashes, and never displayed again."
+            detail={
+              passwordless
+                ? "Products connect through short-lived SSH keys and workload certificates. Nanogres keeps the internal database password hidden."
+                : "Passwords are sent over HTTPS, stored by Postgres as SCRAM hashes, and never displayed again."
+            }
           >
             {databaseLoading ? (
               <Loading />
@@ -173,40 +187,58 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
                   </small>
                 </div>
                 <div className={styles.field}>
-                  <label htmlFor="role-password">Password</label>
-                  <div className={styles.passwordInputRow}>
+                  <label htmlFor="role-passwordless">
                     <input
-                      autoComplete="new-password"
-                      id="role-password"
-                      minLength={16}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder="At least 16 characters"
-                      required
-                      type={passwordVisible ? "text" : "password"}
-                      value={password}
-                    />
-                    <button
-                      aria-controls="role-password"
-                      aria-label={passwordVisible ? "Hide password" : "Show password"}
-                      aria-pressed={passwordVisible}
-                      className={`${styles.button} ${styles.secondary}`}
-                      onClick={() => setPasswordVisible((visible) => !visible)}
-                      type="button"
-                    >
-                      {passwordVisible ? "Hide" : "Show"}
-                    </button>
-                    <Button
-                      onClick={() => setPassword(generateSecurePassword())}
-                      type="button"
-                      variant="secondary"
-                    >
-                      Generate
-                    </Button>
-                  </div>
-                  <small>
-                    Generate a secure 24-character password, show it, then save it in your password
-                    manager.
-                  </small>
+                      checked={passwordless}
+                      id="role-passwordless"
+                      onChange={(event) => setPasswordless(event.target.checked)}
+                      type="checkbox"
+                    />{" "}
+                    Connect through workload identity
+                  </label>
+                  {passwordless ? (
+                    <small>
+                      Nanogres creates an internal Postgres password for PgBouncer. Your product
+                      receives only short-lived certificates and never handles that password.
+                    </small>
+                  ) : (
+                    <>
+                      <label htmlFor="role-password">Password</label>
+                      <div className={styles.passwordInputRow}>
+                        <input
+                          autoComplete="new-password"
+                          id="role-password"
+                          minLength={16}
+                          onChange={(event) => setPassword(event.target.value)}
+                          placeholder="At least 16 characters"
+                          required
+                          type={passwordVisible ? "text" : "password"}
+                          value={password}
+                        />
+                        <button
+                          aria-controls="role-password"
+                          aria-label={passwordVisible ? "Hide password" : "Show password"}
+                          aria-pressed={passwordVisible}
+                          className={`${styles.button} ${styles.secondary}`}
+                          onClick={() => setPasswordVisible((visible) => !visible)}
+                          type="button"
+                        >
+                          {passwordVisible ? "Hide" : "Show"}
+                        </button>
+                        <Button
+                          onClick={() => setPassword(generateSecurePassword())}
+                          type="button"
+                          variant="secondary"
+                        >
+                          Generate
+                        </Button>
+                      </div>
+                      <small>
+                        Generate a secure 24-character password, show it, then save it in your
+                        password manager.
+                      </small>
+                    </>
+                  )}
                 </div>
                 <div className={styles.formActions}>
                   <Button disabled={saving} type="submit">
@@ -306,6 +338,7 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
               </Empty>
             )}
           </Panel>
+          <LiveWorkloadIdentities databases={databases} roles={rawRoles ?? []} />
         </>
       )}
 

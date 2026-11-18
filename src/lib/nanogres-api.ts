@@ -34,6 +34,32 @@ function getApiConfig(): ApiConfig | null {
   return parseApiConfig(process.env.NANOGRES_API_URL, process.env.NANOGRES_API_TOKEN);
 }
 
+export async function callNanogresWorkloadApi(
+  path: string,
+  organizationId: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const config = getApiConfig();
+  if (!config) return apiNotConfigured();
+  try {
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${config.token}`);
+    headers.set("X-Nanogres-Organization", organizationId);
+    headers.set("X-Nanogres-Actor", "workload-identity-broker");
+    return await fetch(`${config.url}${path}`, {
+      ...init,
+      headers,
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    return Response.json(
+      { error: "The Nanogres VPS API could not be reached." },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+}
+
 function apiNotConfigured(): Response {
   return Response.json(
     { error: "The Nanogres VPS API is not configured." },
