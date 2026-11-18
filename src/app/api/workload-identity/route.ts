@@ -108,8 +108,17 @@ export async function POST(request: Request): Promise<Response> {
     },
   );
   if (!issued.ok) {
+    const errorData = (await issued.json().catch(() => null)) as { error?: unknown } | null;
+    const upstreamMessage =
+      typeof errorData?.error === "string"
+        ? errorData.error.replace(/[\\r\\n\\t]+/g, " ").slice(0, 256)
+        : "";
     return Response.json(
-      { error: "Nanogres could not issue workload SSH credentials." },
+      {
+        error: upstreamMessage
+          ? "Nanogres could not issue workload SSH credentials: " + upstreamMessage
+          : "Nanogres could not issue workload SSH credentials.",
+      },
       { status: issued.status >= 500 ? 503 : issued.status },
     );
   }
