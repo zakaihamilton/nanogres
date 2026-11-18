@@ -359,7 +359,7 @@ def create_workload_identity(
             item
             for item in list_roles(organization_id)
             if item.get("name") == logical_role
-            and item.get("connectionDatabase") == database
+            and item.get("connectionDatabase") == logical_database
         ),
         None,
     )
