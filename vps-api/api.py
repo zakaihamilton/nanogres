@@ -58,7 +58,6 @@ RESTORE_UPLOAD_DIR = STATE_DIR / "restore-uploads"
 TRANSFER_DIR = STATE_DIR / "transfers"
 WORKLOAD_IDENTITY_DIR = STATE_DIR / "workload-identities"
 WORKLOAD_PGBOUNCER_AUTH_FILE = Path("/var/lib/nanogres/workload-pgbouncer-users.txt")
-WORKLOAD_PGBOUNCER_AUTH_SOURCE = Path("/etc/nanogres/pgbouncer-users.txt")
 WORKLOAD_PGBOUNCER_PID_FILES = (
     Path("/run/nanogres-pgbouncer-identity-runtime/pgbouncer.pid"),
     Path("/run/nanogres-pgbouncer-identity-migrations/pgbouncer.pid"),
@@ -434,32 +433,19 @@ def store_workload_pgbouncer_credential(username: str, password: str) -> None:
 
     with workload_pgbouncer_auth_lock:
         try:
-            source_lines = WORKLOAD_PGBOUNCER_AUTH_SOURCE.read_text(encoding="utf-8").splitlines()
-            auth_user_line = next(
-                (
-                    line
-                    for line in source_lines
-                    if _pgbouncer_username(line) == "nanogres_pgbouncer_auth"
-                ),
-                None,
-            )
-            if auth_user_line is None:
-                raise ApiError(503, "Nanogres workload authentication is not configured.")
-            try:
-                existing_lines = WORKLOAD_PGBOUNCER_AUTH_FILE.read_text(encoding="utf-8").splitlines()
-            except FileNotFoundError:
-                existing_lines = []
+            existing_lines = WORKLOAD_PGBOUNCER_AUTH_FILE.read_text(encoding="utf-8").splitlines()
+        except FileNotFoundError:
+            existing_lines = []
         except OSError as error:
             raise ApiError(503, "Nanogres could not update workload authentication.") from error
 
-        lines = [auth_user_line]
-        lines.extend(
+        lines = [
             line
             for line in existing_lines
             if line.strip()
             and _pgbouncer_username(line)
             not in {"nanogres_pgbouncer_auth", username}
-        )
+        ]
         lines.append(f'"{username}" "{password}"')
 
         temporary = ""
