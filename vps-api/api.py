@@ -14,8 +14,6 @@ import json
 import os
 import re
 import selectors
-import shlex
-import signal
 import secrets
 import shutil
 import socket
@@ -57,11 +55,6 @@ RESTORE_UPLOAD_TTL = timedelta(hours=24)
 RESTORE_UPLOAD_DIR = STATE_DIR / "restore-uploads"
 TRANSFER_DIR = STATE_DIR / "transfers"
 WORKLOAD_IDENTITY_DIR = STATE_DIR / "workload-identities"
-WORKLOAD_PGBOUNCER_AUTH_FILE = Path("/var/lib/nanogres/workload-pgbouncer-users.txt")
-WORKLOAD_PGBOUNCER_PID_FILES = (
-    Path("/run/nanogres-pgbouncer-identity-runtime/pgbouncer.pid"),
-    Path("/run/nanogres-pgbouncer-identity-migrations/pgbouncer.pid"),
-)
 TRANSFER_JOB_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 WORKLOAD_IDENTITY_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 TRANSFER_INTERNAL_PATTERN = re.compile(r"^transfer_(?:old_)?[a-f0-9]{24}$")
@@ -87,7 +80,6 @@ transfer_workers: dict[str, threading.Thread] = {}
 transfer_processes: dict[str, subprocess.Popen[str]] = {}
 transfer_cancel_events: dict[str, threading.Event] = {}
 workload_identity_lock = threading.RLock()
-workload_pgbouncer_auth_lock = threading.RLock()
 workload_ssh_key_lock = threading.RLock()
 
 
@@ -343,15 +335,35 @@ def create_workload_identity(
     logical_role = str(body.get("role", ""))
     try:
         issuer_url = urlsplit(issuer)
+        issuer_host = issuer_url.hostname
+        issuer_port = issuer_url.port
     except ValueError as error:
         raise ApiError(400, "Issuer must be a valid HTTPS URL.") from error
+    try:
+        ipaddress.ip_address(issuer_host or "")
+        issuer_is_ip = True
+    except ValueError:
+        issuer_is_ip = False
+    local_host = bool(
+        issuer_host
+        and (
+            issuer_host == "localhost"
+            or issuer_host.endswith((".localhost", ".local", ".internal", ".test", ".invalid"))
+        )
+    )
     if (
         not 1 <= len(label) <= 128
         or any(ord(character) < 32 or ord(character) == 127 for character in label)
         or issuer_url.scheme != "https"
         or not issuer_url.netloc
-        or issuer_url.username
-        or issuer_url.password
+        or issuer_url.username is not None
+        or issuer_url.password is not None
+        or issuer_port not in (None, 443)
+        or not issuer_host
+        or "." not in issuer_host
+        or issuer_host.endswith(".")
+        or issuer_is_ip
+        or local_host
         or issuer_url.query
         or issuer_url.fragment
         or not 1 <= len(issuer) <= 512
@@ -360,14 +372,14 @@ def create_workload_identity(
         or not 1 <= len(subject) <= 512
         or any(ord(character) < 32 or ord(character) == 127 for character in subject)
     ):
-        raise ApiError(400, "Provide a name and valid HTTPS issuer, audience, and subject.")
+        raise ApiError(400, "Provide a public HTTPS issuer hostname, audience, and subject.")
     database = require_organization_database(organization_id, logical_database)
     role = next(
         (
             item
             for item in list_roles(organization_id)
             if item.get("name") == logical_role
-            and item.get("connectionDatabase") == logical_database
+            and item.get("connectionDatabase") == database
         ),
         None,
     )
@@ -409,69 +421,10 @@ def delete_workload_identity(identity_id: str, organization_id: object) -> None:
         updated = [item for item in identities if item.get("id") != identity_id]
         if len(updated) == len(identities):
             raise ApiError(404, "Workload identity grant not found.")
-        _write_workload_identities(organization_id, updated)
-    with workload_ssh_key_lock:
-        keys = _read_workload_ssh_keys()
-        _write_workload_ssh_keys([item for item in keys if item.get("grantId") != identity_id])
-
-
-def _pgbouncer_username(line: str) -> str | None:
-    try:
-        fields = shlex.split(line, comments=True)
-    except ValueError:
-        return None
-    return fields[0] if fields else None
-
-
-def store_workload_pgbouncer_credential(username: str, password: str) -> None:
-    if (
-        not NAME_PATTERN.fullmatch(username)
-        or not password
-        or any(character in password for character in ('"', '\r', '\n', '\t'))
-    ):
-        raise ApiError(400, "A valid workload login credential is required.")
-
-    with workload_pgbouncer_auth_lock:
-        try:
-            existing_lines = WORKLOAD_PGBOUNCER_AUTH_FILE.read_text(encoding="utf-8").splitlines()
-        except FileNotFoundError:
-            existing_lines = []
-        except OSError as error:
-            raise ApiError(503, "Nanogres could not update workload authentication.") from error
-
-        lines = [
-            line
-            for line in existing_lines
-            if line.strip()
-            and _pgbouncer_username(line)
-            not in {"nanogres_pgbouncer_auth", username}
-        ]
-        lines.append(f'"{username}" "{password}"')
-
-        temporary = ""
-        try:
-            WORKLOAD_PGBOUNCER_AUTH_FILE.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            descriptor, temporary = tempfile.mkstemp(
-                prefix=".workload-pgbouncer-users.",
-                dir=WORKLOAD_PGBOUNCER_AUTH_FILE.parent,
-            )
-            os.fchmod(descriptor, 0o600)
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                handle.write("\n".join(lines) + "\n")
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary, WORKLOAD_PGBOUNCER_AUTH_FILE)
-            temporary = ""
-            for pid_file in WORKLOAD_PGBOUNCER_PID_FILES:
-                pid = int(pid_file.read_text(encoding="ascii").strip())
-                if pid <= 1:
-                    raise ValueError("invalid PgBouncer process id")
-                os.kill(pid, signal.SIGHUP)
-        except (OSError, ValueError) as error:
-            raise ApiError(503, "Nanogres could not reload workload authentication.") from error
-        finally:
-            if temporary:
-                Path(temporary).unlink(missing_ok=True)
+        with workload_ssh_key_lock:
+            keys = _read_workload_ssh_keys()
+            _write_workload_ssh_keys([item for item in keys if item.get("grantId") != identity_id])
+            _write_workload_identities(organization_id, updated)
 
 
 def _workload_ssh_key_path() -> Path:
@@ -623,7 +576,7 @@ def issue_workload_certificate(
             item
             for item in list_roles(organization_id)
             if item.get("name") == logical_role
-            and item.get("connectionDatabase") == logical_database
+            and item.get("connectionDatabase") == database
         ),
         None,
     )
@@ -700,15 +653,24 @@ def issue_workload_certificate(
         )
         migration_role = role.get("migrationRole") is True
         ssh_host_key_sha256 = workload_ssh_host_key_sha256()
-        _register_workload_ssh_key(
-            ssh_public_key,
-            grant_id,
-            organization_id,
-            str(role.get("connectionDatabase")),
-            logical_role,
-            migration_role,
-            expires,
-        )
+        with workload_identity_lock:
+            grant_is_active = any(
+                item.get("id") == grant_id
+                and item.get("database") == logical_database
+                and item.get("role") == logical_role
+                for item in _read_workload_identities(organization_id)
+            )
+            if not grant_is_active:
+                raise ApiError(403, "No matching workload identity grant.")
+            _register_workload_ssh_key(
+                ssh_public_key,
+                grant_id,
+                organization_id,
+                str(role.get("connectionDatabase")),
+                logical_role,
+                migration_role,
+                expires,
+            )
         return {
             "clientCert": certificate.read_text(encoding="ascii"),
             "clientKey": client_key.read_text(encoding="ascii"),
@@ -716,7 +678,7 @@ def issue_workload_certificate(
             "host": "127.0.0.1",
             "port": 6435 if migration_role else 6434,
             "user": username,
-            "database": database,
+            "database": str(role.get("connectionDatabase")),
             "tlsServerName": "nanogres.duckdns.org",
             "pooling": "session" if migration_role else "transaction",
             "sshHost": "nanogres.duckdns.org",
@@ -3819,8 +3781,6 @@ class Handler(BaseHTTPRequestHandler):
                 )
         statements.append("COMMIT")
         run_sql("; ".join(statements), database)
-        if workload_identity_only:
-            store_workload_pgbouncer_credential(name, str(password))
         record_event(
             "role.created",
             f"Role {logical_name} created for {logical_database} ({access}).",

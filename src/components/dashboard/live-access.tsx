@@ -22,6 +22,7 @@ import {
   Loading,
   Empty,
   ErrorNotice,
+  useActionFeedback,
   useDatabases,
 } from "./live-shared";
 import styles from "./live-screens.module.css";
@@ -46,8 +47,7 @@ export function LiveAccessScreen({ page = "list" }: { page?: "list" | "new" }) {
   const [passwordless, setPasswordless] = useState(false);
   const [access, setAccess] = useState<"readwrite" | "readonly" | "migration">("readwrite");
   const [saving, setSaving] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const { actionError, setActionError, message, setMessage } = useActionFeedback();
 
   // Search & connect modal
   const [searchQuery, setSearchQuery] = useState("");

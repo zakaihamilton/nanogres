@@ -78,6 +78,7 @@ function resetApiState() {
     ],
     backups: [],
     transfers: [],
+    workloadIdentities: [],
     events: [],
     uploads: new Map(),
     options: { failReads: false, failNextUploadChunk: false, offsiteBackup: null },
@@ -383,6 +384,7 @@ async function apiHandler(request, response) {
       backupCount: apiState.backups.length,
       uploadCount: apiState.uploads.size,
       transfers: apiState.transfers,
+      workloadIdentityCount: apiState.workloadIdentities.length,
     });
     return;
   }
@@ -418,6 +420,10 @@ async function apiHandler(request, response) {
   }
   if (request.method === "GET" && pathname === "/v1/roles") {
     sendJson(response, 200, { roles: apiState.roles });
+    return;
+  }
+  if (request.method === "GET" && pathname === "/v1/workload-identities") {
+    sendJson(response, 200, { identities: apiState.workloadIdentities });
     return;
   }
   if (request.method === "GET" && pathname === "/v1/backups") {
@@ -534,6 +540,71 @@ async function apiHandler(request, response) {
     apiState.roles.push(role);
     record("role.created", `Role ${body.name} created for ${body.database}.`);
     return sendJson(response, 201, { role });
+  }
+  if (request.method === "POST" && pathname === "/v1/workload-identities") {
+    const body = await readJson(request);
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const issuer = typeof body.issuer === "string" ? body.issuer.trim() : "";
+    const audience = typeof body.audience === "string" ? body.audience.trim() : "";
+    const subject = typeof body.subject === "string" ? body.subject.trim() : "";
+    const databaseName = typeof body.database === "string" ? body.database : "";
+    const roleName = typeof body.role === "string" ? body.role : "";
+    let validIssuer = false;
+    try {
+      const parsed = new URL(issuer);
+      validIssuer =
+        parsed.protocol === "https:" &&
+        !parsed.username &&
+        !parsed.password &&
+        !parsed.search &&
+        !parsed.hash;
+    } catch {
+      validIssuer = false;
+    }
+    if (
+      !name ||
+      !validIssuer ||
+      !audience ||
+      !subject ||
+      !apiState.databases.some((item) => !item.systemDatabase && item.name === databaseName) ||
+      !apiState.roles.some((item) => item.name === roleName && item.database === databaseName)
+    ) {
+      return sendJson(response, 400, { error: "Workload identity input is invalid." });
+    }
+    if (
+      apiState.workloadIdentities.some(
+        (item) =>
+          item.issuer === issuer &&
+          item.audience === audience &&
+          item.subject === subject &&
+          item.database === databaseName &&
+          item.role === roleName,
+      )
+    ) {
+      return sendJson(response, 409, { error: "That workload identity grant already exists." });
+    }
+    const identity = {
+      id: randomBytes(16).toString("hex"),
+      name,
+      issuer,
+      audience,
+      subject,
+      database: databaseName,
+      role: roleName,
+      createdAt: new Date().toISOString(),
+    };
+    apiState.workloadIdentities.push(identity);
+    record("workload_identity.created", `Workload identity ${name} created.`);
+    return sendJson(response, 201, { identity });
+  }
+  const identityDeleteMatch = pathname.match(/^\/v1\/workload-identities\/([a-f0-9]{32})$/);
+  if (request.method === "DELETE" && identityDeleteMatch) {
+    const index = apiState.workloadIdentities.findIndex(
+      (item) => item.id === identityDeleteMatch[1],
+    );
+    if (index < 0) return sendJson(response, 404, { error: "Workload identity grant not found." });
+    apiState.workloadIdentities.splice(index, 1);
+    return sendJson(response, 200, { deleted: true });
   }
   if (request.method === "POST" && pathname === "/v1/backups") {
     const body = await readJson(request);

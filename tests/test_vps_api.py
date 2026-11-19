@@ -1,7 +1,9 @@
 """Exercise recovery safety against temporary files and mocked PostgreSQL."""
+import base64
+import hashlib
+import http.client
 import importlib.util
 import json
-import http.client
 import os
 import re
 import socket
@@ -574,6 +576,126 @@ class HttpAuthorizationTests(unittest.TestCase):
             status, payload = self.request("DELETE", f"/v1/transfers/{transfer_id}", headers=headers)
             self.assertEqual((status, payload["transfer"]["status"]), (200, "cancelling"))
             cancel.assert_called_once_with(transfer_id, TEST_ORGANIZATION_ID)
+
+
+class WorkloadIdentityTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.workload_dir = Path(self.temp_dir.name)
+        self.physical_db = api.organization_database_name(TEST_ORGANIZATION_ID, "app")
+        self.sample_roles = [
+            {
+                "name": "app_runtime",
+                "loginName": api.tenant_resource_name(TEST_ORGANIZATION_ID, "app_runtime", "Role name"),
+                "database": "app",
+                "connectionDatabase": self.physical_db,
+                "migrationRole": False,
+            },
+            {
+                "name": "app_migrator",
+                "loginName": api.tenant_resource_name(TEST_ORGANIZATION_ID, "app_migrator", "Role name"),
+                "database": "app",
+                "connectionDatabase": self.physical_db,
+                "migrationRole": True,
+            },
+        ]
+
+    @staticmethod
+    def _ed25519_ssh_key(seed_byte: bytes = b"A") -> str:
+        blob = b"\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x20" + (seed_byte * 32)
+        return "ssh-ed25519 " + base64.b64encode(blob).decode("ascii")
+
+    def test_workload_identity_crud_and_validation(self):
+        payload = {
+            "name": "Visitoring Prod",
+            "issuer": "https://oidc.vercel.com/team",
+            "audience": "https://vercel.com/team",
+            "subject": "owner:team:project:visitoring:environment:production",
+            "database": "app",
+            "role": "app_runtime",
+        }
+        with patch.object(api, "WORKLOAD_IDENTITY_DIR", self.workload_dir), \
+                patch.object(api, "require_organization_database", return_value=self.physical_db), \
+                patch.object(api, "list_roles", return_value=self.sample_roles):
+            created = api.create_workload_identity(payload, "user-1", TEST_ORGANIZATION_ID)
+            self.assertEqual(created["name"], "Visitoring Prod")
+            self.assertEqual(len(api.list_workload_identities(TEST_ORGANIZATION_ID)), 1)
+
+            with self.assertRaises(api.ApiError) as duplicate_error:
+                api.create_workload_identity(payload, "user-1", TEST_ORGANIZATION_ID)
+            self.assertEqual(duplicate_error.exception.status, 409)
+
+            with self.assertRaises(api.ApiError) as issuer_error:
+                api.create_workload_identity(
+                    {**payload, "issuer": "http://oidc.vercel.com/team"},
+                    "user-1",
+                    TEST_ORGANIZATION_ID,
+                )
+            self.assertEqual(issuer_error.exception.status, 400)
+
+            ssh_key = self._ed25519_ssh_key(b"B")
+            normalized, fingerprint = api._parse_workload_ssh_public_key(ssh_key)
+            self.assertEqual(normalized, ssh_key)
+            api._register_workload_ssh_key(
+                ssh_key,
+                created["id"],
+                TEST_ORGANIZATION_ID,
+                "app",
+                "app_runtime",
+                False,
+                datetime.now(timezone.utc) + timedelta(minutes=15),
+            )
+            self.assertIsNotNone(api.workload_authorized_ssh_key("nanogres-workload", fingerprint))
+
+            api.delete_workload_identity(created["id"], TEST_ORGANIZATION_ID)
+            self.assertEqual(api.list_workload_identities(TEST_ORGANIZATION_ID), [])
+            self.assertIsNone(api.workload_authorized_ssh_key("nanogres-workload", fingerprint))
+
+            with self.assertRaises(api.ApiError) as missing_error:
+                api.delete_workload_identity("0" * 32, TEST_ORGANIZATION_ID)
+            self.assertEqual(missing_error.exception.status, 404)
+
+            with self.assertRaises(api.ApiError) as invalid_id_error:
+                api.delete_workload_identity("not-a-valid-id", TEST_ORGANIZATION_ID)
+            self.assertEqual(invalid_id_error.exception.status, 404)
+
+    def test_workload_ssh_key_registration_and_authorization(self):
+        runtime_key = self._ed25519_ssh_key(b"C")
+        expired_key = self._ed25519_ssh_key(b"D")
+        with patch.object(api, "WORKLOAD_IDENTITY_DIR", self.workload_dir):
+            _, runtime_fp = api._parse_workload_ssh_public_key(runtime_key)
+            _, expired_fp = api._parse_workload_ssh_public_key(expired_key)
+            api._register_workload_ssh_key(
+                runtime_key,
+                "1" * 32,
+                TEST_ORGANIZATION_ID,
+                "app",
+                "app_runtime",
+                False,
+                datetime.now(timezone.utc) + timedelta(minutes=10),
+            )
+            api._register_workload_ssh_key(
+                expired_key,
+                "2" * 32,
+                TEST_ORGANIZATION_ID,
+                "app",
+                "app_migrator",
+                True,
+                datetime.now(timezone.utc) - timedelta(minutes=1),
+            )
+
+            authorized = api.workload_authorized_ssh_key("nanogres-workload", runtime_fp)
+            self.assertIsNotNone(authorized)
+            self.assertIn('permitopen="127.0.0.1:6434"', authorized)
+            self.assertIn(runtime_key, authorized)
+            self.assertIsNone(api.workload_authorized_ssh_key("other-user", runtime_fp))
+            self.assertIsNone(api.workload_authorized_ssh_key("nanogres-workload", expired_fp))
+            self.assertIsNone(api.workload_authorized_ssh_key("nanogres-workload", "SHA256:unknown"))
+
+            with self.assertRaises(api.ApiError) as invalid_key_error:
+                api._parse_workload_ssh_public_key("ssh-rsa AAAAB3NzaC1yc2E=")
+            self.assertEqual(invalid_key_error.exception.status, 400)
 
 
 if __name__ == "__main__":

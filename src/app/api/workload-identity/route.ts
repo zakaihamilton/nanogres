@@ -108,19 +108,6 @@ export async function POST(request: Request): Promise<Response> {
     },
   );
   if (!issued.ok) {
-    const errorData = (await issued.clone().json().catch(() => null)) as { error?: unknown } | null;
-    const upstreamMessage =
-      typeof errorData?.error === "string" ? errorData.error : "";
-    const reason =
-      upstreamMessage === "No matching workload identity grant."
-        ? "grant-not-found"
-        : upstreamMessage === "The granted database role is no longer available."
-          ? "role-unavailable"
-          : "upstream-error";
-    console.warn("Nanogres workload credential issuance failed.", {
-      status: issued.status,
-      reason,
-    });
     return Response.json(
       { error: "Nanogres could not issue workload SSH credentials." },
       { status: issued.status >= 500 ? 503 : issued.status },

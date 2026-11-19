@@ -1,3 +1,4 @@
+// biome-ignore-all lint/a11y/noNoninteractiveTabindex: Keyboard-focusable dashboard regions allow keyboard scrolling of wide tables.
 "use client";
 
 import { useState, type FormEvent } from "react";
@@ -49,7 +50,7 @@ export function LiveWorkloadIdentities({
 
   const selectedDatabase = database || userDatabases[0]?.name || "";
   const eligibleRoles = roles.filter(
-    (candidate) => candidate.connectionDatabase === selectedDatabase && !candidate.systemRole,
+    (candidate) => candidate.database === selectedDatabase && !candidate.systemRole,
   );
   const selectedRole = role || eligibleRoles[0]?.name || "";
   const identities = identitiesQuery.data?.identities ?? [];

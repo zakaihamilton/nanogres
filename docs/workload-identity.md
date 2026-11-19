@@ -4,8 +4,8 @@ Nanogres lets server products connect with a verified workload identity instead 
 
 ## Model
 
-- An organization grants an OIDC identity an exact database and login role. A grant records a display name, issuer, audience, subject, database, and role. Issuer, audience, and subject must all match; wildcard subjects are not supported.
-- A workload presents its short-lived OIDC token to Nanogres over HTTPS. Nanogres validates the signature from the issuer's published JWKS and checks issuer, audience, subject, expiry, and any configured environment claims.
+- An organization grants an OIDC identity an exact database and login role. A grant records a display name, issuer, audience, subject, database, and role. Issuer, audience, and subject must all match; wildcard subjects are not supported. Issuers must use HTTPS on port 443 and a public DNS hostname. Discovery and JWKS must stay on the issuer origin, which must resolve only to public IP addresses.
+- A workload presents its short-lived OIDC token to Nanogres over HTTPS. Nanogres checks the token claims before loading provider keys, then validates the signature from the issuer's published JWKS and checks issuer, audience, subject, and expiry. Provider metadata and keys are fetched without redirects, pinned to a validated public IP, and cached briefly.
 - Nanogres returns a 15-minute SSH public-key grant tied to the approved database role, plus a short-lived PostgreSQL client certificate. The workload generates the SSH keypair locally; its private key stays in memory and only its public key reaches Nanogres.
 - A dedicated OpenSSH service accepts only ephemeral workload keys. Each key is restricted to local PostgreSQL forwarding on the one PgBouncer listener selected for its role; shell, remote forwarding, agent forwarding, X11, and TTY access are disabled. The SSH stream is carried over WebSocket at a dedicated path on the existing HTTPS endpoint, so the VPS firewall needs no new SSH port.
 - PgBouncer's workload listeners bind only to loopback and accept short-lived client certificates. Its private auth query still checks the PostgreSQL role's SCRAM verifier, so existing database roles and PostgreSQL privileges remain in force. No PostgreSQL listener is exposed for workload connections.
@@ -26,7 +26,7 @@ Enable Secure Backend Access with OIDC for each Vercel project. A Vercel functio
 - Audience: `https://vercel.com/<team-slug>`
 - Subject: `owner:<team-slug>:project:<project-name>:environment:<production|preview|development>`
 
-Other OIDC providers use the same exact-match grant model. Provider-specific token retrieval remains an adapter at the product boundary; no product name or Vercel claim is hard-coded into Nanogres.
+Other OIDC providers can use the same exact-match grant model when their discovery and JWKS endpoints share the issuer origin and resolve only to public addresses. Provider-specific token retrieval remains an adapter at the product boundary; no product name or Vercel claim is hard-coded into Nanogres.
 
 ## Client behavior
 
