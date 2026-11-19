@@ -128,7 +128,7 @@ function pinnedLookup(url: URL, address: ResolvedAddress): NonNullable<RequestOp
       const error = Object.assign(new Error("OIDC host changed during lookup."), {
         code: "EACCES",
       }) as NodeJS.ErrnoException;
-      callback(error);
+      callback(error, "", address.family);
       return;
     }
     if (options.all) {
