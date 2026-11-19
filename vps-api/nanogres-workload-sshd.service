@@ -1,0 +1,25 @@
+[Unit]
+Description=Nanogres loopback workload SSH gateway
+After=network-online.target ssh.service nanogres-api.service
+Wants=network-online.target
+Requires=nanogres-api.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/sshd -t -f /etc/ssh/sshd_config-nanogres-workload
+ExecStart=/usr/sbin/sshd -D -e -f /etc/ssh/sshd_config-nanogres-workload
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=2s
+KillMode=process
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/var/lib/nanogres/workload-identities
+RestrictAddressFamilies=AF_UNIX AF_INET
+LockPersonality=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

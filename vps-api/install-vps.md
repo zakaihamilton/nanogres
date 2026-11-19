@@ -1,10 +1,13 @@
 # VPS installation notes
 
 Run `vps-api/install-vps.sh` as root after copying this directory onto the server. It installs the
-loopback-only API, local and off-site backup units, quota reconciler, and PgBouncer. It generates a
+loopback-only API, local and off-site backup units, quota reconciler, PgBouncer, and the loopback-only
+SSH endpoint for passwordless workload access. It generates a
 random API bearer token in `/etc/nanogres/api.env` and a separate PgBouncer authentication secret
 under `/etc/nanogres`. It installs Ubuntu/Debian's `rclone` and `quota` packages if missing, and
 uses the official PostgreSQL APT repository to install a current PgBouncer release (1.26.1 or newer).
+It also installs OpenSSH and websockify when missing and creates a one-year workload client CA only
+when a CA pair is not already present.
 Rerunning it applies API and pooler updates. It does not enable the Nginx proxy or change firewall
 rules.
 
@@ -22,10 +25,11 @@ rules.
 4. Install `nginx-nanogres.conf`, run `nginx -t`, then reload Nginx. The API proxy listens on 8443;
    port 443 stays assigned to the existing TURN server. The 5 MiB request limit allows the dashboard's
    4 MiB restore chunks through Nginx.
-5. Open inbound TCP 8443, 6432, and 6433 in the VPS and provider firewalls, then verify each service
-   from outside. These are deliberate public access changes. PgBouncer requires TLS and SCRAM
-   authentication; PostgreSQL itself must remain bound to `127.0.0.1:5432`. The installer does not
-   open any ports automatically.
+5. Keep inbound rules unchanged for passwordless access. Workload SSH travels over the existing HTTPS
+   endpoint on 8443 at `/_nanogres/workload-ssh`; the SSH daemon listens only on `127.0.0.1:2222`, and
+   the new workload PgBouncer listeners use `127.0.0.1:6434` and `127.0.0.1:6435`. Do not open those
+   loopback ports in either firewall. Existing password-based endpoints on 6432 and 6433 are separate.
+   PostgreSQL itself must remain bound to `127.0.0.1:5432`.
 6. Copy the token from `/etc/nanogres/api.env` into Vercel's encrypted production environment
    variable `NANOGRES_API_TOKEN`. Keep it out of source files and browser code.
 
@@ -41,11 +45,11 @@ the database's **Extensions** tab to enable or disable it for that database. Dis
 `DROP EXTENSION ... RESTRICT`; remove objects that depend on pgvector first. The dashboard never
 cascade-drops dependent objects.
 
-For Visitoring, create a normal **Read and write** role for runtime access and a **Schema migration**
-role for migrations. In Visitoring's Vercel environment, use the normal role's connection URI for
-`DATABASE_URL`; use the migration role's session-pool URI for `MIGRATION_DATABASE_URL`; and copy
-the owner role shown by the migration snippet into `MIGRATION_DATABASE_ROLE`. Visitoring then uses
-the transaction pool for requests and the session pool while applying Drizzle migrations.
+For each passwordless product connection, create database-scoped runtime and migration login roles,
+then add exact OIDC grants in Nanogres Access & roles. The product uses the grant's logical role names
+with short-lived OIDC and SSH credentials; no database URL or password belongs in its settings.
+Visitoring uses the transaction listener at 6434 for requests and the session listener at 6435 while
+applying Drizzle migrations.
 
 The API uses the local peer-auth socket for administrative operations and loopback TCP password
 authentication for restricted organization SQL roles. Keep PostgreSQL listening on loopback and make

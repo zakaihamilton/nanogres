@@ -106,6 +106,12 @@ export async function apiRequest<T extends ApiPayload>(
   return payload as T;
 }
 
+export function useActionFeedback() {
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  return { actionError, setActionError, message, setMessage };
+}
+
 export function useApiData<T extends ApiPayload>(path: string) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);

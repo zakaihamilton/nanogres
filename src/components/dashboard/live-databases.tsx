@@ -18,6 +18,7 @@ import {
   DatabaseTable,
   DeleteDatabaseDialog,
   ErrorNotice,
+  useActionFeedback,
   useDatabases,
 } from "./live-shared";
 import styles from "./live-screens.module.css";
@@ -30,8 +31,7 @@ export function LiveDatabasesScreen({ page = "list" }: { page?: "list" | "new" }
   const [busyName, setBusyName] = useState<string | null>(null);
   const deletingDatabase = useRef(false);
   const [deleteTarget, setDeleteTarget] = useState<Database | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const { actionError, setActionError, message, setMessage } = useActionFeedback();
 
   // Search & filter state
   const [searchQuery, setSearchQuery] = useState("");
