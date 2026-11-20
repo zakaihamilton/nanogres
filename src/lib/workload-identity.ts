@@ -9,6 +9,11 @@ type JsonMap = Record<string, unknown>;
 type IpFamily = 4 | 6;
 type ResolvedAddress = { address: string; family: IpFamily };
 type JwksCacheEntry = { expiresAt: number; keys: JsonMap[] };
+type DnsOverHttpsResolver = {
+  hostname: string;
+  path: string;
+  addresses: readonly string[];
+};
 
 export type WorkloadIdentityFailureReason =
   | "token_too_large"
@@ -71,7 +76,18 @@ const MAX_OIDC_CACHE_ENTRIES = 128;
 const MAX_OIDC_FETCHES_IN_FLIGHT = 16;
 const OIDC_REQUEST_TIMEOUT_MS = 8_000;
 const OIDC_DOH_REQUEST_TIMEOUT_MS = 2_000;
-const CLOUDFLARE_DOH_IPS = ["1.1.1.1", "1.0.0.1"] as const;
+const OIDC_DOH_RESOLVERS = [
+  {
+    hostname: "cloudflare-dns.com",
+    path: "/dns-query",
+    addresses: ["1.1.1.1", "1.0.0.1"],
+  },
+  {
+    hostname: "dns.google",
+    path: "/resolve",
+    addresses: ["8.8.8.8", "8.8.4.4"],
+  },
+] as const satisfies readonly DnsOverHttpsResolver[];
 const oidcDnsResolver = new Resolver({ timeout: 1_500, tries: 1 });
 
 const nonPublicAddresses = new BlockList();
@@ -196,23 +212,32 @@ async function resolvePublicAddress(url: URL): Promise<ResolvedAddress> {
   );
   let selected: ResolvedAddress | undefined = publicAddresses[0];
   if (!selected && url.hostname === "oidc.vercel.com") {
-    const dohResults = await Promise.allSettled([
-      queryCloudflareDns(url.hostname, "A"),
-      queryCloudflareDns(url.hostname, "AAAA"),
-    ]);
-    const dohAddresses = dohResults.flatMap((result) =>
-      result.status === "fulfilled" ? result.value : [],
-    );
-    selected = dohAddresses.find(({ address, family }) =>
-      isPublicAddress(address, family),
-    );
-    if (!selected) {
-      const dohError = dohResults.find(
+    let dohError: unknown;
+    let dohReturnedAddresses = false;
+    for (const resolver of OIDC_DOH_RESOLVERS) {
+      const dohResults = await Promise.allSettled([
+        queryDohDns(url.hostname, "A", resolver),
+        queryDohDns(url.hostname, "AAAA", resolver),
+      ]);
+      const dohAddresses = dohResults.flatMap((result) =>
+        result.status === "fulfilled" ? result.value : [],
+      );
+      dohReturnedAddresses ||= dohAddresses.length > 0;
+      selected = dohAddresses.find(({ address, family }) =>
+        isPublicAddress(address, family),
+      );
+      if (selected) break;
+      dohError ??= dohResults.find(
         (result): result is PromiseRejectedResult => result.status === "rejected",
       )?.reason;
-      if (dohError) {
-        throw new OidcRequestError(getSafeOidcErrorCode(dohError) ?? "DOH_REQUEST_FAILED");
-      }
+    }
+    if (!selected && dohError) {
+      throw new OidcRequestError(getSafeOidcErrorCode(dohError) ?? "DOH_REQUEST_FAILED");
+    }
+    if (!selected) {
+      throw new OidcRequestError(
+        dohReturnedAddresses ? "DOH_NO_PUBLIC_ADDRESS" : "DOH_NO_ANSWER",
+      );
     }
   }
   if (!selected) throw new OidcRequestError("DNS_NO_PUBLIC_ADDRESS");
@@ -312,17 +337,21 @@ async function requestJsonAtAddress(
   });
 }
 
-async function queryCloudflareDns(
+async function queryDohDns(
   hostname: string,
   recordType: "A" | "AAAA",
+  resolver: DnsOverHttpsResolver,
 ): Promise<ResolvedAddress[]> {
-  const url = new URL("https://cloudflare-dns.com/dns-query");
+  if (hostname !== "oidc.vercel.com") {
+    throw new OidcRequestError("DOH_HOST_REJECTED");
+  }
+  const url = new URL(resolver.path, `https://${resolver.hostname}`);
   url.searchParams.set("name", hostname);
   url.searchParams.set("type", recordType);
 
   let response: JsonMap | undefined;
   let lastError: unknown;
-  for (const address of CLOUDFLARE_DOH_IPS) {
+  for (const address of resolver.addresses) {
     try {
       response = await requestJsonAtAddress(
         url,
