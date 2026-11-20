@@ -24,9 +24,16 @@ registerHooks({
       return {
         format: "module",
         shortCircuit: true,
-        source: `export async function lookup() {
-          return [{ address: "93.184.216.34", family: 4 }];
-        }`,
+        source: `
+          export async function lookup() {
+            return [{ address: "93.184.216.34", family: 4 }];
+          }
+          export class Resolver {
+            constructor() {}
+            async resolve4() { return ["93.184.216.34"]; }
+            async resolve6() { return []; }
+          }
+        `,
       };
     }
     if (url === "virtual:oidc-https") {

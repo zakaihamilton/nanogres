@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createPublicKey, verify as verifySignature } from "node:crypto";
-import { lookup as dnsLookup } from "node:dns/promises";
+import { lookup as dnsLookup, Resolver } from "node:dns/promises";
 import { BlockList, isIP } from "node:net";
 import { request as httpsRequest, type RequestOptions } from "node:https";
 
@@ -70,6 +70,7 @@ const OIDC_CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_OIDC_CACHE_ENTRIES = 128;
 const MAX_OIDC_FETCHES_IN_FLIGHT = 16;
 const OIDC_REQUEST_TIMEOUT_MS = 8_000;
+const oidcDnsResolver = new Resolver({ timeout: 1_500, tries: 1 });
 
 const nonPublicAddresses = new BlockList();
 for (const [network, prefix, family] of [
@@ -157,8 +158,36 @@ async function resolvePublicAddress(url: URL): Promise<ResolvedAddress> {
   if (url.protocol !== "https:" || url.port || isIP(url.hostname) !== 0) {
     throw new OidcRequestError("URL_POLICY_REJECTED");
   }
-  const addresses = await dnsLookup(url.hostname, { all: true, verbatim: true });
-  if (!addresses.length) throw new OidcRequestError("DNS_NO_ADDRESSES");
+  // dns.lookup() uses the operating system's name-resolution path, which may
+  // include hosts files or platform-specific mappings. Query DNS directly as
+  // well so a runtime mapping cannot hide the public records for a trusted
+  // issuer. Every returned address still passes the public-IP check below and
+  // the selected address is pinned for the TLS request.
+  const results = await Promise.allSettled([
+    dnsLookup(url.hostname, { all: true, verbatim: true }).then((addresses) =>
+      addresses.map(({ address, family }) => ({ address, family: family as IpFamily })),
+    ),
+    oidcDnsResolver.resolve4(url.hostname).then((addresses) =>
+      addresses.map((address) => ({ address, family: 4 as const })),
+    ),
+    oidcDnsResolver.resolve6(url.hostname).then((addresses) =>
+      addresses.map((address) => ({ address, family: 6 as const })),
+    ),
+  ]);
+  const addresses: ResolvedAddress[] = [];
+  const errors: unknown[] = [];
+  for (const result of results) {
+    if (result.status === "fulfilled") addresses.push(...result.value);
+    else errors.push(result.reason);
+  }
+  if (!addresses.length) {
+    const resolutionError = errors.find((error) => {
+      const code = getSafeOidcErrorCode(error);
+      return code !== "ENODATA" && code !== "ENOTFOUND";
+    });
+    if (resolutionError) throw resolutionError;
+    throw new OidcRequestError("DNS_NO_ADDRESSES");
+  }
 
   const publicAddresses = addresses.filter(({ address, family }) =>
     isPublicAddress(address, family),
