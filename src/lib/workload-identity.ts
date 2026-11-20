@@ -253,7 +253,32 @@ async function loadJwks(issuer: string): Promise<JsonMap[]> {
   return request;
 }
 
-function hasValidClaims(payload: JsonMap, issuer: string, grant: WorkloadIdentityGrant): boolean {
+export type WorkloadIdentityFailureReason =
+  | "token_too_large"
+  | "invalid_grant"
+  | "malformed_token"
+  | "unsupported_header"
+  | "issuer_mismatch"
+  | "audience_mismatch"
+  | "authorized_party_mismatch"
+  | "subject_mismatch"
+  | "invalid_expiration"
+  | "expired_token"
+  | "invalid_not_before"
+  | "not_yet_valid"
+  | "invalid_issued_at"
+  | "issued_at_in_future"
+  | "invalid_lifetime"
+  | "jwks_unavailable"
+  | "signing_key_not_found"
+  | "invalid_signature"
+  | "signature_verification_error";
+
+function getClaimFailures(
+  payload: JsonMap,
+  issuer: string,
+  grant: WorkloadIdentityGrant,
+): WorkloadIdentityFailureReason[] {
   const now = Math.floor(Date.now() / 1000);
   const audiences =
     typeof payload.aud === "string"
@@ -261,67 +286,109 @@ function hasValidClaims(payload: JsonMap, issuer: string, grant: WorkloadIdentit
       : Array.isArray(payload.aud) && payload.aud.every((value) => typeof value === "string")
         ? (payload.aud as string[])
         : [];
-  return (
-    payload.iss === issuer &&
-    audiences.includes(grant.audience) &&
-    (audiences.length <= 1 || payload.azp === grant.audience) &&
-    payload.sub === grant.subject &&
+  const failures: WorkloadIdentityFailureReason[] = [];
+
+  if (payload.iss !== issuer) failures.push("issuer_mismatch");
+  if (!audiences.includes(grant.audience)) failures.push("audience_mismatch");
+  if (audiences.length > 1 && payload.azp !== grant.audience) {
+    failures.push("authorized_party_mismatch");
+  }
+  if (payload.sub !== grant.subject) failures.push("subject_mismatch");
+
+  if (typeof payload.exp !== "number") failures.push("invalid_expiration");
+  else if (payload.exp <= now) failures.push("expired_token");
+
+  if (payload.nbf !== undefined) {
+    if (typeof payload.nbf !== "number") failures.push("invalid_not_before");
+    else if (payload.nbf > now + 60) failures.push("not_yet_valid");
+  }
+
+  if (typeof payload.iat !== "number") failures.push("invalid_issued_at");
+  else if (payload.iat > now + 60) failures.push("issued_at_in_future");
+
+  if (
     typeof payload.exp === "number" &&
-    payload.exp > now &&
-    (payload.nbf === undefined || (typeof payload.nbf === "number" && payload.nbf <= now + 60)) &&
     typeof payload.iat === "number" &&
-    payload.iat <= now + 60 &&
-    payload.exp > payload.iat
-  );
+    payload.exp <= payload.iat
+  ) {
+    failures.push("invalid_lifetime");
+  }
+
+  return failures;
 }
 
 export async function verifyWorkloadIdentityToken(
   token: string,
   grant: WorkloadIdentityGrant,
+  onFailure?: (reason: WorkloadIdentityFailureReason) => void,
 ): Promise<boolean> {
-  if (token.length > 8192) return false;
+  const fail = (reason: WorkloadIdentityFailureReason) => {
+    onFailure?.(reason);
+    return false;
+  };
+
+  if (token.length > 8192) return fail("token_too_large");
   const issuer = httpsUrl(grant.issuer);
-  if (!issuer || !grant.audience || !grant.subject) return false;
+  if (!issuer || !grant.audience || !grant.subject) return fail("invalid_grant");
   const parts = token.split(".");
-  if (parts.length !== 3 || parts.some((part) => !part)) return false;
+  if (parts.length !== 3 || parts.some((part) => !part)) return fail("malformed_token");
+
+  const [encodedHeader, encodedPayload, encodedSignature] = parts as [string, string, string];
+  let header: JsonMap;
+  let payload: JsonMap;
+  try {
+    header = decodeJsonSegment(encodedHeader);
+    payload = decodeJsonSegment(encodedPayload);
+  } catch {
+    return fail("malformed_token");
+  }
+
+  if (
+    header.alg !== "RS256" ||
+    (header.typ !== undefined && header.typ !== "JWT") ||
+    typeof header.kid !== "string" ||
+    !/^[A-Za-z0-9._-]{1,128}$/.test(header.kid) ||
+    "jku" in header ||
+    "x5u" in header ||
+    "crit" in header
+  ) {
+    return fail("unsupported_header");
+  }
+
+  const claimFailures = getClaimFailures(payload, issuer, grant);
+  if (claimFailures.length) {
+    claimFailures.forEach((reason) => onFailure?.(reason));
+    return false;
+  }
+
+  let keys: JsonMap[];
+  try {
+    keys = await loadJwks(issuer);
+  } catch {
+    return fail("jwks_unavailable");
+  }
+
+  const key = keys.find(
+    (candidate) =>
+      candidate.kid === header.kid &&
+      candidate.kty === "RSA" &&
+      (candidate.alg === undefined || candidate.alg === "RS256") &&
+      (candidate.use === undefined || candidate.use === "sig") &&
+      typeof candidate.n === "string" &&
+      typeof candidate.e === "string",
+  );
+  if (!key) return fail("signing_key_not_found");
 
   try {
-    const [encodedHeader, encodedPayload, encodedSignature] = parts as [string, string, string];
-    const header = decodeJsonSegment(encodedHeader);
-    const payload = decodeJsonSegment(encodedPayload);
-    if (
-      header.alg !== "RS256" ||
-      (header.typ !== undefined && header.typ !== "JWT") ||
-      typeof header.kid !== "string" ||
-      !/^[A-Za-z0-9._-]{1,128}$/.test(header.kid) ||
-      "jku" in header ||
-      "x5u" in header ||
-      "crit" in header
-    ) {
-      return false;
-    }
-    if (!hasValidClaims(payload, issuer, grant)) return false;
-
-    const keys = await loadJwks(issuer);
-    const key = keys.find(
-      (candidate) =>
-        candidate.kid === header.kid &&
-        candidate.kty === "RSA" &&
-        (candidate.alg === undefined || candidate.alg === "RS256") &&
-        (candidate.use === undefined || candidate.use === "sig") &&
-        typeof candidate.n === "string" &&
-        typeof candidate.e === "string",
-    );
-    if (!key) return false;
-
     const publicKey = createPublicKey({ key: key as never, format: "jwk" });
-    return verifySignature(
+    const isValid = verifySignature(
       "RSA-SHA256",
-      Buffer.from(`${encodedHeader}.${encodedPayload}`, "utf8"),
+      Buffer.from(encodedHeader + "." + encodedPayload, "utf8"),
       publicKey,
       Buffer.from(encodedSignature, "base64url"),
     );
+    return isValid ? true : fail("invalid_signature");
   } catch {
-    return false;
+    return fail("signature_verification_error");
   }
 }
