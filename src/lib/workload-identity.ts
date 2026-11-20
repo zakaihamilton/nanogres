@@ -70,6 +70,8 @@ const OIDC_CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_OIDC_CACHE_ENTRIES = 128;
 const MAX_OIDC_FETCHES_IN_FLIGHT = 16;
 const OIDC_REQUEST_TIMEOUT_MS = 8_000;
+const OIDC_DOH_REQUEST_TIMEOUT_MS = 2_000;
+const CLOUDFLARE_DOH_IPS = ["1.1.1.1", "1.0.0.1"] as const;
 const oidcDnsResolver = new Resolver({ timeout: 1_500, tries: 1 });
 
 const nonPublicAddresses = new BlockList();
@@ -192,7 +194,27 @@ async function resolvePublicAddress(url: URL): Promise<ResolvedAddress> {
   const publicAddresses = addresses.filter(({ address, family }) =>
     isPublicAddress(address, family),
   );
-  const selected = publicAddresses[0];
+  let selected: ResolvedAddress | undefined = publicAddresses[0];
+  if (!selected && url.hostname === "oidc.vercel.com") {
+    const dohResults = await Promise.allSettled([
+      queryCloudflareDns(url.hostname, "A"),
+      queryCloudflareDns(url.hostname, "AAAA"),
+    ]);
+    const dohAddresses = dohResults.flatMap((result) =>
+      result.status === "fulfilled" ? result.value : [],
+    );
+    selected = dohAddresses.find(({ address, family }) =>
+      isPublicAddress(address, family),
+    );
+    if (!selected) {
+      const dohError = dohResults.find(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      )?.reason;
+      if (dohError) {
+        throw new OidcRequestError(getSafeOidcErrorCode(dohError) ?? "DOH_REQUEST_FAILED");
+      }
+    }
+  }
   if (!selected) throw new OidcRequestError("DNS_NO_PUBLIC_ADDRESS");
   if (selected.family !== 4 && selected.family !== 6) {
     throw new OidcRequestError("DNS_UNSUPPORTED_ADDRESS_FAMILY");
@@ -224,15 +246,24 @@ async function requestJson(url: URL): Promise<JsonMap> {
   } catch (error) {
     throw new OidcRequestError(getSafeOidcErrorCode(error) ?? "DNS_OR_ADDRESS_REJECTED");
   }
+  return requestJsonAtAddress(url, address);
+}
+
+async function requestJsonAtAddress(
+  url: URL,
+  address: ResolvedAddress,
+  accept: string = "application/json",
+  timeoutMs: number = OIDC_REQUEST_TIMEOUT_MS,
+): Promise<JsonMap> {
   return new Promise((resolve, reject) => {
     const request = httpsRequest(
       url,
       {
         method: "GET",
-        headers: { Accept: "application/json" },
+        headers: { Accept: accept },
         lookup: pinnedLookup(url, address),
         servername: url.hostname,
-        signal: AbortSignal.timeout(OIDC_REQUEST_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       },
       (response) => {
         if (response.statusCode !== 200) {
@@ -279,6 +310,52 @@ async function requestJson(url: URL): Promise<JsonMap> {
     request.on("error", reject);
     request.end();
   });
+}
+
+async function queryCloudflareDns(
+  hostname: string,
+  recordType: "A" | "AAAA",
+): Promise<ResolvedAddress[]> {
+  const url = new URL("https://cloudflare-dns.com/dns-query");
+  url.searchParams.set("name", hostname);
+  url.searchParams.set("type", recordType);
+
+  let response: JsonMap | undefined;
+  let lastError: unknown;
+  for (const address of CLOUDFLARE_DOH_IPS) {
+    try {
+      response = await requestJsonAtAddress(
+        url,
+        { address, family: 4 },
+        "application/dns-json",
+        OIDC_DOH_REQUEST_TIMEOUT_MS,
+      );
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!response) {
+    throw new OidcRequestError(getSafeOidcErrorCode(lastError) ?? "DOH_REQUEST_FAILED");
+  }
+  if (response.Status !== 0) {
+    const status = typeof response.Status === "number" ? response.Status : "UNKNOWN";
+    throw new OidcRequestError(`DOH_DNS_STATUS_${status}`);
+  }
+
+  const expectedRecordType = recordType === "A" ? 1 : 28;
+  const expectedFamily = recordType === "A" ? 4 : 6;
+  const answers = Array.isArray(response.Answer) ? response.Answer : [];
+  return answers
+    .map(asObject)
+    .filter((answer): answer is JsonMap => answer !== null)
+    .filter((answer) => answer.type === expectedRecordType)
+    .map((answer) => answer.data)
+    .filter(
+      (address): address is string =>
+        typeof address === "string" && isIP(address) === expectedFamily,
+    )
+    .map((address) => ({ address, family: expectedFamily }));
 }
 
 function getSafeOidcErrorCode(error: unknown): string | undefined {
