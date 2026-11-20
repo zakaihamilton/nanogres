@@ -155,15 +155,18 @@ function isPublicAddress(address: string, family: number): family is IpFamily {
 
 async function resolvePublicAddress(url: URL): Promise<ResolvedAddress> {
   if (url.protocol !== "https:" || url.port || isIP(url.hostname) !== 0) {
-    throw new Error("OIDC URLs must use a public HTTPS hostname on port 443.");
+    throw new OidcRequestError("URL_POLICY_REJECTED");
   }
   const addresses = await dnsLookup(url.hostname, { all: true, verbatim: true });
-  if (!addresses.length || addresses.some(({ address, family }) => !isPublicAddress(address, family))) {
-    throw new Error("OIDC host must resolve exclusively to public IP addresses.");
-  }
-  const selected = addresses[0];
-  if (!selected || (selected.family !== 4 && selected.family !== 6)) {
-    throw new Error("OIDC host did not resolve to a supported IP address.");
+  if (!addresses.length) throw new OidcRequestError("DNS_NO_ADDRESSES");
+
+  const publicAddresses = addresses.filter(({ address, family }) =>
+    isPublicAddress(address, family),
+  );
+  const selected = publicAddresses[0];
+  if (!selected) throw new OidcRequestError("DNS_NO_PUBLIC_ADDRESS");
+  if (selected.family !== 4 && selected.family !== 6) {
+    throw new OidcRequestError("DNS_UNSUPPORTED_ADDRESS_FAMILY");
   }
   return { address: selected.address, family: selected.family };
 }
