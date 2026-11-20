@@ -1,6 +1,6 @@
 import { callNanogresWorkloadApi } from "@/lib/nanogres-api";
 import {
-  type WorkloadIdentityFailureReason,
+  type WorkloadIdentityFailure,
   type WorkloadIdentityGrant,
   verifyWorkloadIdentityToken,
 } from "@/lib/workload-identity";
@@ -89,10 +89,12 @@ export async function POST(request: Request): Promise<Response> {
     (grant) => grant.database === database && grant.role === role,
   );
   let acceptedGrant: WorkloadIdentityGrant | undefined;
-  const verificationFailures: WorkloadIdentityFailureReason[] = [];
+  const verificationFailures: WorkloadIdentityFailure[] = [];
   for (const grant of candidates) {
     if (
-      await verifyWorkloadIdentityToken(token, grant, (reason) => verificationFailures.push(reason))
+      await verifyWorkloadIdentityToken(token, grant, (failure) =>
+        verificationFailures.push(failure),
+      )
     ) {
       acceptedGrant = grant;
       break;
@@ -103,7 +105,14 @@ export async function POST(request: Request): Promise<Response> {
       database,
       role,
       candidateCount: candidates.length,
-      reasons: [...new Set(verificationFailures)],
+      reasons: [
+        ...new Map(
+          verificationFailures.map((failure) => [
+            `${failure.reason}:${failure.code ?? ""}`,
+            failure,
+          ]),
+        ).values(),
+      ],
     });
     return Response.json(
       { error: "This workload identity has no matching Nanogres grant." },

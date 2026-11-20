@@ -10,6 +10,52 @@ type IpFamily = 4 | 6;
 type ResolvedAddress = { address: string; family: IpFamily };
 type JwksCacheEntry = { expiresAt: number; keys: JsonMap[] };
 
+export type WorkloadIdentityFailureReason =
+  | "token_too_large"
+  | "invalid_grant"
+  | "malformed_token"
+  | "unsupported_header"
+  | "issuer_mismatch"
+  | "audience_mismatch"
+  | "authorized_party_mismatch"
+  | "subject_mismatch"
+  | "invalid_expiration"
+  | "expired_token"
+  | "invalid_not_before"
+  | "not_yet_valid"
+  | "invalid_issued_at"
+  | "issued_at_in_future"
+  | "invalid_lifetime"
+  | "oidc_metadata_unavailable"
+  | "oidc_metadata_invalid"
+  | "jwks_unavailable"
+  | "jwks_invalid"
+  | "signing_key_not_found"
+  | "invalid_signature"
+  | "signature_verification_error";
+
+export type WorkloadIdentityFailure = {
+  reason: WorkloadIdentityFailureReason;
+  code?: string;
+};
+
+class OidcLoadError extends Error {
+  constructor(
+    readonly reason: WorkloadIdentityFailureReason,
+    readonly code?: string,
+  ) {
+    super("OIDC provider metadata could not be loaded.");
+    this.name = "OidcLoadError";
+  }
+}
+
+class OidcRequestError extends Error {
+  constructor(readonly code: string) {
+    super("OIDC provider request failed.");
+    this.name = "OidcRequestError";
+  }
+}
+
 export type WorkloadIdentityGrant = {
   id: string;
   issuer: string;
@@ -140,7 +186,12 @@ function pinnedLookup(url: URL, address: ResolvedAddress): NonNullable<RequestOp
 }
 
 async function requestJson(url: URL): Promise<JsonMap> {
-  const address = await resolvePublicAddress(url);
+  let address: ResolvedAddress;
+  try {
+    address = await resolvePublicAddress(url);
+  } catch (error) {
+    throw new OidcRequestError(getSafeOidcErrorCode(error) ?? "DNS_OR_ADDRESS_REJECTED");
+  }
   return new Promise((resolve, reject) => {
     const request = httpsRequest(
       url,
@@ -154,13 +205,14 @@ async function requestJson(url: URL): Promise<JsonMap> {
       (response) => {
         if (response.statusCode !== 200) {
           response.resume();
-          reject(new Error("OIDC provider metadata could not be loaded."));
+          reject(new OidcRequestError(`HTTP_${response.statusCode ?? "UNKNOWN"}`));
           return;
         }
         const contentLength = Number(response.headers["content-length"] ?? 0);
         if (Number.isFinite(contentLength) && contentLength > MAX_OIDC_RESPONSE_BYTES) {
-          response.destroy(new Error("OIDC provider response is too large."));
-          reject(new Error("OIDC provider response is too large."));
+          const error = new OidcRequestError("RESPONSE_TOO_LARGE");
+          response.destroy(error);
+          reject(error);
           return;
         }
         const chunks: Buffer[] = [];
@@ -169,7 +221,7 @@ async function requestJson(url: URL): Promise<JsonMap> {
           const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
           totalBytes += bytes.byteLength;
           if (totalBytes > MAX_OIDC_RESPONSE_BYTES) {
-            response.destroy(new Error("OIDC provider response is too large."));
+            response.destroy(new OidcRequestError("RESPONSE_TOO_LARGE"));
             return;
           }
           chunks.push(bytes);
@@ -179,12 +231,12 @@ async function requestJson(url: URL): Promise<JsonMap> {
           try {
             parsed = JSON.parse(Buffer.concat(chunks, totalBytes).toString("utf8"));
           } catch {
-            reject(new Error("OIDC provider metadata is invalid."));
+            reject(new OidcRequestError("INVALID_JSON"));
             return;
           }
           const object = asObject(parsed);
           if (!object) {
-            reject(new Error("OIDC provider metadata is invalid."));
+            reject(new OidcRequestError("INVALID_JSON_OBJECT"));
             return;
           }
           resolve(object);
@@ -195,6 +247,22 @@ async function requestJson(url: URL): Promise<JsonMap> {
     request.on("error", reject);
     request.end();
   });
+}
+
+function getSafeOidcErrorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const candidate = error as { code?: unknown; statusCode?: unknown };
+  if (typeof candidate.code === "string" && /^[A-Z0-9_]{1,40}$/.test(candidate.code)) {
+    return candidate.code;
+  }
+  if (
+    typeof candidate.statusCode === "number" &&
+    candidate.statusCode >= 100 &&
+    candidate.statusCode <= 599
+  ) {
+    return `HTTP_${candidate.statusCode}`;
+  }
+  return undefined;
 }
 
 function cacheJwks(
@@ -230,15 +298,29 @@ async function loadJwks(issuer: string): Promise<JsonMap[]> {
     try {
       const issuerUrl = new URL(issuer);
       const issuerBase = issuer.replace(/\/+$/, "");
-      const metadata = await requestJson(
-        new URL(`${issuerBase}/.well-known/openid-configuration`),
-      );
+      let metadata: JsonMap;
+      try {
+        metadata = await requestJson(new URL(`${issuerBase}/.well-known/openid-configuration`));
+      } catch (error) {
+        throw new OidcLoadError(
+          "oidc_metadata_unavailable",
+          getSafeOidcErrorCode(error) ?? "REQUEST_FAILED",
+        );
+      }
       const jwksUri = httpsUrl(metadata.jwks_uri);
       if (!jwksUri || metadata.issuer !== issuer || new URL(jwksUri).origin !== issuerUrl.origin) {
-        throw new Error("OIDC provider metadata has an invalid issuer or JWKS URL.");
+        throw new OidcLoadError("oidc_metadata_invalid");
       }
-      const jwks = await requestJson(new URL(jwksUri));
-      if (!Array.isArray(jwks.keys)) throw new Error("OIDC provider keys are invalid.");
+      let jwks: JsonMap;
+      try {
+        jwks = await requestJson(new URL(jwksUri));
+      } catch (error) {
+        throw new OidcLoadError(
+          "jwks_unavailable",
+          getSafeOidcErrorCode(error) ?? "REQUEST_FAILED",
+        );
+      }
+      if (!Array.isArray(jwks.keys)) throw new OidcLoadError("jwks_invalid");
       const keys = jwks.keys
         .map(asObject)
         .filter((key): key is JsonMap => key !== null);
@@ -252,27 +334,6 @@ async function loadJwks(issuer: string): Promise<JsonMap[]> {
   jwksRequests.set(issuer, request);
   return request;
 }
-
-export type WorkloadIdentityFailureReason =
-  | "token_too_large"
-  | "invalid_grant"
-  | "malformed_token"
-  | "unsupported_header"
-  | "issuer_mismatch"
-  | "audience_mismatch"
-  | "authorized_party_mismatch"
-  | "subject_mismatch"
-  | "invalid_expiration"
-  | "expired_token"
-  | "invalid_not_before"
-  | "not_yet_valid"
-  | "invalid_issued_at"
-  | "issued_at_in_future"
-  | "invalid_lifetime"
-  | "jwks_unavailable"
-  | "signing_key_not_found"
-  | "invalid_signature"
-  | "signature_verification_error";
 
 function getClaimFailures(
   payload: JsonMap,
@@ -320,10 +381,10 @@ function getClaimFailures(
 export async function verifyWorkloadIdentityToken(
   token: string,
   grant: WorkloadIdentityGrant,
-  onFailure?: (reason: WorkloadIdentityFailureReason) => void,
+  onFailure?: (failure: WorkloadIdentityFailure) => void,
 ): Promise<boolean> {
-  const fail = (reason: WorkloadIdentityFailureReason) => {
-    onFailure?.(reason);
+  const fail = (reason: WorkloadIdentityFailureReason, code?: string) => {
+    onFailure?.({ reason, ...(code ? { code } : {}) });
     return false;
   };
 
@@ -357,14 +418,15 @@ export async function verifyWorkloadIdentityToken(
 
   const claimFailures = getClaimFailures(payload, issuer, grant);
   if (claimFailures.length) {
-    claimFailures.forEach((reason) => onFailure?.(reason));
+    claimFailures.forEach((reason) => onFailure?.({ reason }));
     return false;
   }
 
   let keys: JsonMap[];
   try {
     keys = await loadJwks(issuer);
-  } catch {
+  } catch (error) {
+    if (error instanceof OidcLoadError) return fail(error.reason, error.code);
     return fail("jwks_unavailable");
   }
 
