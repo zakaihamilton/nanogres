@@ -45,18 +45,26 @@ export type WorkloadIdentityFailure = {
 };
 
 class OidcLoadError extends Error {
+  readonly reason: WorkloadIdentityFailureReason;
+  readonly code?: string;
+
   constructor(
-    readonly reason: WorkloadIdentityFailureReason,
-    readonly code?: string,
+    reason: WorkloadIdentityFailureReason,
+    code?: string,
   ) {
     super("OIDC provider metadata could not be loaded.");
+    this.reason = reason;
+    this.code = code;
     this.name = "OidcLoadError";
   }
 }
 
 class OidcRequestError extends Error {
-  constructor(readonly code: string) {
+  readonly code: string;
+
+  constructor(code: string) {
     super("OIDC provider request failed.");
+    this.code = code;
     this.name = "OidcRequestError";
   }
 }
