@@ -15,7 +15,7 @@ type DnsOverHttpsResolver = {
   addresses: readonly string[];
 };
 
-export type WorkloadIdentityFailureReason =
+type WorkloadIdentityFailureReason =
   | "token_too_large"
   | "invalid_grant"
   | "malformed_token"
@@ -98,7 +98,8 @@ const OIDC_DOH_RESOLVERS = [
 ] as const satisfies readonly DnsOverHttpsResolver[];
 const oidcDnsResolver = new Resolver({ timeout: 1_500, tries: 1 });
 
-const nonPublicAddresses = new BlockList();
+const nonPublicIpv4Addresses = new BlockList();
+const nonPublicIpv6Addresses = new BlockList();
 for (const [network, prefix, family] of [
   ["0.0.0.0", 8, "ipv4"],
   ["10.0.0.0", 8, "ipv4"],
@@ -129,7 +130,11 @@ for (const [network, prefix, family] of [
   ["fe80::", 10, "ipv6"],
   ["ff00::", 8, "ipv6"],
 ] as const) {
-  nonPublicAddresses.addSubnet(network, prefix, family);
+  (family === "ipv4" ? nonPublicIpv4Addresses : nonPublicIpv6Addresses).addSubnet(
+    network,
+    prefix,
+    family,
+  );
 }
 
 const jwksCache = new Map<string, JwksCacheEntry>();
@@ -177,7 +182,8 @@ function httpsUrl(value: unknown): string | null {
 
 function isPublicAddress(address: string, family: number): family is IpFamily {
   if (family !== 4 && family !== 6) return false;
-  return !nonPublicAddresses.check(address, family === 4 ? "ipv4" : "ipv6");
+  const blockedAddresses = family === 4 ? nonPublicIpv4Addresses : nonPublicIpv6Addresses;
+  return !blockedAddresses.check(address, family === 4 ? "ipv4" : "ipv6");
 }
 
 async function resolvePublicAddress(url: URL): Promise<ResolvedAddress> {
