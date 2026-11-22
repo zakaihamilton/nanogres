@@ -1,8 +1,8 @@
-import { createHash, generateKeyPairSync, randomBytes, sign as signBytes } from "node:crypto";
 import { spawn } from "node:child_process";
+import { createHash, generateKeyPairSync, randomBytes, sign as signBytes } from "node:crypto";
 import { createServer } from "node:http";
-import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const appOrigin = "http://127.0.0.1:3100";

@@ -1,8 +1,8 @@
 "use client";
 
-import { Select } from "@/components/ui/select";
 
-import { useState, type FormEvent } from "react";
+import { type FormEvent, useState } from "react";
+import { Select } from "@/components/ui/select";
 import styles from "./storage-capacity.module.css";
 
 export type StorageDisk = {

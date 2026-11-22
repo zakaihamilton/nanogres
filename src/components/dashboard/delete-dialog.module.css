@@ -1,0 +1,142 @@
+.dialog {
+  width: min(560px, calc(100vw - 24px));
+  max-width: min(560px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.dialog :global(.pf-dialog-panel) {
+  max-height: calc(100dvh - 32px);
+  border-color: var(--line-strong);
+  border-radius: 14px;
+}
+
+.dialog :global(.pf-dialog-header) {
+  padding: 20px 24px 0;
+}
+
+.dialog :global(.pf-dialog-heading h2) {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 660;
+  letter-spacing: -0.045em;
+}
+
+.dialog :global(.pf-dialog-heading p) {
+  margin: 12px 0 0;
+  padding: 11px 12px;
+  border: 1px solid var(--red-pale);
+  border-radius: 9px;
+  background: var(--red-pale);
+  color: var(--red);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.dialog :global(.pf-dialog-body) {
+  padding: 0 24px 24px;
+}
+
+.dialogContent {
+  display: grid;
+  gap: 15px;
+  padding: 0;
+}
+
+.dialogEyebrow {
+  margin: 0;
+  color: var(--red);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.12em;
+}
+
+.dialogNameGroup {
+  display: grid;
+  gap: 7px;
+}
+
+.dialogNameLabel,
+.dialogForm label {
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 640;
+}
+
+.dialogNameRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.dialogDatabaseName {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.dialogStatus {
+  min-height: 14px;
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.dialogForm {
+  display: grid;
+  gap: 8px;
+}
+
+.dialogForm input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.dialog input:focus-visible,
+.dialog button:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.dialogError {
+  margin: 0;
+  color: var(--red);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 5px;
+}
+
+@media (width <= 620px) {
+  .dialogActions {
+    flex-direction: column;
+  }
+
+  .dialogActions :global(.pf-button) {
+    width: 100%;
+  }
+}

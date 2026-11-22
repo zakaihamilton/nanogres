@@ -1,5 +1,5 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { test } from "node:test";
 import { actionFor } from "../src/lib/nanogres-actions.ts";
 
 test("maps read and management operations to separate permissions", () => {

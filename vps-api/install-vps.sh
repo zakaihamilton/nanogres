@@ -70,6 +70,10 @@ install -d -o postgres -g postgres -m 0700 /var/backups/nanogres /var/lib/nanogr
 install -d -o root -g postgres -m 0750 /etc/nanogres
 install -d -o root -g postgres -m 0750 /etc/nanogres/pgbouncer
 install -o root -g root -m 0644 "$SOURCE_DIR/api.py" /opt/nanogres-api/api.py
+install -d -o root -g root -m 0755 /opt/nanogres-api/nanogres_api
+for module in "$SOURCE_DIR/nanogres_api/"*.py; do
+  install -o root -g root -m 0644 "$module" "/opt/nanogres-api/nanogres_api/$(basename "$module")"
+done
 install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-api.service" /etc/systemd/system/nanogres-api.service
 install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-backup.service" /etc/systemd/system/nanogres-backup.service
 install -o root -g root -m 0644 "$SOURCE_DIR/nanogres-backup.timer" /etc/systemd/system/nanogres-backup.timer

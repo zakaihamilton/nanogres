@@ -14,6 +14,9 @@ registerHooks({
     if (specifier === "node:https") {
       return { url: "virtual:oidc-https", shortCircuit: true };
     }
+    if (specifier === "./ssrf-https") {
+      return nextResolve("./ssrf-https.ts", context);
+    }
     return nextResolve(specifier, context);
   },
   load(url, context, nextLoad) {

@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Select } from "@/components/ui/select";
+import styles from "./live-primitives.module.css";
 import {
   apiRequest,
   Button,
@@ -14,7 +15,6 @@ import {
   Panel,
   useDatabases,
 } from "./live-shared";
-import styles from "./live-screens.module.css";
 
 type TransferJob = {
   transferId: string;

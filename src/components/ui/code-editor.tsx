@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, type ChangeEvent, type KeyboardEvent, type ReactNode } from "react";
+import { type ChangeEvent, type KeyboardEvent, type ReactNode, useCallback, useRef } from "react";
 import { Tooltip } from "@/components/ui/tooltip";
 import styles from "./code-editor.module.css";
 

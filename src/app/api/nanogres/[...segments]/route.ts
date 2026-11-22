@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
-import { authorizeNanogresAction } from "@/lib/perminister-auth";
 import { actionFor } from "@/lib/nanogres-actions";
 import { callNanogresApi, relayApiResponse } from "@/lib/nanogres-api";
+import { authorizeNanogresAction } from "@/lib/perminister-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

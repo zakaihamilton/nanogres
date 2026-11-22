@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { Select } from "@/components/ui/select";
 import { nanogresToast } from "@/components/ui/toast";
 import { Tooltip } from "@/components/ui/tooltip";
-import { apiRequest, useDatabases, Button, ErrorNotice } from "./live-shared";
+import { apiRequest, Button, ErrorNotice, useDatabases } from "./live-shared";
 import styles from "./sql-editor-screen.module.css";
 
 type TabState = {

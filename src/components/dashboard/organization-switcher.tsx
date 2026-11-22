@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { ContextSwitcher } from "panel-frame-ui";
+import { useState } from "react";
 import { Icon } from "./icons";
 import styles from "./organization-switcher.module.css";
 

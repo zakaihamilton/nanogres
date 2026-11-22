@@ -1,21 +1,21 @@
 // biome-ignore-all lint/a11y/noNoninteractiveTabindex: Keyboard-focusable dashboard regions allow keyboard scrolling of wide tables.
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 import { Select } from "@/components/ui/select";
 import { nanogresToast } from "@/components/ui/toast";
+import styles from "./live-primitives.module.css";
 import {
   apiRequest,
   Button,
+  type Database,
   Empty,
   ErrorNotice,
   Loading,
   Panel,
-  useApiData,
-  type Database,
   type Role,
+  useApiData,
 } from "./live-shared";
-import styles from "./live-screens.module.css";
 
 type WorkloadIdentityGrant = {
   id: string;

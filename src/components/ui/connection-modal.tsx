@@ -1,10 +1,10 @@
 // biome-ignore-all lint/a11y/noNoninteractiveTabindex: The code tabpanel is keyboard-focusable for scrolling and navigation.
 "use client";
 
-import { useState, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Dialog } from "panel-frame-ui";
-import { nanogresToast } from "./toast";
+import { type KeyboardEvent as ReactKeyboardEvent, useRef, useState } from "react";
 import styles from "./connection-modal.module.css";
+import { nanogresToast } from "./toast";
 
 type Tab = "uri" | "psql" | "node" | "python" | "go" | "env";
 const connectionTabs: Array<[Tab, string]> = [
