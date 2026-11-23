@@ -932,7 +932,17 @@
 
   .miniTableRowHeader,
   .miniTableRow {
-    grid-template-columns: 1.5fr 1fr 1fr;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 8px;
+  }
+
+  .dbNameCol {
+    min-width: 0;
+  }
+
+  .dbNameCol strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .miniTableRowHeader span:nth-child(3),
