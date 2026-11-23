@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import type { ServerStatus, ActivityEvent } from "@/components/dashboard/live-shared";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ActivityEvent, ServerStatus } from "@/components/dashboard/live-shared";
 
 export type TelemetryPayload = {
   type: string;

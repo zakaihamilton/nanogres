@@ -1,8 +1,8 @@
 import { callNanogresWorkloadApi } from "@/lib/nanogres-api";
 import {
+  verifyWorkloadIdentityToken,
   type WorkloadIdentityFailure,
   type WorkloadIdentityGrant,
-  verifyWorkloadIdentityToken,
 } from "@/lib/workload-identity";
 
 export const runtime = "nodejs";

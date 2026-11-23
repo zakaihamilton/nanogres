@@ -1,20 +1,20 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Icon } from "./icons";
-import { useTelemetryStream } from "@/lib/use-stream";
+import { useMemo, useState } from "react";
 import { nanogresToast } from "@/components/ui/toast";
 import { Tooltip } from "@/components/ui/tooltip";
+import { useTelemetryStream } from "@/lib/use-stream";
+import { Icon } from "./icons";
+import styles from "./live-primitives.module.css";
 import {
   type ActivityEvent,
-  useApiData,
-  PageHeader,
-  Button,
-  Panel,
-  ErrorNotice,
   ActivityList,
+  Button,
+  ErrorNotice,
+  PageHeader,
+  Panel,
+  useApiData,
 } from "./live-shared";
-import styles from "./live-screens.module.css";
 
 export function LiveActivityScreen() {
   const { data, error, loading, refresh } = useApiData<{ events: ActivityEvent[] }>(

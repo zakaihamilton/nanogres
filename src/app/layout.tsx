@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import type { ReactNode } from "react";
 import { ThemeProvider } from "panel-frame-ui";
+import type { ReactNode } from "react";
 import { THEME_COOKIE, THEMES, type Theme } from "@/lib/theme";
 import "./globals.css";
 

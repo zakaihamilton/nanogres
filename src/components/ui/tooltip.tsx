@@ -1,7 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { Tooltip as PanelTooltip } from "panel-frame-ui";
+import type { ReactNode } from "react";
 
 export function Tooltip({
   children,

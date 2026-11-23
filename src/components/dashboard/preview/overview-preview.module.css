@@ -1,0 +1,173 @@
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overviewGrid,
+.lowerGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.9fr);
+  gap: 15px;
+}
+
+.overviewGrid {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1.85fr) minmax(280px, 0.9fr);
+}
+
+.lowerGrid {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+}
+
+.healthCard {
+  padding: 16px 17px 13px;
+}
+
+.healthStatus {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding-bottom: 16px;
+}
+
+.healthOrb {
+  display: grid;
+  width: 37px;
+  height: 37px;
+  flex: 0 0 37px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--amber-pale);
+  color: var(--amber);
+}
+
+.healthOrbGood {
+  background: var(--green-pale);
+  color: var(--green);
+}
+
+.healthStatus > span:last-child {
+  display: grid;
+  gap: 4px;
+}
+
+.healthStatus strong {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.healthStatus small {
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.healthRows {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--line);
+}
+
+.healthRows div {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.healthRows div:last-child {
+  border-bottom: 0;
+}
+
+.healthRows span {
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.healthRows strong {
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 620;
+}
+
+.tipCard {
+  position: relative;
+  display: flex;
+  min-height: 143px;
+  gap: 13px;
+  overflow: hidden;
+  padding: 19px 18px;
+  border: 1px solid var(--green-pale);
+  border-radius: 12px;
+  background: var(--surface-green);
+}
+
+.tipIcon {
+  display: grid;
+  width: 33px;
+  height: 33px;
+  flex: 0 0 33px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--green) 22%, transparent);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--green);
+}
+
+.tipEyebrow {
+  margin: 1px 0 7px;
+  font-size: 9px;
+}
+
+.tipCard h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 670;
+  letter-spacing: -0.03em;
+}
+
+.tipCard p:last-child {
+  max-width: 330px;
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.tipDecoration {
+  position: absolute;
+  right: -8px;
+  bottom: -31px;
+  color: color-mix(in srgb, var(--green) 9%, transparent);
+  font-size: 144px;
+  font-weight: 800;
+  letter-spacing: -0.1em;
+  line-height: 1;
+  pointer-events: none;
+}
+
+@media (width <= 1180px) {
+  .overviewGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (width <= 1050px) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lowerGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (width <= 500px) {
+  .metrics {
+    gap: 9px;
+  }
+}

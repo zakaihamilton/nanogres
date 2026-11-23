@@ -1,6 +1,5 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { exchangePerministerOidcCode } from "@/lib/perminister-oidc";
 import {
   getAppOrigin,
   getPerministerConfig,
@@ -9,6 +8,7 @@ import {
   SESSION_COOKIE,
   validatePerministerSession,
 } from "@/lib/perminister-auth";
+import { exchangePerministerOidcCode } from "@/lib/perminister-oidc";
 import {
   matchesPerministerSsoState,
   perministerSsoCookieName,

@@ -1,32 +1,33 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { Icon } from "./icons";
-import { formatBytes, StorageCapacity } from "./storage-capacity";
-import { ConnectionGauge, StorageDonut } from "@/components/ui/svg-charts";
+import { useState } from "react";
 import { ConnectionModal } from "@/components/ui/connection-modal";
+import { ConnectionGauge, StorageDonut } from "@/components/ui/svg-charts";
 import { Tooltip } from "@/components/ui/tooltip";
-import { SectionInfo } from "./section-info";
 import { useTelemetryStream } from "@/lib/use-stream";
+import { Icon } from "./icons";
+import overviewStyles from "./live-overview.module.css";
+import styles from "./live-primitives.module.css";
 import {
-  type Database,
-  type Backup,
   type ActivityEvent,
-  type ServerStatus,
-  useApiData,
-  formatDate,
-  PageHeader,
-  PrimaryLink,
+  ActivityList,
+  type Backup,
   Button,
-  Panel,
-  Notice,
-  Loading,
+  type Database,
   DatabaseTable,
   ErrorNotice,
-  ActivityList,
+  formatDate,
+  Loading,
+  Notice,
+  PageHeader,
+  Panel,
+  PrimaryLink,
+  type ServerStatus,
+  useApiData,
 } from "./live-shared";
-import styles from "./live-screens.module.css";
+import { SectionInfo } from "./section-info";
+import { formatBytes, StorageCapacity } from "./storage-capacity";
 
 export function LiveOverviewScreen() {
   const { data, error, loading, refresh } = useApiData<{
@@ -126,16 +127,16 @@ export function LiveOverviewScreen() {
 
       {status ? (
         <>
-          <div className={styles.telemetryGrid}>
-            <div className={styles.telemetryCard}>
-              <div className={styles.telemetryCardHeader}>
+          <div className={overviewStyles.telemetryGrid}>
+            <div className={overviewStyles.telemetryCard}>
+              <div className={overviewStyles.telemetryCardHeader}>
                 <h3>Active Connections</h3>
-                <div className={styles.telemetryCardMeta}>
+                <div className={overviewStyles.telemetryCardMeta}>
                   <span>Server connection usage</span>
                   <SectionInfo label="Counts active PostgreSQL sessions across the whole server against its cluster-wide max_connections setting. Other organization databases and maintenance sessions share this connection ceiling." />
                 </div>
               </div>
-              <div className={styles.telemetryCardBody}>
+              <div className={overviewStyles.telemetryCardBody}>
                 <ConnectionGauge
                   current={status.connections}
                   max={status.maxConnections || 100}
@@ -143,17 +144,17 @@ export function LiveOverviewScreen() {
                 />
               </div>
             </div>
-            <div className={styles.telemetryCard}>
-              <div className={styles.telemetryCardHeader}>
+            <div className={overviewStyles.telemetryCard}>
+              <div className={overviewStyles.telemetryCardHeader}>
                 <h3>Disk & Storage Allocation</h3>
-                <div className={styles.telemetryCardMeta}>
+                <div className={overviewStyles.telemetryCardMeta}>
                   <span>VPS root filesystem</span>
                   <SectionInfo
                     label={`Shows organization database file sizes and free space on the VPS filesystem. The ${formatBytes(status.databaseQuotaReserveBytes ?? 1024 ** 3)} growth reserve is taken from available disk, not extra physical storage; it can overlap the free-space value, so the chart segments are not additive.`}
                   />
                 </div>
               </div>
-              <div className={styles.telemetryCardBody}>
+              <div className={overviewStyles.telemetryCardBody}>
                 <StorageDonut items={storageItems} size={120} totalBytes={status.disk.totalBytes} />
               </div>
             </div>
@@ -190,7 +191,7 @@ export function LiveOverviewScreen() {
 
       {data && status ? (
         <>
-          <div className={styles.twoColumns}>
+          <div className={overviewStyles.twoColumns}>
             <Panel
               title="Databases"
               detail={`${databases.length} total · ${managedDatabases.length} managed · ${systemDatabaseCount} protected system · ${formatBytes(totalSize)} used`}
@@ -203,8 +204,8 @@ export function LiveOverviewScreen() {
               detail="PostgreSQL server status"
               info={`Shows server response and runtime details. Local backup retention follows the server setting (${status.backupRetentionDays} days). An off-site copy is marked stale after 36 hours without a verified successful upload.`}
             >
-              <div className={styles.health}>
-                <span className={styles.healthyDot} />
+              <div className={overviewStyles.health}>
+                <span className={overviewStyles.healthyDot} />
                 <div>
                   <strong>PostgreSQL is responding</strong>
                   <small>Version {status.postgresVersion}</small>
@@ -289,10 +290,10 @@ export function FirstRunCard({ error }: { error: string | null }) {
     error?.includes("no Nanogres database access") === true;
 
   return (
-    <section aria-labelledby="first-run-title" className={styles.firstRunCard}>
-      <div className={styles.firstRunIntro}>
-        <div className={styles.firstRunLabel}>
-          <span className={styles.firstRunIcon}>
+    <section aria-labelledby="first-run-title" className={overviewStyles.firstRunCard}>
+      <div className={overviewStyles.firstRunIntro}>
+        <div className={overviewStyles.firstRunLabel}>
+          <span className={overviewStyles.firstRunIcon}>
             <Icon name="server" size={18} />
           </span>
           <span>GETTING STARTED</span>
@@ -309,7 +310,7 @@ export function FirstRunCard({ error }: { error: string | null }) {
         </p>
         {!needsDatabaseAccess ? (
           <a
-            className={styles.setupLink}
+            className={overviewStyles.setupLink}
             href="https://github.com/zakaihamilton/nanogres#connect-your-vps"
             rel="noreferrer"
             target="_blank"
@@ -318,15 +319,15 @@ export function FirstRunCard({ error }: { error: string | null }) {
           </a>
         ) : null}
         {error && !needsDatabaseAccess ? (
-          <details className={styles.connectionDetails}>
+          <details className={overviewStyles.connectionDetails}>
             <summary>Connection details</summary>
             <p>{error}</p>
           </details>
         ) : null}
       </div>
-      <ol aria-label="Your first three steps" className={styles.firstRunSteps}>
-        <li className={styles.firstRunStep}>
-          <span className={styles.stepNumber}>01</span>
+      <ol aria-label="Your first three steps" className={overviewStyles.firstRunSteps}>
+        <li className={overviewStyles.firstRunStep}>
+          <span className={overviewStyles.stepNumber}>01</span>
           <span>
             <strong>
               {needsDatabaseAccess ? "Grant organization access" : "Connect your VPS"}
@@ -339,16 +340,16 @@ export function FirstRunCard({ error }: { error: string | null }) {
           </span>
           <Icon name={needsDatabaseAccess ? "shield" : "server"} size={16} />
         </li>
-        <li className={styles.firstRunStep}>
-          <span className={styles.stepNumber}>02</span>
+        <li className={overviewStyles.firstRunStep}>
+          <span className={overviewStyles.stepNumber}>02</span>
           <span>
             <strong>Create a database</strong>
             <small>Give each project its own space.</small>
           </span>
           <Icon name="database" size={16} />
         </li>
-        <li className={styles.firstRunStep}>
-          <span className={styles.stepNumber}>03</span>
+        <li className={overviewStyles.firstRunStep}>
+          <span className={overviewStyles.stepNumber}>03</span>
           <span>
             <strong>Save a backup copy</strong>
             <small>Download a dump for off-server recovery.</small>
@@ -373,7 +374,7 @@ function Metric({
 }) {
   return (
     <section className={styles.metric}>
-      <div className={styles.metricHeader}>
+      <div className={overviewStyles.metricHeader}>
         <span>{label}</span>
         <SectionInfo label={info} />
       </div>

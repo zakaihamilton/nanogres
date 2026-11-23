@@ -1,0 +1,311 @@
+.passwordInputRow {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.passwordInputRow input {
+  min-width: 0;
+  flex: 1;
+}
+
+.createForm {
+  display: grid;
+  gap: 7px;
+  padding: 17px;
+}
+
+.createForm label,
+.previewField label {
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 640;
+}
+
+.createFormRow {
+  display: flex;
+  gap: 9px;
+}
+
+.createForm input,
+.previewField input,
+.previewField [data-select-trigger],
+.previewInlineForm [data-select-trigger] {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.createForm input:focus-visible,
+.previewField input:focus-visible,
+.previewField [data-select-trigger]:focus-visible,
+.previewInlineForm [data-select-trigger]:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.createFormRow input {
+  flex: 1;
+}
+
+.accessNotice {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 15px;
+  border: 1px solid var(--blue-pale);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--blue-pale) 54%, var(--surface));
+}
+
+.accessNotice > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--blue);
+}
+
+.accessNotice p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.backupSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.backupPageActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.backupSummary > div {
+  display: flex;
+  min-height: 73px;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+}
+
+.summaryIcon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--surface-green);
+  color: var(--green);
+}
+
+.backupSummary > div > span:last-child {
+  display: grid;
+  gap: 5px;
+}
+
+.backupSummary small {
+  color: var(--ink-muted);
+  font-size: 9px;
+}
+
+.backupSummary strong {
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 640;
+}
+
+.previewFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+  padding: 17px;
+}
+
+.previewField {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+}
+
+.previewField strong {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 640;
+}
+
+.previewField small {
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.previewFormActions {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+}
+
+.previewFormActions button:disabled,
+.previewInlineForm button:disabled,
+.backupPreviewActions button:disabled {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--ink-muted);
+  cursor: not-allowed;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.previewFormActions button:not(:disabled),
+.backupPreviewActions button:not(:disabled) {
+  border-color: var(--green-strong);
+  background: var(--green);
+  color: var(--on-green);
+  cursor: pointer;
+  opacity: 1;
+}
+
+.previewInlineForm {
+  display: flex;
+  gap: 9px;
+  padding: 17px;
+}
+
+.previewInlineForm [data-select-root] {
+  width: min(320px, 100%);
+}
+
+.previewInlineForm [data-select-trigger] {
+  max-width: 320px;
+}
+
+.restorePreviewForm {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 15px;
+  padding: 17px;
+}
+
+.restoreExistingForm {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+  padding: 17px;
+}
+
+.restoreExistingSummary {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.restoreExistingActions {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.restorePreviewForm input[type="file"] {
+  min-height: 38px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--ink-muted);
+  font-size: 10px;
+}
+
+.backupPreviewActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.previewDownloadAction {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+}
+
+.backupPreviewActions button {
+  min-height: 29px;
+  padding: 0 9px;
+  font-size: 10px;
+}
+
+@media (width <= 720px) {
+  .backupSummary,
+  .previewFormGrid,
+  .restorePreviewForm,
+  .restoreExistingForm {
+    grid-template-columns: 1fr;
+  }
+
+  .backupSummary > div {
+    min-height: 62px;
+  }
+}
+
+@media (width <= 500px) {
+  .passwordInputRow {
+    flex-wrap: wrap;
+  }
+
+  .passwordInputRow input {
+    flex-basis: 100%;
+  }
+
+  .createFormRow,
+  .previewInlineForm {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .previewFormActions {
+    grid-column: auto;
+  }
+
+  .previewInlineForm [data-select-root] {
+    max-width: none;
+    width: 100%;
+  }
+
+  .backupPreviewActions {
+    align-items: flex-end;
+    flex-direction: column;
+  }
+
+  .restorePreviewForm {
+    gap: 12px;
+  }
+}

@@ -1,35 +1,8 @@
-.page {
-  min-height: 100svh;
-  padding: clamp(26px, 5vw, 64px) clamp(18px, 6vw, 88px);
-  background:
-    radial-gradient(
-      ellipse at 12% 8%,
-      color-mix(in srgb, var(--surface-green) 78%, transparent),
-      transparent 35%
-    ),
-    radial-gradient(
-      ellipse at 92% 94%,
-      color-mix(in srgb, var(--blue-pale) 76%, transparent),
-      transparent 32%
-    ),
-    var(--canvas);
-}
-
 .themeControl {
   position: fixed;
   z-index: 2;
   top: 20px;
   right: 25px;
-}
-
-.layout {
-  display: grid;
-  width: min(100%, 1200px);
-  min-height: calc(100svh - 128px);
-  align-items: center;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
-  gap: clamp(48px, 7vw, 104px);
-  margin: 0 auto;
 }
 
 .intro {
@@ -83,6 +56,10 @@
   font-weight: 760;
   letter-spacing: 0.13em;
   text-transform: uppercase;
+}
+
+.loginEyebrow {
+  margin-bottom: 8px;
 }
 
 .intro h1 {
@@ -270,10 +247,6 @@
   stroke-width: 1.65;
 }
 
-.loginEyebrow {
-  margin-bottom: 8px;
-}
-
 .card h2 {
   margin: 0;
   color: var(--ink);
@@ -299,52 +272,6 @@
   color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.5;
-}
-
-.credentialsForm {
-  display: grid;
-  gap: 16px;
-}
-
-.field {
-  display: grid;
-  gap: 8px;
-}
-
-.fieldLabel {
-  color: var(--ink-soft);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.input {
-  width: 100%;
-  min-height: 50px;
-  padding: 0 14px;
-  border: 1px solid var(--line-strong);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-  font-size: 13px;
-  transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease;
-}
-
-.input::placeholder {
-  color: var(--ink-muted);
-  opacity: 0.75;
-}
-
-.input:hover {
-  border-color: var(--green);
-}
-
-.input:focus-visible {
-  border-color: var(--green);
-  outline: 3px solid color-mix(in srgb, var(--green) 25%, transparent);
-  outline-offset: 1px;
 }
 
 .recoveryLink {
@@ -410,25 +337,6 @@
   background: var(--surface-muted);
   color: var(--ink-muted);
   cursor: not-allowed;
-}
-
-.divider {
-  display: grid;
-  align-items: center;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 12px;
-  margin: 19px 0;
-  color: var(--ink-muted);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-}
-
-.divider::before,
-.divider::after {
-  height: 1px;
-  background: var(--line);
-  content: "";
 }
 
 .singleSignOnButton {
@@ -519,39 +427,30 @@
 }
 
 @media (width <= 960px) {
-  .page {
-    padding-right: clamp(24px, 5vw, 52px);
-    padding-left: clamp(24px, 5vw, 52px);
-  }
-
-  .layout {
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
-    gap: 36px;
-  }
-
   .intro h1 {
     font-size: clamp(38px, 5.4vw, 54px);
   }
 }
 
-@media (width <= 760px) {
-  .page {
-    padding: 74px 18px 30px;
-  }
-
-  .layout {
-    min-height: 0;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 28px;
+@media (width <= 780px) {
+  .featureList,
+  .architectureCard {
+    display: none;
   }
 
   .intro {
+    gap: 0;
+  }
+}
+
+/* Keep the mobile sign-in task ahead of decorative product detail. */
+@media (width <= 760px) {
+  .intro {
     order: 2;
-    gap: 24px;
+    gap: 16px;
   }
 
   .card {
-    max-width: 520px;
     order: 1;
     justify-self: center;
   }
@@ -564,16 +463,10 @@
     max-width: 590px;
     font-size: clamp(37px, 8vw, 54px);
   }
-}
 
-@media (width <= 780px) {
-  .featureList,
-  .architectureCard {
-    display: none;
-  }
-
-  .intro {
-    gap: 0;
+  .introDescription {
+    margin-top: 12px;
+    line-height: 1.5;
   }
 }
 
@@ -607,34 +500,7 @@
   .architectureArrow {
     font-size: 12px;
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .signInButton,
-  .input,
-  .singleSignOnButton {
-    transition: none;
-  }
-}
-
-/* Keep the mobile sign-in task ahead of decorative product detail. */
-@media (width <= 760px) {
-  .intro {
-    gap: 16px;
-  }
-
-  .introDescription {
-    margin-top: 12px;
-    line-height: 1.5;
-  }
-
-  .featureList,
-  .architectureCard {
-    display: none;
-  }
-}
-
-@media (width <= 480px) {
   .intro {
     gap: 12px;
   }
@@ -663,8 +529,11 @@
   .description {
     margin: 8px 0 15px;
   }
+}
 
-  .credentialsForm {
-    gap: 12px;
+@media (prefers-reduced-motion: reduce) {
+  .signInButton,
+  .singleSignOnButton {
+    transition: none;
   }
 }

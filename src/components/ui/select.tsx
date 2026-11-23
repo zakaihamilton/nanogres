@@ -1,7 +1,7 @@
 "use client";
 
-import { Children, isValidElement, type ReactNode } from "react";
 import { Select as PanelSelect, type SelectOption } from "panel-frame-ui";
+import { Children, isValidElement, type ReactNode } from "react";
 
 type OptionProps = {
   children?: ReactNode;

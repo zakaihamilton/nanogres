@@ -932,7 +932,17 @@
 
   .miniTableRowHeader,
   .miniTableRow {
-    grid-template-columns: 1.5fr 1fr 1fr;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 8px;
+  }
+
+  .dbNameCol {
+    min-width: 0;
+  }
+
+  .dbNameCol strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .miniTableRowHeader span:nth-child(3),
@@ -948,6 +958,19 @@
 
 
 @media (width <= 350px) {
+  .showcaseNav {
+    gap: 2px;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .showcaseTab {
+    gap: 4px;
+    padding-right: 5px;
+    padding-left: 5px;
+    font-size: 11px;
+  }
+
   .actions {
     display: grid;
     grid-template-columns: minmax(0, 1fr);

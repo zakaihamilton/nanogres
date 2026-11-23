@@ -138,7 +138,6 @@ function PreviewScreen({
     case "databases":
       return (
         <DatabasesScreen
-          mode="preview"
           previewPage={screen === "database-new" ? "new" : "list"}
           onPreviewNavigate={onNavigate}
           onPreviewDelete={(database) => onDelete(database.name)}
@@ -161,12 +160,10 @@ function PreviewScreen({
     case "access":
       return (
         <AccessScreen
-          mode="preview"
           previewPage={screen === "access-new" ? "new" : "list"}
           onPreviewNavigate={onNavigate}
           onPreviewCreateRole={onCreateRole}
           previewNotice={previewNotice}
-          previewScenario={previewScenario}
           readOnly={previewScenario === "read-only"}
         />
       );
@@ -176,7 +173,6 @@ function PreviewScreen({
     case "backups":
       return (
         <BackupsScreen
-          mode="preview"
           previewBackup={previewBackup}
           onPreviewNavigate={onNavigate}
           previewPage={
@@ -193,13 +189,12 @@ function PreviewScreen({
         />
       );
     case "activity":
-      return <ActivityScreen mode="preview" />;
+      return <ActivityScreen />;
     case "sql-editor":
       return <SqlEditorPreview previewScenario={previewScenario} />;
     default:
       return (
         <OverviewScreen
-          mode="preview"
           onPreviewNavigate={onNavigate}
           previewNotice={previewNotice}
           previewScenario={previewScenario}
