@@ -948,6 +948,19 @@
 
 
 @media (width <= 350px) {
+  .showcaseNav {
+    gap: 2px;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .showcaseTab {
+    gap: 4px;
+    padding-right: 5px;
+    padding-left: 5px;
+    font-size: 11px;
+  }
+
   .actions {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
