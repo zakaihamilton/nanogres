@@ -4,9 +4,10 @@ import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { Select } from "@/components/ui/select";
 import { Tooltip } from "@/components/ui/tooltip";
-import { Button, ErrorNotice } from "./live-shared";
+import { ErrorNotice } from "./live-shared";
 import type { PreviewScenario } from "./screens";
 import styles from "./sql-editor-screen.module.css";
+import { SqlGuardrailsBar, SqlResultsMeta } from "./sql-editor-shared";
 
 type PreviewTab = { id: string; title: string; query: string };
 type PreviewQueryResult = {
@@ -239,86 +240,34 @@ export function SqlEditorPreview({ previewScenario }: { previewScenario: Preview
         />
       </div>
 
-      <div className={styles.guardrailsBar}>
-        <div className={styles.guardrailsLeft}>
-          <Tooltip label="Executes inside a read-only transaction">
-            <label className={styles.guardrailToggle}>
-              <input
-                checked={readOnly}
-                className={styles.guardrailCheckbox}
-                onChange={(event) => setReadOnly(event.target.checked)}
-                type="checkbox"
-              />
-              Read-Only Safety
-            </label>
-          </Tooltip>
-          <Tooltip label="Appends LIMIT 100 to unbounded SELECT queries">
-            <label className={styles.guardrailToggle}>
-              <input
-                checked={defaultLimit}
-                className={styles.guardrailCheckbox}
-                onChange={(event) => setDefaultLimit(event.target.checked)}
-                type="checkbox"
-              />
-              Limit 100
-            </label>
-          </Tooltip>
-          <label className={styles.previewTimeout}>
-            Timeout:
-            <Select
-              className={styles.timeoutSelect}
-              onChange={(value) => setTimeoutSeconds(Number(value))}
-              value={String(timeoutSeconds)}
-            >
-              <option value="5">5s</option>
-              <option value="15">15s</option>
-              <option value="30">30s</option>
-            </Select>
-          </label>
-        </div>
-        <div className={styles.actionButtons}>
-          <Button
-            disabled={!selectedDb || executing}
-            onClick={() => runSyntheticQuery(`EXPLAIN\n${currentTab?.query ?? ""}`)}
-            variant="secondary"
-          >
-            Explain
-          </Button>
-          <Button
-            disabled={!selectedDb || executing}
-            onClick={() => runSyntheticQuery(`EXPLAIN (ANALYZE, BUFFERS)\n${currentTab?.query ?? ""}`)}
-            variant="secondary"
-          >
-            Explain Analyze
-          </Button>
-          <Button
-            disabled={executing || !selectedDb}
-            onClick={() => runSyntheticQuery()}
-            variant="primary"
-          >
-            {executing ? "Running preview…" : "Run Query ⌘↵"}
-          </Button>
-        </div>
-      </div>
+      <SqlGuardrailsBar
+        actionDisabled={!selectedDb || executing}
+        defaultLimit={defaultLimit}
+        onDefaultLimitChange={setDefaultLimit}
+        onExplain={() => runSyntheticQuery(`EXPLAIN\n${currentTab?.query ?? ""}`)}
+        onExplainAnalyze={() =>
+          runSyntheticQuery(`EXPLAIN (ANALYZE, BUFFERS)\n${currentTab?.query ?? ""}`)
+        }
+        onReadOnlyChange={setReadOnly}
+        onRun={() => runSyntheticQuery()}
+        onTimeoutSecondsChange={setTimeoutSeconds}
+        readOnly={readOnly}
+        runDisabled={executing || !selectedDb}
+        runLabel={executing ? "Running preview…" : "Run Query ⌘↵"}
+        timeoutSeconds={timeoutSeconds}
+        timeoutSelectId="preview-query-timeout"
+      />
 
       <ErrorNotice error={error} />
 
       {result ? (
         <div className={styles.resultsPanel}>
           <div className={styles.resultsHeader}>
-            <div className={styles.resultsMeta}>
-              <span>
-                Status: <strong>{result.commandTag}</strong>
-              </span>
-              <span>·</span>
-              <span>
-                Duration: <span className={styles.durationBadge}>{result.durationMs}ms</span>
-              </span>
-              <span>·</span>
-              <span>
-                Rows: <strong>{result.rowCount}</strong>
-              </span>
-            </div>
+            <SqlResultsMeta
+              commandTag={result.commandTag}
+              durationMs={result.durationMs}
+              rowCount={result.rowCount}
+            />
             {result.columns.length ? (
               <div className={styles.exportButtons}>
                 <button className={styles.exportBtn} disabled type="button">

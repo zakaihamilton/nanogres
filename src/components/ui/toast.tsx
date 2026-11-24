@@ -3,7 +3,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from "react";
 import styles from "./toast.module.css";
 
-export type ToastType = "success" | "error" | "info";
+type ToastType = "success" | "error" | "info";
 
 export type Toast = {
   id: string;
@@ -116,7 +116,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useToast(): ToastContextValue {
+function useToast(): ToastContextValue {
   const ctx = useContext(ToastContext);
   if (!ctx) {
     return {
