@@ -6,8 +6,9 @@ import { CodeEditor } from "@/components/ui/code-editor";
 import { Select } from "@/components/ui/select";
 import { nanogresToast } from "@/components/ui/toast";
 import { Tooltip } from "@/components/ui/tooltip";
-import { apiRequest, Button, ErrorNotice, useDatabases } from "./live-shared";
+import { apiRequest, ErrorNotice, useDatabases } from "./live-shared";
 import styles from "./sql-editor-screen.module.css";
+import { SqlGuardrailsBar, SqlResultsMeta } from "./sql-editor-shared";
 
 type TabState = {
   id: string;
@@ -313,69 +314,21 @@ export function SqlEditorScreen() {
       />
 
       {/* Guardrails and action bar */}
-      <div className={styles.guardrailsBar}>
-        <div className={styles.guardrailsLeft}>
-          <Tooltip label="Executes inside a read-only transaction">
-            <label className={styles.guardrailToggle}>
-              <input
-                checked={readOnly}
-                className={styles.guardrailCheckbox}
-                onChange={(e) => setReadOnly(e.target.checked)}
-                type="checkbox"
-              />
-              Read-Only Safety
-            </label>
-          </Tooltip>
-          <Tooltip label="Appends LIMIT 100 to unbounded SELECT queries">
-            <label className={styles.guardrailToggle}>
-              <input
-                checked={defaultLimit}
-                className={styles.guardrailCheckbox}
-                onChange={(e) => setDefaultLimit(e.target.checked)}
-                type="checkbox"
-              />
-              Limit 100
-            </label>
-          </Tooltip>
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 12,
-              color: "var(--ink-soft)",
-            }}
-          >
-            <label htmlFor="query-timeout">Timeout:</label>
-            <Select
-              className={styles.timeoutSelect}
-              id="query-timeout"
-              onChange={(value) => setTimeoutSeconds(Number(value))}
-              value={String(timeoutSeconds)}
-            >
-              <option value="5">5s</option>
-              <option value="15">15s</option>
-              <option value="30">30s</option>
-            </Select>
-          </div>
-        </div>
-
-        <div className={styles.actionButtons}>
-          <Button disabled={!selectedDb} onClick={() => handleExplain(false)} variant="secondary">
-            Explain
-          </Button>
-          <Button disabled={!selectedDb} onClick={() => handleExplain(true)} variant="secondary">
-            Explain Analyze
-          </Button>
-          <Button
-            disabled={executing || !selectedDb}
-            onClick={() => void executeSql()}
-            variant="primary"
-          >
-            {executing ? "Executing..." : "Run Query ⌘↵"}
-          </Button>
-        </div>
-      </div>
+      <SqlGuardrailsBar
+        actionDisabled={!selectedDb}
+        defaultLimit={defaultLimit}
+        onDefaultLimitChange={setDefaultLimit}
+        onExplain={() => handleExplain(false)}
+        onExplainAnalyze={() => handleExplain(true)}
+        onReadOnlyChange={setReadOnly}
+        onRun={() => void executeSql()}
+        onTimeoutSecondsChange={setTimeoutSeconds}
+        readOnly={readOnly}
+        runDisabled={executing || !selectedDb}
+        runLabel={executing ? "Executing..." : "Run Query ⌘↵"}
+        timeoutSeconds={timeoutSeconds}
+        timeoutSelectId="query-timeout"
+      />
 
       {/* Inline error notice if execution failed */}
       <ErrorNotice error={error} />
@@ -384,24 +337,18 @@ export function SqlEditorScreen() {
       {result ? (
         <div className={styles.resultsPanel}>
           <div className={styles.resultsHeader}>
-            <div className={styles.resultsMeta}>
-              <span>
-                Status: <strong>{result.commandTag || "COMPLETED"}</strong>
-              </span>
-              <span>·</span>
-              <span>
-                Duration: <span className={styles.durationBadge}>{result.durationMs}ms</span>
-              </span>
-              <span>·</span>
-              <span>
-                Rows: <strong>{result.rowCount}</strong>
-              </span>
-              {result.truncated ? (
-                <span style={{ color: "var(--amber)", fontSize: 11 }}>
-                  (Showing first 500 rows)
-                </span>
-              ) : null}
-            </div>
+            <SqlResultsMeta
+              commandTag={result.commandTag || "COMPLETED"}
+              durationMs={result.durationMs}
+              extra={
+                result.truncated ? (
+                  <span style={{ color: "var(--amber)", fontSize: 11 }}>
+                    (Showing first 500 rows)
+                  </span>
+                ) : null
+              }
+              rowCount={result.rowCount}
+            />
             {result.columns.length ? (
               <div className={styles.exportButtons}>
                 <button className={styles.exportBtn} onClick={exportCsv} type="button">
